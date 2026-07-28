@@ -1,0 +1,20 @@
+# Scenario-workload RoadRunner config — identical to .rr.yaml except the worker
+# script and http.raw_body. Run from THIS directory: ./rr serve -c .rr.scenario.yaml
+version: '3'
+
+server:
+  command: "php scenario-worker.php"
+  relay: pipes
+
+http:
+  address: 0.0.0.0:8080
+  # Hand the worker the raw urlencoded body: without this rr pre-parses forms on
+  # the Go side and the worker's body stream carries a JSON re-encoding instead —
+  # app.php would parse garbage (and parity with the raw-string servers breaks).
+  raw_body: true
+  pool:
+    num_workers: 32
+
+logs:
+  level: error
+  mode: production

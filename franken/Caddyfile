@@ -1,0 +1,29 @@
+# FrankenPHP pinned to 32 worker threads (parity with `rapira serve --processes 32`).
+# Run from THIS directory:  ./frankenphp run --config Caddyfile
+#
+# Unlike `php-server` (which auto-sizes the pool — 48 workers here, measured), num_threads fixes
+# the total pool. FrankenPHP requires num_threads to be STRICTLY GREATER than the
+# worker count (at least one non-worker thread), hence 32 workers + 1 spare = 33.
+# Both knobs are mandatory: without them FrankenPHP auto-sized this pool to 48
+# workers / 49 threads while every other server ran the parity count, and the run
+# on 2026-07-21 was measured that way (seen in results/franken.server.log at the time;
+# that file has since been overwritten by the 2026-07-27 re-run).
+# No `encode` directive, so responses are uncompressed (parity with rapira).
+{
+	auto_https off
+	admin off
+
+	frankenphp {
+		num_threads 33
+
+		worker {
+			file ./index.php
+			num 32
+		}
+	}
+}
+
+:8080 {
+	root * .
+	php_server
+}

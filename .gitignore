@@ -1,0 +1,11 @@
+.claude
+INSTRUCTIONS.md
+results/**
+**/vendor/**
+
+# Prebuilt server binaries: frankenphp alone is 163M, over GitHub's 100M per-file limit.
+franken/frankenphp
+roadrunner/rr
+swoole/swoole.so
+rapira/rapira
+rapira/rapira-*
