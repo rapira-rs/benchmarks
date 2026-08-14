@@ -4,11 +4,8 @@ declare(strict_types=1);
 
 require __DIR__ . '/../app/app.php';
 
-// Scenario worker: same resident loop as the hello worker, routing via app.php.
-// The handler comes from the HTTP plugin and is created once, at boot — the loop
-// is per-request, the plugin handler is not.
-$http = \Rapira\create_plugin_handler(new \Rapira\Plugin\Http\HttpHandlerConfig());
-
+// Scenario worker (worker mode): same resident loop as the hello worker,
+// routing via app.php.
 $handler = static function (): void {
     [$status, $headers, $body] = scenario_handle(
         $_SERVER['REQUEST_METHOD'] ?? 'GET',
@@ -21,5 +18,5 @@ $handler = static function (): void {
     }
     echo $body;
 };
-while ($http->handleRequest($handler)) {
+while (\Rapira\handle_request($handler)) {
 }

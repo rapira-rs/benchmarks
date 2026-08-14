@@ -7,6 +7,5 @@ $handler = static function (): void {
     $name = $_GET['name'] ?? 'world';
     echo "Hello from worker, {$name}!";
 };
-$http = \Rapira\create_plugin_handler(new \Rapira\Plugin\Http\HttpHandlerConfig());
-while ($http->handleRequest($handler)) {
+while (\Rapira\handle_request($handler)) {
 }

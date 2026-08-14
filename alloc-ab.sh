@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Allocator A/B for rapira: one binary per allocator leg built from ../core,
-# each driven through this harness's bench-wrk-rapira flow (port guard,
+# each driven through this harness's bench-wrk-rapira-worker flow (port guard,
 # readiness, graceful stop, reaping).
 # Only the default leg (mi-v3) builds today: core hard-wires mimalloc as a
 # non-optional dep (core/Cargo.toml) plus an ungated #[global_allocator]
@@ -14,8 +14,8 @@
 # records summed Pss (master+workers) and worker-set churn per run.
 # Results: results/rapira-alloc-<leg>-r<round>[-16k].{wrk.txt,pss}.
 # Knobs: LEGS, ROUNDS, WRK_CONNS, WRK_DURATION (harness defaults: 12t/500c/15s).
-# CLOBBER WARNING: run_probe `mv`s results/rapira.wrk.txt into its own tag, so running this
-# script CONSUMES the rapira row of the reference wrk table. Re-run `make bench-wrk-rapira
+# CLOBBER WARNING: run_probe `mv`s results/rapira-worker.wrk.txt into its own tag, so running
+# this script CONSUMES the rapira-worker row of the reference wrk table. Re-run `make bench-wrk-rapira-worker
 # WRK_CONNS=5000` afterwards to restore it.
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -52,8 +52,8 @@ build mi-v3
 
 pss_sampler() { # $1=outfile — poll master+workers Pss every 2s until the master exits
   local out=$1 pid p v total max=0 last=0 first_set="" last_set="" workers
-  for _ in $(seq 300); do [ -f results/rapira.pid ] && break; sleep 0.1; done
-  pid=$(cat results/rapira.pid 2>/dev/null) || { echo "no_pid=1" >"$out"; return 0; }
+  for _ in $(seq 300); do [ -f results/rapira-worker.pid ] && break; sleep 0.1; done
+  pid=$(cat results/rapira-worker.pid 2>/dev/null) || { echo "no_pid=1" >"$out"; return 0; }
   while kill -0 "$pid" 2>/dev/null; do
     workers=$(pgrep -P "$pid" 2>/dev/null | sort -n | tr '\n' ' ') || true
     total=0
@@ -79,12 +79,12 @@ run_probe() { # $1=leg $2=round $3=url $4=suffix ("" | -16k)
   tag="rapira-alloc-$leg-r$round$suf"
   pss_sampler "results/$tag.pss" &
   local sampler=$!
-  make bench-wrk-rapira \
+  make bench-wrk-rapira-worker \
     RAPIRA_SRC_BIN="rapira/rapira-$leg" \
-    RAPIRA_SCRIPT="rapira/alloc-worker.php" \
+    RAPIRA_WORKER_SCRIPT="rapira/alloc-worker.php" \
     WRK_CONNS="$WRK_CONNS" WRK_DURATION="$WRK_DURATION" \
     WRK_URL="$url"
-  mv -f results/rapira.wrk.txt "results/$tag.wrk.txt"
+  mv -f results/rapira-worker.wrk.txt "results/$tag.wrk.txt"
   wait "$sampler" 2>/dev/null || true
 }
 

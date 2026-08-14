@@ -3,9 +3,10 @@
 # See INSTRUCTIONS.md for the manual flow and the gotchas this automates.
 #
 #   make bench                       # franken → fpm → roadrunner → swoole → table
-#   make bench-all                   # rapira → rapira-classic → franken → fpm → roadrunner → swoole → table
-#   make bench-rapira                # a single server (any of the five)
-#   make bench-rapira-classic        # rapira --classic on the php-fpm scripts (apples-to-apples vs fpm)
+#   make bench-all                   # rapira → rapira-worker → rapira-classic → franken → fpm → roadrunner → swoole → table
+#   make bench-rapira                # a single server (rapira = dispatcher mode, ten-fiber receive loop)
+#   make bench-rapira-worker         # rapira worker mode (resident handler closure)
+#   make bench-rapira-classic        # rapira classic mode on the php-fpm scripts (apples-to-apples vs fpm)
 #   make bench BENCH=scenario        # scenario workload (scenario.js + app/ mini-app workers)
 #   make bench-wrk-all               # all five servers under wrk (high-concurrency ceilings)
 #   make bench-wrk-fpm               # a single server under wrk
@@ -53,7 +54,8 @@ BENCH ?= hello
 ifeq ($(BENCH),scenario)
   K6_SCRIPT      := scenario.js
   SUF            := .scenario
-  RAPIRA_SCRIPT  := rapira/scenario-worker.php
+  RAPIRA_SCRIPT  := rapira/scenario-dispatcher.php
+  RAPIRA_WORKER_SCRIPT := rapira/scenario-worker.php
   RAPIRA_CLASSIC_SCRIPT := fpm/scenario.php
   FRANKEN_CONFIG := Caddyfile.scenario
   FPM_NGINX_CONF := nginx.scenario.conf
@@ -62,7 +64,8 @@ ifeq ($(BENCH),scenario)
 else
   K6_SCRIPT      := bench.js
   SUF            :=
-  RAPIRA_SCRIPT  := rapira/worker.php
+  RAPIRA_SCRIPT  := rapira/dispatcher.php
+  RAPIRA_WORKER_SCRIPT := rapira/worker.php
   RAPIRA_CLASSIC_SCRIPT := fpm/hello.php
   FRANKEN_CONFIG := Caddyfile
   FPM_NGINX_CONF := nginx.conf
@@ -75,17 +78,17 @@ endif
 RAPIRA_SRC_BIN := ../core/target/release/rapira
 RAPIRA_BIN := rapira/rapira
 
-.PHONY: bench bench-all bench-rapira bench-rapira-classic bench-franken bench-fpm bench-roadrunner bench-swoole \
-        bench-wrk bench-wrk-all bench-wrk-rapira bench-wrk-rapira-classic bench-wrk-franken bench-wrk-fpm \
+.PHONY: bench bench-all bench-rapira bench-rapira-worker bench-rapira-classic bench-franken bench-fpm bench-roadrunner bench-swoole \
+        bench-wrk bench-wrk-all bench-wrk-rapira bench-wrk-rapira-worker bench-wrk-rapira-classic bench-wrk-franken bench-wrk-fpm \
         bench-wrk-roadrunner bench-wrk-swoole report clean
 
 bench: bench-franken bench-fpm bench-roadrunner bench-swoole report
 
-bench-all: bench-rapira bench-rapira-classic bench-franken bench-fpm bench-roadrunner bench-swoole report
+bench-all: bench-rapira bench-rapira-worker bench-rapira-classic bench-franken bench-fpm bench-roadrunner bench-swoole report
 
 bench-wrk: bench-wrk-franken bench-wrk-fpm bench-wrk-roadrunner bench-wrk-swoole report
 
-bench-wrk-all: bench-wrk-rapira bench-wrk-rapira-classic bench-wrk-franken bench-wrk-fpm bench-wrk-roadrunner bench-wrk-swoole report
+bench-wrk-all: bench-wrk-rapira bench-wrk-rapira-worker bench-wrk-rapira-classic bench-wrk-franken bench-wrk-fpm bench-wrk-roadrunner bench-wrk-swoole report
 
 $(RESULTS):
 	@mkdir -p $(RESULTS)
@@ -138,10 +141,21 @@ define start_rapira
 	if [ -x $(RAPIRA_SRC_BIN) ]; then cp -f $(RAPIRA_SRC_BIN) $(RAPIRA_BIN); fi; \
 	test -x $(RAPIRA_BIN) || { echo "ERROR: $(RAPIRA_BIN) missing — build it first:"; \
 	  echo "  cd ../core && PHP_CONFIG=$(PHP_NTS)/bin/php-config LD_LIBRARY_PATH=$(PHP_NTS)/lib cargo build --release"; exit 1; }; \
-	echo "==> rapira: starting (32 worker processes)"; \
-	LD_LIBRARY_PATH=$(PHP_NTS)/lib ./$(RAPIRA_BIN) serve --processes 32 --listen :8080 \
+	echo "==> rapira: starting (32 worker processes, dispatcher + fibers)"; \
+	LD_LIBRARY_PATH=$(PHP_NTS)/lib ./$(RAPIRA_BIN) serve --mode dispatcher --processes 32 --listen :8080 \
 	  $(RAPIRA_SCRIPT) > $(RESULTS)/rapira$(SUF).server.log 2>&1 & \
 	echo $$! > $(RESULTS)/rapira$(SUF).pid
+endef
+# rapira in worker mode: the resident handler-closure loop (\Rapira\handle_request)
+# over per-request superglobals.
+define start_rapira_worker
+	if [ -x $(RAPIRA_SRC_BIN) ]; then cp -f $(RAPIRA_SRC_BIN) $(RAPIRA_BIN); fi; \
+	test -x $(RAPIRA_BIN) || { echo "ERROR: $(RAPIRA_BIN) missing — build it first:"; \
+	  echo "  cd ../core && PHP_CONFIG=$(PHP_NTS)/bin/php-config LD_LIBRARY_PATH=$(PHP_NTS)/lib cargo build --release"; exit 1; }; \
+	echo "==> rapira-worker: starting (32 worker processes, handler closure)"; \
+	LD_LIBRARY_PATH=$(PHP_NTS)/lib ./$(RAPIRA_BIN) serve --mode worker --processes 32 --listen :8080 \
+	  $(RAPIRA_WORKER_SCRIPT) > $(RESULTS)/rapira-worker$(SUF).server.log 2>&1 & \
+	echo $$! > $(RESULTS)/rapira-worker$(SUF).pid
 endef
 # rapira in classic mode: per-request script execution (no resident worker) on
 # the SAME fpm/ scripts php-fpm serves — apples-to-apples with the fpm stack,
@@ -151,7 +165,7 @@ define start_rapira_classic
 	test -x $(RAPIRA_BIN) || { echo "ERROR: $(RAPIRA_BIN) missing — build it first:"; \
 	  echo "  cd ../core && PHP_CONFIG=$(PHP_NTS)/bin/php-config LD_LIBRARY_PATH=$(PHP_NTS)/lib cargo build --release"; exit 1; }; \
 	echo "==> rapira-classic: starting (32 worker processes, per-request script)"; \
-	LD_LIBRARY_PATH=$(PHP_NTS)/lib ./$(RAPIRA_BIN) serve --classic --processes 32 --listen :8080 \
+	LD_LIBRARY_PATH=$(PHP_NTS)/lib ./$(RAPIRA_BIN) serve --mode classic --processes 32 --listen :8080 \
 	  $(RAPIRA_CLASSIC_SCRIPT) > $(RESULTS)/rapira-classic$(SUF).server.log 2>&1 & \
 	echo $$! > $(RESULTS)/rapira-classic$(SUF).pid
 endef
@@ -230,6 +244,15 @@ bench-rapira: | $(RESULTS)
 	@$(call reap_rapira)
 	@echo "==> rapira: done"
 
+bench-rapira-worker: | $(RESULTS)
+	@$(call port_guard)
+	@$(call start_rapira_worker)
+	@$(call wait_ready,rapira-worker)
+	@$(call run_k6,rapira-worker)
+	@$(call stop_server,rapira-worker,INT)
+	@$(call reap_rapira)
+	@echo "==> rapira-worker: done"
+
 bench-rapira-classic: | $(RESULTS)
 	@$(call port_guard)
 	@$(call start_rapira_classic)
@@ -282,6 +305,15 @@ bench-wrk-rapira: | $(RESULTS)
 	@$(call stop_server,rapira,INT)
 	@$(call reap_rapira)
 	@echo "==> rapira (wrk): done"
+
+bench-wrk-rapira-worker: | $(RESULTS)
+	@$(call port_guard)
+	@$(call start_rapira_worker)
+	@$(call wait_ready,rapira-worker)
+	@$(call run_wrk,rapira-worker)
+	@$(call stop_server,rapira-worker,INT)
+	@$(call reap_rapira)
+	@echo "==> rapira-worker (wrk): done"
 
 bench-wrk-rapira-classic: | $(RESULTS)
 	@$(call port_guard)
@@ -338,7 +370,7 @@ bench-wrk-swoole: | $(RESULTS)
 define REPORT_PY
 import json, os, re, time
 rows, stamps = [], []
-for name in ('rapira', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole'):
+for name in ('rapira', 'rapira-worker', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole'):
     path = os.path.join('results', name + '.summary.json')
     if not os.path.exists(path):
         continue
@@ -350,7 +382,7 @@ for name in ('rapira', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole
     stamps.append(name + ': ' + time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(path))))
 scen_names = ('browse', 'echoJson', 'form', 'misc')
 srows, sstamps = [], []
-for name in ('rapira', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole'):
+for name in ('rapira', 'rapira-worker', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole'):
     path = os.path.join('results', name + '.scenario.summary.json')
     if not os.path.exists(path):
         continue
@@ -371,7 +403,7 @@ def wrk_ms(tok):
         return None
     return float(m.group(1)) * {'us': 0.001, 'ms': 1.0, 's': 1000.0, 'm': 60000.0}[m.group(2)]
 wrows, wstamps = [], []
-for name in ('rapira', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole'):
+for name in ('rapira', 'rapira-worker', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole'):
     for suf, label in (('', name), ('.scenario', name + ' (scn)')):
         path = os.path.join('results', name + suf + '.wrk.txt')
         if not os.path.exists(path):
