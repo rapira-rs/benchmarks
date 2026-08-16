@@ -12,7 +12,8 @@ use Swoole\Http\Server;
 // app.php. Swoole splits the request target ($request->server['request_uri'] is
 // the path only), so the adapter reassembles path?query — the string
 // $_SERVER['REQUEST_URI'] carries on the SAPI servers.
-$server = new Server('0.0.0.0', 8080, SWOOLE_BASE);
+// Port: $SWOOLE_PORT, defaulting to 8080 (see server.php).
+$server = new Server('0.0.0.0', (int) (getenv('SWOOLE_PORT') ?: 8080), SWOOLE_BASE);
 $server->set([
     'worker_num' => 32,
     'enable_reuse_port' => true,

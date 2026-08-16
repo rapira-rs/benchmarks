@@ -10,7 +10,9 @@ use Swoole\Http\Server;
 // SWOOLE_BASE: each of the 32 workers accepts on :8080 itself (SO_REUSEPORT,
 // same model as Folk) — no dispatcher IPC hop like SWOOLE_PROCESS would add.
 // http_compression off for parity (FrankenPHP runs without encode too).
-$server = new Server('0.0.0.0', 8080, SWOOLE_BASE);
+// Port: $SWOOLE_PORT, defaulting to 8080 so the serial bench-* targets are unchanged;
+// `make start_all` sets it so every server can run at once on its own port.
+$server = new Server('0.0.0.0', (int) (getenv('SWOOLE_PORT') ?: 8080), SWOOLE_BASE);
 $server->set([
     'worker_num' => 32,
     'enable_reuse_port' => true,

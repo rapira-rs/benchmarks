@@ -9,6 +9,8 @@
 # on 2026-07-21 was measured that way (seen in results/franken.server.log at the time;
 # that file has since been overwritten by the 2026-07-27 re-run).
 # No `encode` directive, so responses are uncompressed (parity with rapira).
+# Port: $FRANKEN_PORT, defaulting to 8080 so the serial bench-* targets are unchanged;
+# `make start_all` sets it so every server can run at once on its own port.
 {
 	auto_https off
 	admin off
@@ -23,7 +25,7 @@
 	}
 }
 
-:8080 {
+:{$FRANKEN_PORT:8080} {
 	root * .
 	php_server
 }

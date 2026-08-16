@@ -15,7 +15,22 @@
 #   make bench-wrk-all WRK_THREADS=12 WRK_CONNS=5000 WRK_DURATION=15s   # override wrk defaults
 #   make clean                       # drop results/
 #
-# One server at a time — all five bind :8080, so targets are strictly serial.
+# Remote bench — the load generator runs on a SECOND box, which removes the
+# generator-vs-server CPU contention that caps the fast servers on a single box
+# (see INSTRUCTIONS.md "The wrk bench"). Two steps, two machines:
+#
+#   make start_all                   # on the BENCH box: all six servers at once, one per port
+#   make stop_all                    # on the BENCH box: stop the fleet
+#   make remote_bench_all_k6         # on the LOAD box: k6 walks the fleet → "(remote)" tables
+#   make remote_bench_all_wrk        # on the LOAD box: same under wrk
+#   make start_all BENCH=scenario && make remote_bench_all_k6 BENCH=scenario
+#   make remote_bench_all_wrk REMOTE_HOST=10.1.0.25 WRK_CONNS=5000
+#
+# One server at a time — the bench-* targets all bind :8080, so they are strictly serial.
+# start_all is the deliberate exception: each server gets its own port so they coexist,
+# and the remote targets still bench them ONE AT A TIME (concurrent legs would fight for
+# CPU and every number would be garbage). Remote results are written to a separate
+# `.remote` file set, so they never overwrite the local reference rows.
 
 .NOTPARALLEL:
 SHELL := /bin/bash
@@ -37,13 +52,36 @@ WRK_DURATION ?= 15s
 WRK_URL ?= http://127.0.0.1:8080/?name=you
 
 RESULTS := results
-PHP_NTS := $(HOME)/.local/php-nts
 
-# php-fpm stack: the pacman php-fpm (split from the SAME pacman build as the CLI `php`
+# Fleet ports (start_all / remote_bench_all_*): PORT_BASE+1 … PORT_BASE+6, one per
+# server, so all six coexist and a remote generator can walk them without a
+# start/stop cycle per leg. PORT_BASE itself is left free; at the default it is :8080,
+# the port every serial bench-* target binds, so the two flows can't collide.
+PORT_BASE ?= 8080
+PORT_RAPIRA         := $(shell expr $(PORT_BASE) + 1)
+PORT_RAPIRA_WORKER  := $(shell expr $(PORT_BASE) + 2)
+PORT_RAPIRA_CLASSIC := $(shell expr $(PORT_BASE) + 3)
+PORT_FRANKEN        := $(shell expr $(PORT_BASE) + 4)
+PORT_ROADRUNNER     := $(shell expr $(PORT_BASE) + 5)
+PORT_SWOOLE         := $(shell expr $(PORT_BASE) + 6)
+
+# name:port pairs in report order — the fleet/remote targets walk this list.
+# php-fpm is deliberately absent: it is a two-process stack (nginx front + fpm pool)
+# whose port lives in nginx.conf, and it needs a second parameterized config to join.
+FLEET := rapira:$(PORT_RAPIRA) rapira-worker:$(PORT_RAPIRA_WORKER) \
+         rapira-classic:$(PORT_RAPIRA_CLASSIC) franken:$(PORT_FRANKEN) \
+         roadrunner:$(PORT_ROADRUNNER) swoole:$(PORT_SWOOLE)
+
+# The bench box, as seen from the load box. Results from a remote run are suffixed
+# so they never clobber the local reference rows.
+REMOTE_HOST ?= 10.1.0.25
+RSUF := .remote
+
+# php-fpm stack: the distro php-fpm (split from the SAME package build as the CLI `php`
 # that swoole and roadrunner run) + nginx front; ~/.local/nginx is the no-sudo fallback.
-# PHP-build parity caveat: only fpm/swoole/roadrunner share the distro 8.5.8. rapira loads
-# the local $(PHP_NTS) embed build (8.5.8-dev) — required since the NTS rewrite — and
-# FrankenPHP ships its own statically linked PHP.
+# PHP-build parity: fpm/swoole/roadrunner AND rapira all run the distro PHP — rapira embeds
+# its libphp (php-embedded) through the embed SAPI, so nothing is pinned here: ld.so resolves
+# libphp from the default search path. Only FrankenPHP differs (statically linked PHP).
 PHP_FPM_BIN ?= $(shell command -v php-fpm || echo /usr/bin/php-fpm)
 NGINX_BIN ?= $(shell command -v nginx || echo $(HOME)/.local/nginx/sbin/nginx)
 
@@ -61,6 +99,9 @@ ifeq ($(BENCH),scenario)
   FPM_NGINX_CONF := nginx.scenario.conf
   RR_CONFIG      := .rr.scenario.yaml
   SWOOLE_SCRIPT  := scenario-server.php
+  # scenario.js takes BASE (origin only); $$p is the fleet loop's port variable, so the
+  # quoting breaks around it (the URL carries glob characters — keep it quoted).
+  REMOTE_K6_URL   = -e 'BASE=http://$(REMOTE_HOST):'$$p
 else
   K6_SCRIPT      := bench.js
   SUF            :=
@@ -71,6 +112,8 @@ else
   FPM_NGINX_CONF := nginx.conf
   RR_CONFIG      := .rr.yaml
   SWOOLE_SCRIPT  := server.php
+  # bench.js takes TARGET (a full URL, path and query included).
+  REMOTE_K6_URL   = -e 'TARGET=http://$(REMOTE_HOST):'$$p'/?name=you'
 endif
 
 # rapira runs as a local binary in rapira/, like the other SAPIs' artifacts;
@@ -80,7 +123,8 @@ RAPIRA_BIN := rapira/rapira
 
 .PHONY: bench bench-all bench-rapira bench-rapira-worker bench-rapira-classic bench-franken bench-fpm bench-roadrunner bench-swoole \
         bench-wrk bench-wrk-all bench-wrk-rapira bench-wrk-rapira-worker bench-wrk-rapira-classic bench-wrk-franken bench-wrk-fpm \
-        bench-wrk-roadrunner bench-wrk-swoole report clean
+        bench-wrk-roadrunner bench-wrk-swoole report clean \
+        start_all stop_all remote_bench_all_k6 remote_bench_all_wrk
 
 bench: bench-franken bench-fpm bench-roadrunner bench-swoole report
 
@@ -96,12 +140,22 @@ $(RESULTS):
 # Shared steps, $(call ...)-ed from each server target.
 # port_guard: refuse to start on a busy :8080 (a stale server here once produced a ghost benchmark).
 define port_guard
-	if ss -ltn | grep -q ':8080 '; then echo "ERROR: :8080 already in use — stop that server first"; exit 1; fi
+	if ss -ltn | grep -q ':$(or $(1),8080) '; then echo "ERROR: :$(or $(1),8080) already in use — stop that server first"; exit 1; fi
 endef
-# wait_ready(1=name): poll until the server answers, else dump its log and kill it.
+# fleet_port_guard: same idea for start_all — report EVERY busy port in one pass
+# rather than failing on the first, so a half-up fleet is diagnosable at a glance.
+define fleet_port_guard
+	busy=; \
+	for e in $(FLEET); do \
+	  p=$${e##*:}; \
+	  if ss -ltn | grep -q ":$$p "; then busy="$$busy $$p"; fi; \
+	done; \
+	if [ -n "$$busy" ]; then echo "ERROR: port(s)$$busy already in use — run 'make stop_all' first"; exit 1; fi
+endef
+# wait_ready(1=name, 2=port [8080]): poll until the server answers, else dump its log and kill it.
 define wait_ready
 	ok=0; for i in $$(seq 1 60); do \
-	  curl -sf -o /dev/null -m1 'http://127.0.0.1:8080/?name=you' && { ok=1; break; }; sleep 0.5; \
+	  curl -sf -o /dev/null -m1 'http://127.0.0.1:$(or $(2),8080)/?name=you' && { ok=1; break; }; sleep 0.5; \
 	done; \
 	if [ $$ok -ne 1 ]; then \
 	  echo "ERROR: $(1) never became ready; last log lines:"; tail -8 $(RESULTS)/$(1)$(SUF).server.log; \
@@ -124,25 +178,30 @@ define run_wrk
 	  | tee $(RESULTS)/$(1)$(SUF).wrk.txt \
 	  || echo "(wrk exited non-zero — see $(RESULTS)/$(1)$(SUF).wrk.txt)"
 endef
-# stop_server(1=name, 2=signal): signal the pidfile, wait for :8080 to free, force-kill if held.
+# stop_server(1=name, 2=signal, 3=port [8080]): signal the pidfile, wait for the port to
+# free, force-kill if held.
 define stop_server
 	kill -$(2) $$(cat $(RESULTS)/$(1)$(SUF).pid) 2>/dev/null || true; \
-	for i in $$(seq 1 30); do ss -ltn | grep -q ':8080 ' || break; sleep 0.5; done; \
-	if ss -ltn | grep -q ':8080 '; then \
-	  echo "WARN: $(1) still holds :8080 — force-killing"; \
+	for i in $$(seq 1 30); do ss -ltn | grep -q ':$(or $(3),8080) ' || break; sleep 0.5; done; \
+	if ss -ltn | grep -q ':$(or $(3),8080) '; then \
+	  echo "WARN: $(1) still holds :$(or $(3),8080) — force-killing"; \
 	  kill -KILL $$(cat $(RESULTS)/$(1)$(SUF).pid) 2>/dev/null; sleep 1; \
 	fi; \
 	rm -f $(RESULTS)/$(1)$(SUF).pid
 endef
 
-# start_<name>: artifact preflight + launch + pidfile. Shared by the k6 (bench-*)
-# and wrk (bench-wrk-*) target families so the launch logic lives in one place.
+# start_<name>(1=port [8080]): artifact preflight + launch + pidfile. Shared by the k6
+# (bench-*), wrk (bench-wrk-*) and fleet (start_all) target families so the launch logic
+# lives in one place. The port argument is what lets start_all run them side by side; the
+# serial targets pass nothing and keep binding :8080, which is also each config's own
+# built-in default (franken/Caddyfile, swoole/server.php), so their command lines are
+# unchanged from before the fleet existed.
 define start_rapira
 	if [ -x $(RAPIRA_SRC_BIN) ]; then cp -f $(RAPIRA_SRC_BIN) $(RAPIRA_BIN); fi; \
 	test -x $(RAPIRA_BIN) || { echo "ERROR: $(RAPIRA_BIN) missing — build it first:"; \
-	  echo "  cd ../core && PHP_CONFIG=$(PHP_NTS)/bin/php-config LD_LIBRARY_PATH=$(PHP_NTS)/lib cargo build --release"; exit 1; }; \
-	echo "==> rapira: starting (32 worker processes, dispatcher + fibers)"; \
-	LD_LIBRARY_PATH=$(PHP_NTS)/lib ./$(RAPIRA_BIN) serve --mode dispatcher --processes 32 --listen :8080 \
+	  echo "  cd ../core && cargo build --release"; exit 1; }; \
+	echo "==> rapira: starting on :$(or $(1),8080) (32 worker processes, dispatcher + fibers)"; \
+	./$(RAPIRA_BIN) serve --mode dispatcher --processes 32 --listen :$(or $(1),8080) \
 	  $(RAPIRA_SCRIPT) > $(RESULTS)/rapira$(SUF).server.log 2>&1 & \
 	echo $$! > $(RESULTS)/rapira$(SUF).pid
 endef
@@ -151,9 +210,9 @@ endef
 define start_rapira_worker
 	if [ -x $(RAPIRA_SRC_BIN) ]; then cp -f $(RAPIRA_SRC_BIN) $(RAPIRA_BIN); fi; \
 	test -x $(RAPIRA_BIN) || { echo "ERROR: $(RAPIRA_BIN) missing — build it first:"; \
-	  echo "  cd ../core && PHP_CONFIG=$(PHP_NTS)/bin/php-config LD_LIBRARY_PATH=$(PHP_NTS)/lib cargo build --release"; exit 1; }; \
-	echo "==> rapira-worker: starting (32 worker processes, handler closure)"; \
-	LD_LIBRARY_PATH=$(PHP_NTS)/lib ./$(RAPIRA_BIN) serve --mode worker --processes 32 --listen :8080 \
+	  echo "  cd ../core && cargo build --release"; exit 1; }; \
+	echo "==> rapira-worker: starting on :$(or $(1),8080) (32 worker processes, handler closure)"; \
+	./$(RAPIRA_BIN) serve --mode worker --processes 32 --listen :$(or $(1),8080) \
 	  $(RAPIRA_WORKER_SCRIPT) > $(RESULTS)/rapira-worker$(SUF).server.log 2>&1 & \
 	echo $$! > $(RESULTS)/rapira-worker$(SUF).pid
 endef
@@ -163,16 +222,16 @@ endef
 define start_rapira_classic
 	if [ -x $(RAPIRA_SRC_BIN) ]; then cp -f $(RAPIRA_SRC_BIN) $(RAPIRA_BIN); fi; \
 	test -x $(RAPIRA_BIN) || { echo "ERROR: $(RAPIRA_BIN) missing — build it first:"; \
-	  echo "  cd ../core && PHP_CONFIG=$(PHP_NTS)/bin/php-config LD_LIBRARY_PATH=$(PHP_NTS)/lib cargo build --release"; exit 1; }; \
-	echo "==> rapira-classic: starting (32 worker processes, per-request script)"; \
-	LD_LIBRARY_PATH=$(PHP_NTS)/lib ./$(RAPIRA_BIN) serve --mode classic --processes 32 --listen :8080 \
+	  echo "  cd ../core && cargo build --release"; exit 1; }; \
+	echo "==> rapira-classic: starting on :$(or $(1),8080) (32 worker processes, per-request script)"; \
+	./$(RAPIRA_BIN) serve --mode classic --processes 32 --listen :$(or $(1),8080) \
 	  $(RAPIRA_CLASSIC_SCRIPT) > $(RESULTS)/rapira-classic$(SUF).server.log 2>&1 & \
 	echo $$! > $(RESULTS)/rapira-classic$(SUF).pid
 endef
 define start_franken
 	test -x franken/frankenphp -a -f franken/$(FRANKEN_CONFIG) || { echo "ERROR: franken/frankenphp or franken/$(FRANKEN_CONFIG) missing — fetch/check it (see INSTRUCTIONS.md §2)"; exit 1; }; \
-	echo "==> frankenphp: starting (32 workers)"; \
-	cd franken && { ./frankenphp run --config $(FRANKEN_CONFIG) > ../$(RESULTS)/franken$(SUF).server.log 2>&1 & \
+	echo "==> frankenphp: starting on :$(or $(1),8080) (32 workers)"; \
+	cd franken && { FRANKEN_PORT=$(or $(1),8080) ./frankenphp run --config $(FRANKEN_CONFIG) > ../$(RESULTS)/franken$(SUF).server.log 2>&1 & \
 	  echo $$! > ../$(RESULTS)/franken$(SUF).pid; }
 endef
 # fpm is the one two-process stack here: an nginx master (+ workers) fronting a
@@ -190,14 +249,14 @@ define start_fpm
 endef
 define start_roadrunner
 	test -x roadrunner/rr -a -d roadrunner/vendor || { echo "ERROR: roadrunner/rr or roadrunner/vendor missing — fetch them (see INSTRUCTIONS.md §4)"; exit 1; }; \
-	echo "==> roadrunner: starting (32 workers)"; \
-	cd roadrunner && { ./rr serve -c $(RR_CONFIG) > ../$(RESULTS)/roadrunner$(SUF).server.log 2>&1 & \
+	echo "==> roadrunner: starting on :$(or $(1),8080) (32 workers)"; \
+	cd roadrunner && { ./rr serve -c $(RR_CONFIG) -o http.address=0.0.0.0:$(or $(1),8080) > ../$(RESULTS)/roadrunner$(SUF).server.log 2>&1 & \
 	  echo $$! > ../$(RESULTS)/roadrunner$(SUF).pid; }
 endef
 define start_swoole
 	test -f swoole/swoole.so || { echo "ERROR: swoole/swoole.so missing — build it (see INSTRUCTIONS.md §5)"; exit 1; }; \
-	echo "==> swoole: starting (32 workers)"; \
-	cd swoole && { php -d extension=$$PWD/swoole.so $(SWOOLE_SCRIPT) > ../$(RESULTS)/swoole$(SUF).server.log 2>&1 & \
+	echo "==> swoole: starting on :$(or $(1),8080) (32 workers)"; \
+	cd swoole && { SWOOLE_PORT=$(or $(1),8080) php -d extension=$$PWD/swoole.so $(SWOOLE_SCRIPT) > ../$(RESULTS)/swoole$(SUF).server.log 2>&1 & \
 	  echo $$! > ../$(RESULTS)/swoole$(SUF).pid; }
 endef
 # reap_<name>: the rapira/fpm/roadrunner/swoole masters fork/spawn workers; reap
@@ -233,6 +292,22 @@ define reap_roadrunner
 endef
 define reap_swoole
 	pkill -KILL -f '[s]woole\.so ([s]cenario-)?server\.php' 2>/dev/null || true
+endef
+# remote_guard: refuse to bench a fleet that isn't up. Without it every leg still
+# "runs" and writes a summary full of zeros, and the only symptom is a k6 threshold
+# error — a ghost benchmark of exactly the kind the port guard exists to prevent.
+# Checks the whole fleet in one pass so one message names every server that is down.
+define remote_guard
+	fail=; \
+	for e in $(FLEET); do \
+	  s=$${e%%:*}; p=$${e##*:}; \
+	  curl -sf -o /dev/null -m2 'http://$(REMOTE_HOST):'$$p'/?name=you' || fail="$$fail $$s(:$$p)"; \
+	done; \
+	if [ -n "$$fail" ]; then \
+	  echo "ERROR: no answer from $(REMOTE_HOST) —$$fail"; \
+	  echo "  start the fleet on the bench box first:  make start_all$(if $(filter scenario,$(BENCH)), BENCH=scenario)"; \
+	  exit 1; \
+	fi
 endef
 
 bench-rapira: | $(RESULTS)
@@ -359,9 +434,80 @@ bench-wrk-swoole: | $(RESULTS)
 	@$(call reap_swoole)
 	@echo "==> swoole (wrk): done"
 
+# ---- Remote bench: fleet on this box, generator on another ----------------------
+#
+# start_all: every server at once, one per port, so a remote generator can walk them
+# without a start/stop cycle per leg. Starts are serial with a readiness wait each, so
+# a failure names the server that broke — but it leaves the already-started ones up:
+# run `make stop_all` to clear a partial fleet before retrying.
+start_all: | $(RESULTS)
+	@$(call fleet_port_guard)
+	@$(call start_rapira,$(PORT_RAPIRA))
+	@$(call wait_ready,rapira,$(PORT_RAPIRA))
+	@$(call start_rapira_worker,$(PORT_RAPIRA_WORKER))
+	@$(call wait_ready,rapira-worker,$(PORT_RAPIRA_WORKER))
+	@$(call start_rapira_classic,$(PORT_RAPIRA_CLASSIC))
+	@$(call wait_ready,rapira-classic,$(PORT_RAPIRA_CLASSIC))
+	@$(call start_franken,$(PORT_FRANKEN))
+	@$(call wait_ready,franken,$(PORT_FRANKEN))
+	@$(call start_roadrunner,$(PORT_ROADRUNNER))
+	@$(call wait_ready,roadrunner,$(PORT_ROADRUNNER))
+	@$(call start_swoole,$(PORT_SWOOLE))
+	@$(call wait_ready,swoole,$(PORT_SWOOLE))
+	@echo; echo "==> fleet up ($(BENCH) workload):"
+	@for e in $(FLEET); do printf '      %-16s 0.0.0.0:%s\n' "$${e%%:*}" "$${e##*:}"; done
+	@echo; echo "    from the load box:  make remote_bench_all_k6 REMOTE_HOST=<this box>$(if $(filter scenario,$(BENCH)), BENCH=scenario)"
+
+# stop_all: stop everything start_all launched; safe against a partial fleet.
+# Order matters — reap_rapira's pkill pattern matches ALL rapira instances, so it runs
+# only after all three rapira legs have been signalled, never between them.
+stop_all:
+	@$(call stop_server,rapira,INT,$(PORT_RAPIRA))
+	@$(call stop_server,rapira-worker,INT,$(PORT_RAPIRA_WORKER))
+	@$(call stop_server,rapira-classic,INT,$(PORT_RAPIRA_CLASSIC))
+	@$(call reap_rapira)
+	@$(call stop_server,franken,TERM,$(PORT_FRANKEN))
+	@$(call stop_server,roadrunner,TERM,$(PORT_ROADRUNNER))
+	@$(call reap_roadrunner)
+	@$(call stop_server,swoole,TERM,$(PORT_SWOOLE))
+	@$(call reap_swoole)
+	@echo "==> fleet down"
+
+# remote_bench_all_k6 / _wrk: run the generator HERE against the fleet on REMOTE_HOST,
+# ONE LEG AT A TIME — the servers coexist, but benching them concurrently would have
+# them fight for the bench box's cores and every number would be meaningless.
+# Results go to the $(RSUF) file set, which `make report` renders as its own tables.
+remote_bench_all_k6: | $(RESULTS)
+	@$(call remote_guard)
+	@for e in $(FLEET); do \
+	  s=$${e%%:*}; p=$${e##*:}; \
+	  echo; echo "==> $$s: k6 -> http://$(REMOTE_HOST):$$p"; \
+	  ulimit -n 65536 2>/dev/null; \
+	  k6 run $(K6_ENV) $(REMOTE_K6_URL) --summary-trend-stats "$(K6_STATS)" \
+	    --summary-export $(RESULTS)/$$s$(SUF)$(RSUF).summary.json $(K6_SCRIPT) 2>&1 \
+	    | tee $(RESULTS)/$$s$(SUF)$(RSUF).k6.log \
+	    || echo "(k6 exited non-zero — a threshold likely failed; summary still exported)"; \
+	done
+	@$(MAKE) --no-print-directory report
+
+remote_bench_all_wrk: | $(RESULTS)
+	@$(call remote_guard)
+	@for e in $(FLEET); do \
+	  s=$${e%%:*}; p=$${e##*:}; \
+	  echo; echo "==> $$s: wrk -> http://$(REMOTE_HOST):$$p"; \
+	  ulimit -n 65536 2>/dev/null; \
+	  wrk -t$(WRK_THREADS) -c$(WRK_CONNS) -d$(WRK_DURATION) --latency 'http://$(REMOTE_HOST):'$$p'/?name=you' \
+	    | tee $(RESULTS)/$$s$(SUF)$(RSUF).wrk.txt \
+	    || echo "(wrk exited non-zero — see $(RESULTS)/$$s$(SUF)$(RSUF).wrk.txt)"; \
+	done
+	@$(MAKE) --no-print-directory report
+
 # Renders the tables from whatever summaries exist in results/ (rapira first if
 # present): the hello table from <name>.summary.json, and a per-scenario table from
-# <name>.scenario.summary.json when scenario runs exist.
+# <name>.scenario.summary.json when scenario runs exist. Each table is rendered twice,
+# once per file set — the local one, then a "REMOTE" group from the <name>.remote.*
+# files that remote_bench_all_* writes. A group is skipped entirely when it has no files,
+# so on a box that has only ever run locally the output is unchanged.
 # Format facts (verified against k6 v2.0.0 --summary-export):
 #   http_reqs = {count, rate}; http_req_duration includes avg (a default trend stat);
 #   http_req_failed is a Rate metric where `passes` counts FAILED requests, `value` is the rate;
@@ -369,88 +515,109 @@ bench-wrk-swoole: | $(RESULTS)
 #   scenario.js declares thresholds on them.
 define REPORT_PY
 import json, os, re, time
-rows, stamps = [], []
-for name in ('rapira', 'rapira-worker', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole'):
-    path = os.path.join('results', name + '.summary.json')
-    if not os.path.exists(path):
-        continue
-    with open(path) as f:
-        m = json.load(f)['metrics']
-    reqs, dur, failed = m.get('http_reqs', {}), m.get('http_req_duration', {}), m.get('http_req_failed', {})
-    rows.append((name, int(reqs.get('count', 0)), reqs.get('rate', 0.0),
-                 dur.get('avg'), int(failed.get('passes', 0)), failed.get('value', 0.0) * 100))
-    stamps.append(name + ': ' + time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(path))))
-scen_names = ('browse', 'echoJson', 'form', 'misc')
-srows, sstamps = [], []
-for name in ('rapira', 'rapira-worker', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole'):
-    path = os.path.join('results', name + '.scenario.summary.json')
-    if not os.path.exists(path):
-        continue
-    with open(path) as f:
-        m = json.load(f)['metrics']
-    def cell(rk, dk, fk, m=m):
-        r, d, x = m.get(rk, {}), m.get(dk, {}), m.get(fk, {})
-        return (int(r.get('count', 0)), r.get('rate', 0.0), d.get('avg'), x.get('value', 0.0) * 100)
-    srows.append((name, '(total)') + cell('http_reqs', 'http_req_duration', 'http_req_failed'))
-    for s in scen_names:
-        srows.append(('', s) + cell('http_reqs{scenario:%s}' % s,
-                                    'http_req_duration{scenario:%s}' % s,
-                                    'http_req_failed{scenario:%s}' % s))
-    sstamps.append(name + ': ' + time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(path))))
+SERVERS = ('rapira', 'rapira-worker', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole')
+SCEN = ('browse', 'echoJson', 'form', 'misc')
+# '' = locally generated runs; '.remote' = runs driven from another box
+# (make remote_bench_all_*). Rendered as two separate table groups on purpose: a
+# loopback number and an over-the-wire number in one table would invite exactly the
+# comparison that isn't valid. Column formats are identical, so a group is still
+# readable against the other — just never row-by-row in the same block.
+VARIANTS = (('', ''), ('.remote', 'REMOTE (load generator off-box)'))
+def when(path):
+    return time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(path)))
 def wrk_ms(tok):
     m = re.match(r'([0-9.]+)(us|ms|s|m)$$', tok or '')
     if not m:
         return None
     return float(m.group(1)) * {'us': 0.001, 'ms': 1.0, 's': 1000.0, 'm': 60000.0}[m.group(2)]
-wrows, wstamps = [], []
-for name in ('rapira', 'rapira-worker', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole'):
-    for suf, label in (('', name), ('.scenario', name + ' (scn)')):
-        path = os.path.join('results', name + suf + '.wrk.txt')
+def collect(rsuf):
+    rows, stamps = [], []
+    for name in SERVERS:
+        path = os.path.join('results', name + rsuf + '.summary.json')
         if not os.path.exists(path):
             continue
         with open(path) as f:
-            txt = f.read()
-        rate = re.search(r'Requests/sec:\s+([0-9.]+)', txt)
-        total = re.search(r'([0-9]+) requests in', txt)
-        lat = re.search(r'Latency\s+(\S+)\s+\S+\s+\S+', txt)   # Thread Stats avg
-        p50 = re.search(r'\s50%\s+(\S+)', txt)
-        p99 = re.search(r'\s99%\s+(\S+)', txt)
-        errs = 0
-        se = re.search(r'Socket errors: connect ([0-9]+), read ([0-9]+), write ([0-9]+), timeout ([0-9]+)', txt)
-        if se:
-            errs += sum(int(g) for g in se.groups())
-        nx = re.search(r'Non-2xx or 3xx responses: ([0-9]+)', txt)
-        if nx:
-            errs += int(nx.group(1))
-        wrows.append((label, int(total.group(1)) if total else 0, float(rate.group(1)) if rate else 0.0,
-                      wrk_ms(lat.group(1) if lat else None),
-                      wrk_ms(p50.group(1) if p50 else None),
-                      wrk_ms(p99.group(1) if p99 else None), errs))
-        wstamps.append(label + ': ' + time.strftime('%Y-%m-%d %H:%M', time.localtime(os.path.getmtime(path))))
-if not rows and not srows and not wrows:
+            m = json.load(f)['metrics']
+        reqs, dur, failed = m.get('http_reqs', {}), m.get('http_req_duration', {}), m.get('http_req_failed', {})
+        rows.append((name, int(reqs.get('count', 0)), reqs.get('rate', 0.0),
+                     dur.get('avg'), int(failed.get('passes', 0)), failed.get('value', 0.0) * 100))
+        stamps.append(name + ': ' + when(path))
+    srows, sstamps = [], []
+    for name in SERVERS:
+        path = os.path.join('results', name + '.scenario' + rsuf + '.summary.json')
+        if not os.path.exists(path):
+            continue
+        with open(path) as f:
+            m = json.load(f)['metrics']
+        def cell(rk, dk, fk, m=m):
+            r, d, x = m.get(rk, {}), m.get(dk, {}), m.get(fk, {})
+            return (int(r.get('count', 0)), r.get('rate', 0.0), d.get('avg'), x.get('value', 0.0) * 100)
+        srows.append((name, '(total)') + cell('http_reqs', 'http_req_duration', 'http_req_failed'))
+        for s in SCEN:
+            srows.append(('', s) + cell('http_reqs{scenario:%s}' % s,
+                                        'http_req_duration{scenario:%s}' % s,
+                                        'http_req_failed{scenario:%s}' % s))
+        sstamps.append(name + ': ' + when(path))
+    wrows, wstamps = [], []
+    for name in SERVERS:
+        for suf, label in (('', name), ('.scenario', name + ' (scn)')):
+            path = os.path.join('results', name + suf + rsuf + '.wrk.txt')
+            if not os.path.exists(path):
+                continue
+            with open(path) as f:
+                txt = f.read()
+            rate = re.search(r'Requests/sec:\s+([0-9.]+)', txt)
+            total = re.search(r'([0-9]+) requests in', txt)
+            lat = re.search(r'Latency\s+(\S+)\s+\S+\s+\S+', txt)   # Thread Stats avg
+            p50 = re.search(r'\s50%\s+(\S+)', txt)
+            p99 = re.search(r'\s99%\s+(\S+)', txt)
+            errs = 0
+            se = re.search(r'Socket errors: connect ([0-9]+), read ([0-9]+), write ([0-9]+), timeout ([0-9]+)', txt)
+            if se:
+                errs += sum(int(g) for g in se.groups())
+            nx = re.search(r'Non-2xx or 3xx responses: ([0-9]+)', txt)
+            if nx:
+                errs += int(nx.group(1))
+            wrows.append((label, int(total.group(1)) if total else 0, float(rate.group(1)) if rate else 0.0,
+                          wrk_ms(lat.group(1) if lat else None),
+                          wrk_ms(p50.group(1) if p50 else None),
+                          wrk_ms(p99.group(1) if p99 else None), errs))
+            wstamps.append(label + ': ' + when(path))
+    return rows, stamps, srows, sstamps, wrows, wstamps
+def render(rsuf, group):
+    rows, stamps, srows, sstamps, wrows, wstamps = collect(rsuf)
+    if not rows and not srows and not wrows:
+        return False
+    if group:
+        print(); print(group); print('=' * len(group))
+    if rows:
+        hdr = '%-14s %12s %12s %12s %10s %9s' % ('server', 'requests', 'req/s', 'avg', 'failed', 'failed%')
+        print(); print(hdr); print('-' * len(hdr))
+        for name, total, rate, avg, nfail, frate in rows:
+            avgs = ('%.2fms' % avg) if avg is not None else 'n/a'
+            print('%-14s %12d %12.1f %12s %10d %8.2f%%' % (name, total, rate, avgs, nfail, frate))
+        print(); print('(' + '; '.join(stamps) + ')')
+    if srows:
+        hdr = '%-14s %-10s %12s %12s %12s %9s' % ('server', 'scenario', 'requests', 'req/s', 'avg', 'failed%')
+        print(); print(hdr); print('-' * len(hdr))
+        for name, scen, total, rate, avg, frate in srows:
+            avgs = ('%.2fms' % avg) if avg is not None else 'n/a'
+            print('%-14s %-10s %12d %12.1f %12s %8.2f%%' % (name, scen, total, rate, avgs, frate))
+        print(); print('(' + '; '.join(sstamps) + ')')
+    if wrows:
+        def ms(v):
+            return ('%.2fms' % v) if v is not None else 'n/a'
+        hdr = '%-20s %12s %12s %10s %10s %10s %8s' % ('server (wrk)', 'requests', 'req/s', 'avg', 'p50', 'p99', 'errors')
+        print(); print(hdr); print('-' * len(hdr))
+        for label, total, rate, avg, p50, p99, errs in wrows:
+            print('%-20s %12d %12.1f %10s %10s %10s %8d' % (label, total, rate, ms(avg), ms(p50), ms(p99), errs))
+        print(); print('(' + '; '.join(wstamps) + ')')
+    return True
+printed = False
+for rsuf, group in VARIANTS:
+    printed = render(rsuf, group) or printed
+if not printed:
     raise SystemExit('no summaries in results/ — run `make bench` first')
-if rows:
-    hdr = '%-14s %12s %12s %12s %10s %9s' % ('server', 'requests', 'req/s', 'avg', 'failed', 'failed%')
-    print(); print(hdr); print('-' * len(hdr))
-    for name, total, rate, avg, nfail, frate in rows:
-        avgs = ('%.2fms' % avg) if avg is not None else 'n/a'
-        print('%-14s %12d %12.1f %12s %10d %8.2f%%' % (name, total, rate, avgs, nfail, frate))
-    print(); print('(' + '; '.join(stamps) + ')')
-if srows:
-    hdr = '%-14s %-10s %12s %12s %12s %9s' % ('server', 'scenario', 'requests', 'req/s', 'avg', 'failed%')
-    print(); print(hdr); print('-' * len(hdr))
-    for name, scen, total, rate, avg, frate in srows:
-        avgs = ('%.2fms' % avg) if avg is not None else 'n/a'
-        print('%-14s %-10s %12d %12.1f %12s %8.2f%%' % (name, scen, total, rate, avgs, frate))
-    print(); print('(' + '; '.join(sstamps) + ')')
-if wrows:
-    def ms(v):
-        return ('%.2fms' % v) if v is not None else 'n/a'
-    hdr = '%-20s %12s %12s %10s %10s %10s %8s' % ('server (wrk)', 'requests', 'req/s', 'avg', 'p50', 'p99', 'errors')
-    print(); print(hdr); print('-' * len(hdr))
-    for label, total, rate, avg, p50, p99, errs in wrows:
-        print('%-20s %12d %12.1f %10s %10s %10s %8d' % (label, total, rate, ms(avg), ms(p50), ms(p99), errs))
-    print(); print('(' + '; '.join(wstamps) + ')')
 endef
 export REPORT_PY
 

@@ -6,6 +6,7 @@
 # php_server parses on v1.12.4 but the runtime ignores `num` and auto-sizes to 48).
 # 32 workers + 1 spare = 33; num_threads must be STRICTLY GREATER than the worker
 # count. No `encode` directive, so responses are uncompressed (parity with rapira).
+# Port: $FRANKEN_PORT, defaulting to 8080 (see Caddyfile).
 # Run from THIS directory:  ./frankenphp run --config Caddyfile.scenario
 {
 	auto_https off
@@ -21,7 +22,7 @@
 	}
 }
 
-:8080 {
+:{$FRANKEN_PORT:8080} {
 	root * .
 	rewrite * /scenario.php
 	php_server

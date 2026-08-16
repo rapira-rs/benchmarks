@@ -21,7 +21,6 @@ set -euo pipefail
 cd "$(dirname "$0")"
 
 CORE=../core
-PHP_NTS=$HOME/.local/php-nts
 LEGS=${LEGS:-"mi-v3"}
 # Refuse legs that can no longer be built: build() no-ops for anything outside LEGS, so a
 # stale rapira/rapira-<leg> from 2026-07-21 would otherwise be probed silently — and those
@@ -39,8 +38,8 @@ build() {
   local leg=$1; shift
   case " $LEGS " in *" $leg "*) ;; *) return 0 ;; esac
   echo "==> build $leg"
-  (cd "$CORE" && PHP_CONFIG=$PHP_NTS/bin/php-config LD_LIBRARY_PATH=$PHP_NTS/lib \
-    cargo build --release "$@")
+  # No PHP prefix pinned: core's build.rs picks up the system php-config from PATH.
+  (cd "$CORE" && cargo build --release "$@")
   cp -f "$CORE/target/release/rapira" "rapira/rapira-$leg"
 }
 build mi-v3
