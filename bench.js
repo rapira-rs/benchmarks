@@ -16,7 +16,7 @@ const TARGET = __ENV.TARGET || "http://127.0.0.1:8080/?name=you";
 const CHECKS = __ENV.CHECKS !== "0";
 
 export const options = {
-	vus: Number(__ENV.VUS || 500),
+	vus: Number(__ENV.VUS || 5000),
 	duration: __ENV.DURATION || "30s",
 	discardResponseBodies: !CHECKS,
 	thresholds: {

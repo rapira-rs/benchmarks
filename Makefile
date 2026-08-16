@@ -51,8 +51,8 @@ K6_STATS := avg,min,med,max,p(90),p(95),p(99)
 # can't (see INSTRUCTIONS.md "The wrk bench"). 12 of the box's 32 hardware threads,
 # so the generator and the server don't fight over every core. Kept at 12 across the
 # worker bump to 32 so wrk numbers stay comparable to earlier runs.
-WRK_THREADS ?= 12
-WRK_CONNS ?= 500
+WRK_THREADS ?= 16
+WRK_CONNS ?= 1000
 WRK_DURATION ?= 15s
 WRK_URL ?= http://127.0.0.1:8080/?name=you
 
