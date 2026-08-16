@@ -4,7 +4,8 @@
 #
 #   make bench                       # franken → fpm → roadrunner → swoole → table
 #   make bench-all                   # rapira → rapira-worker → rapira-classic → franken → fpm → roadrunner → swoole → table
-#   make bench-rapira                # a single server (rapira = dispatcher mode, ten-fiber receive loop)
+#   make bench-rapira                # a single server (rapira = dispatcher mode, blocking receive loop)
+#   make bench-rapira-async          # dispatcher mode, fiber per request (scaffolding cost — see the script)
 #   make bench-rapira-worker         # rapira worker mode (resident handler closure)
 #   make bench-rapira-classic        # rapira classic mode on the php-fpm scripts (apples-to-apples vs fpm)
 #   make bench BENCH=scenario        # scenario workload (scenario.js + app/ mini-app workers)
@@ -19,7 +20,11 @@
 # generator-vs-server CPU contention that caps the fast servers on a single box
 # (see INSTRUCTIONS.md "The wrk bench"). Two steps, two machines:
 #
-#   make start_all                   # on the BENCH box: all six servers at once, one per port
+#   make start_all                   # on the BENCH box: all eight legs at once, one per port
+#                                    #   8081 rapira (sync)     8085 roadrunner
+#                                    #   8082 rapira-worker     8086 swoole
+#                                    #   8083 rapira-classic    8087 rapira-async
+#                                    #   8084 franken           8088 fpm (nginx front)
 #   make stop_all                    # on the BENCH box: stop the fleet
 #   make remote_bench_all_k6         # on the LOAD box: k6 walks the fleet → "(remote)" tables
 #   make remote_bench_all_wrk        # on the LOAD box: same under wrk
@@ -53,10 +58,17 @@ WRK_URL ?= http://127.0.0.1:8080/?name=you
 
 RESULTS := results
 
-# Fleet ports (start_all / remote_bench_all_*): PORT_BASE+1 … PORT_BASE+6, one per
-# server, so all six coexist and a remote generator can walk them without a
-# start/stop cycle per leg. PORT_BASE itself is left free; at the default it is :8080,
-# the port every serial bench-* target binds, so the two flows can't collide.
+# Fleet ports (start_all / remote_bench_all_*): PORT_BASE+1 … PORT_BASE+8, one per
+# server, so all eight coexist and a remote generator can walk them without a start/stop
+# cycle per leg. PORT_BASE itself is left free; at the default it is :8080, the port
+# every serial bench-* target binds.
+#
+# Distinct ports are NOT enough isolation, and the guards enforce that: the two flows
+# share the results/<name>.pid and .server.log namespace, and the reap_* patterns match
+# on cmdline, not port — reap_rapira's `pkill -f '[r]apira/rapira serve'` kills every
+# rapira on the box. So a serial run finishing while a fleet is up would clobber the
+# fleet's pidfiles and SIGKILL its servers mid-benchmark. port_guard therefore refuses
+# while a fleet is up, and fleet_port_guard refuses while PORT_BASE is busy.
 PORT_BASE ?= 8080
 PORT_RAPIRA         := $(shell expr $(PORT_BASE) + 1)
 PORT_RAPIRA_WORKER  := $(shell expr $(PORT_BASE) + 2)
@@ -64,13 +76,14 @@ PORT_RAPIRA_CLASSIC := $(shell expr $(PORT_BASE) + 3)
 PORT_FRANKEN        := $(shell expr $(PORT_BASE) + 4)
 PORT_ROADRUNNER     := $(shell expr $(PORT_BASE) + 5)
 PORT_SWOOLE         := $(shell expr $(PORT_BASE) + 6)
+PORT_RAPIRA_ASYNC   := $(shell expr $(PORT_BASE) + 7)
+PORT_FPM            := $(shell expr $(PORT_BASE) + 8)
 
-# name:port pairs in report order — the fleet/remote targets walk this list.
-# php-fpm is deliberately absent: it is a two-process stack (nginx front + fpm pool)
-# whose port lives in nginx.conf, and it needs a second parameterized config to join.
+# name:port pairs — the fleet/remote targets walk this list in order.
 FLEET := rapira:$(PORT_RAPIRA) rapira-worker:$(PORT_RAPIRA_WORKER) \
          rapira-classic:$(PORT_RAPIRA_CLASSIC) franken:$(PORT_FRANKEN) \
-         roadrunner:$(PORT_ROADRUNNER) swoole:$(PORT_SWOOLE)
+         roadrunner:$(PORT_ROADRUNNER) swoole:$(PORT_SWOOLE) \
+         rapira-async:$(PORT_RAPIRA_ASYNC) fpm:$(PORT_FPM)
 
 # The bench box, as seen from the load box. Results from a remote run are suffixed
 # so they never clobber the local reference rows.
@@ -93,6 +106,7 @@ ifeq ($(BENCH),scenario)
   K6_SCRIPT      := scenario.js
   SUF            := .scenario
   RAPIRA_SCRIPT  := rapira/scenario-dispatcher.php
+  RAPIRA_ASYNC_SCRIPT := rapira/scenario-async-dispatcher.php
   RAPIRA_WORKER_SCRIPT := rapira/scenario-worker.php
   RAPIRA_CLASSIC_SCRIPT := fpm/scenario.php
   FRANKEN_CONFIG := Caddyfile.scenario
@@ -106,6 +120,7 @@ else
   K6_SCRIPT      := bench.js
   SUF            :=
   RAPIRA_SCRIPT  := rapira/dispatcher.php
+  RAPIRA_ASYNC_SCRIPT := rapira/async-dispatcher.php
   RAPIRA_WORKER_SCRIPT := rapira/worker.php
   RAPIRA_CLASSIC_SCRIPT := fpm/hello.php
   FRANKEN_CONFIG := Caddyfile
@@ -121,18 +136,18 @@ endif
 RAPIRA_SRC_BIN := ../core/target/release/rapira
 RAPIRA_BIN := rapira/rapira
 
-.PHONY: bench bench-all bench-rapira bench-rapira-worker bench-rapira-classic bench-franken bench-fpm bench-roadrunner bench-swoole \
-        bench-wrk bench-wrk-all bench-wrk-rapira bench-wrk-rapira-worker bench-wrk-rapira-classic bench-wrk-franken bench-wrk-fpm \
+.PHONY: bench bench-all bench-rapira bench-rapira-async bench-rapira-worker bench-rapira-classic bench-franken bench-fpm bench-roadrunner bench-swoole \
+        bench-wrk bench-wrk-all bench-wrk-rapira bench-wrk-rapira-async bench-wrk-rapira-worker bench-wrk-rapira-classic bench-wrk-franken bench-wrk-fpm \
         bench-wrk-roadrunner bench-wrk-swoole report clean \
         start_all stop_all remote_bench_all_k6 remote_bench_all_wrk
 
 bench: bench-franken bench-fpm bench-roadrunner bench-swoole report
 
-bench-all: bench-rapira bench-rapira-worker bench-rapira-classic bench-franken bench-fpm bench-roadrunner bench-swoole report
+bench-all: bench-rapira bench-rapira-async bench-rapira-worker bench-rapira-classic bench-franken bench-fpm bench-roadrunner bench-swoole report
 
 bench-wrk: bench-wrk-franken bench-wrk-fpm bench-wrk-roadrunner bench-wrk-swoole report
 
-bench-wrk-all: bench-wrk-rapira bench-wrk-rapira-worker bench-wrk-rapira-classic bench-wrk-franken bench-wrk-fpm bench-wrk-roadrunner bench-wrk-swoole report
+bench-wrk-all: bench-wrk-rapira bench-wrk-rapira-async bench-wrk-rapira-worker bench-wrk-rapira-classic bench-wrk-franken bench-wrk-fpm bench-wrk-roadrunner bench-wrk-swoole report
 
 $(RESULTS):
 	@mkdir -p $(RESULTS)
@@ -140,11 +155,20 @@ $(RESULTS):
 # Shared steps, $(call ...)-ed from each server target.
 # port_guard: refuse to start on a busy :8080 (a stale server here once produced a ghost benchmark).
 define port_guard
-	if ss -ltn | grep -q ':$(or $(1),8080) '; then echo "ERROR: :$(or $(1),8080) already in use — stop that server first"; exit 1; fi
+	if ss -ltn | grep -q ':$(or $(1),8080) '; then echo "ERROR: :$(or $(1),8080) already in use — stop that server first"; exit 1; fi; \
+	up=; for e in $(FLEET); do p=$${e##*:}; if ss -ltn | grep -q ":$$p "; then up="$$up $$p"; fi; done; \
+	if [ -n "$$up" ]; then \
+	  echo "ERROR: a start_all fleet is up on$$up — run 'make stop_all' before any serial bench-* run"; \
+	  exit 1; \
+	fi
 endef
-# fleet_port_guard: same idea for start_all — report EVERY busy port in one pass
-# rather than failing on the first, so a half-up fleet is diagnosable at a glance.
+# fleet_port_guard: the start_all counterpart — refuse if a serial run holds PORT_BASE, then
+# report EVERY busy fleet port in one pass rather than failing on the first, so a half-up
+# fleet is diagnosable at a glance.
 define fleet_port_guard
+	if ss -ltn | grep -q ':$(PORT_BASE) '; then \
+	  echo "ERROR: :$(PORT_BASE) is in use — a serial bench-* run is active; let it finish first"; exit 1; \
+	fi; \
 	busy=; \
 	for e in $(FLEET); do \
 	  p=$${e##*:}; \
@@ -216,6 +240,19 @@ define start_rapira_worker
 	  $(RAPIRA_WORKER_SCRIPT) > $(RESULTS)/rapira-worker$(SUF).server.log 2>&1 & \
 	echo $$! > $(RESULTS)/rapira-worker$(SUF).pid
 endef
+# rapira in dispatcher mode, async flavour: core's examples/dispatcher-async.php shape —
+# a fiber per request, tryReceive() between resumes, blocking receive() when idle. Note the
+# bench handlers never suspend, so this measures the fiber-per-request scaffolding cost, not
+# request overlap — see the header comment in rapira/async-dispatcher.php.
+define start_rapira_async
+	if [ -x $(RAPIRA_SRC_BIN) ]; then cp -f $(RAPIRA_SRC_BIN) $(RAPIRA_BIN); fi; \
+	test -x $(RAPIRA_BIN) || { echo "ERROR: $(RAPIRA_BIN) missing — build it first:"; \
+	  echo "  cd ../core && cargo build --release"; exit 1; }; \
+	echo "==> rapira-async: starting on :$(or $(1),8080) (32 worker processes, fiber per request)"; \
+	./$(RAPIRA_BIN) serve --mode dispatcher --processes 32 --listen :$(or $(1),8080) \
+	  $(RAPIRA_ASYNC_SCRIPT) > $(RESULTS)/rapira-async$(SUF).server.log 2>&1 & \
+	echo $$! > $(RESULTS)/rapira-async$(SUF).pid
+endef
 # rapira in classic mode: per-request script execution (no resident worker) on
 # the SAME fpm/ scripts php-fpm serves — apples-to-apples with the fpm stack,
 # differing only in the front (pingora vs nginx+fastcgi).
@@ -237,14 +274,26 @@ endef
 # fpm is the one two-process stack here: an nginx master (+ workers) fronting a
 # php-fpm master (+ 32 children). nginx's pid goes to the standard pidfile (it
 # holds :8080, which the wait/stop logic keys on); fpm's master gets its own.
+# fpm is the one leg whose port cannot be parameterized: nginx has no env-var substitution
+# and `listen` takes no variables, unlike Caddy ({$FRANKEN_PORT:8080}), Swoole (getenv),
+# rapira (--listen) and rr (-o http.address=). So a non-default port is RENDERED into a
+# generated sibling config; the checked-in nginx.conf is never touched and the serial path
+# keeps using it verbatim. php-fpm itself always listens on 127.0.0.1:9000 (one pool, no
+# per-port copy), so only the nginx front moves.
 define start_fpm
 	test -x "$(PHP_FPM_BIN)" || { echo "ERROR: php-fpm missing — install it (see INSTRUCTIONS.md §3)"; exit 1; }; \
 	test -x "$(NGINX_BIN)" || { echo "ERROR: nginx missing — install it (see INSTRUCTIONS.md §3)"; exit 1; }; \
-	echo "==> php-fpm: starting (32 static workers, nginx front)"; \
+	conf=$(FPM_NGINX_CONF); \
+	if [ -n "$(1)" ] && [ "$(1)" != 8080 ]; then \
+	  conf=nginx.$(1).generated.conf; \
+	  sed 's/listen 8080/listen $(1)/' fpm/$(FPM_NGINX_CONF) > fpm/$$conf; \
+	  grep -q "listen $(1)" fpm/$$conf || { echo "ERROR: could not render listen :$(1) into fpm/$$conf"; exit 1; }; \
+	fi; \
+	echo "==> php-fpm: starting on :$(or $(1),8080) (32 static workers, nginx front)"; \
 	mkdir -p fpm/run fpm/tmp; \
 	cd fpm && { $(PHP_FPM_BIN) -F -p $$PWD -y php-fpm.conf > ../$(RESULTS)/fpm$(SUF).fpm.log 2>&1 & \
 	  echo $$! > ../$(RESULTS)/fpm$(SUF).fpm.pid; } && \
-	{ $(NGINX_BIN) -p $$PWD -e stderr -c $(FPM_NGINX_CONF) -g 'daemon off;' > ../$(RESULTS)/fpm$(SUF).server.log 2>&1 & \
+	{ $(NGINX_BIN) -p $$PWD -e stderr -c $$conf -g 'daemon off;' > ../$(RESULTS)/fpm$(SUF).server.log 2>&1 & \
 	  echo $$! > ../$(RESULTS)/fpm$(SUF).pid; }
 endef
 define start_roadrunner
@@ -272,13 +321,13 @@ endef
 # -P (parent pid) BEFORE the master — orphaned nginx workers keep serving :8080
 # and their cmdline is the unanchorable 'nginx: worker process'.
 define stop_fpm
-	kill -QUIT $$(cat $(RESULTS)/fpm$(SUF).pid) 2>/dev/null || true; \
-	kill -QUIT $$(cat $(RESULTS)/fpm$(SUF).fpm.pid) 2>/dev/null || true; \
-	for i in $$(seq 1 30); do ss -ltn | grep -q ':8080 ' || break; sleep 0.5; done; \
-	if ss -ltn | grep -q ':8080 '; then \
-	  echo "WARN: fpm still holds :8080 — force-killing"; \
-	  pkill -KILL -P $$(cat $(RESULTS)/fpm$(SUF).pid) 2>/dev/null; \
-	  kill -KILL $$(cat $(RESULTS)/fpm$(SUF).pid) 2>/dev/null; sleep 1; \
+	kill -QUIT $$(cat $(RESULTS)/fpm$(SUF).pid 2>/dev/null) 2>/dev/null || true; \
+	kill -QUIT $$(cat $(RESULTS)/fpm$(SUF).fpm.pid 2>/dev/null) 2>/dev/null || true; \
+	for i in $$(seq 1 30); do ss -ltn | grep -q ':$(or $(1),8080) ' || break; sleep 0.5; done; \
+	if ss -ltn | grep -q ':$(or $(1),8080) '; then \
+	  echo "WARN: fpm still holds :$(or $(1),8080) — force-killing"; \
+	  pkill -KILL -P $$(cat $(RESULTS)/fpm$(SUF).pid 2>/dev/null) 2>/dev/null; \
+	  kill -KILL $$(cat $(RESULTS)/fpm$(SUF).pid 2>/dev/null) 2>/dev/null; sleep 1; \
 	fi; \
 	rm -f $(RESULTS)/fpm$(SUF).pid $(RESULTS)/fpm$(SUF).fpm.pid
 endef
@@ -318,6 +367,15 @@ bench-rapira: | $(RESULTS)
 	@$(call stop_server,rapira,INT)
 	@$(call reap_rapira)
 	@echo "==> rapira: done"
+
+bench-rapira-async: | $(RESULTS)
+	@$(call port_guard)
+	@$(call start_rapira_async)
+	@$(call wait_ready,rapira-async)
+	@$(call run_k6,rapira-async)
+	@$(call stop_server,rapira-async,INT)
+	@$(call reap_rapira)
+	@echo "==> rapira-async: done"
 
 bench-rapira-worker: | $(RESULTS)
 	@$(call port_guard)
@@ -380,6 +438,15 @@ bench-wrk-rapira: | $(RESULTS)
 	@$(call stop_server,rapira,INT)
 	@$(call reap_rapira)
 	@echo "==> rapira (wrk): done"
+
+bench-wrk-rapira-async: | $(RESULTS)
+	@$(call port_guard)
+	@$(call start_rapira_async)
+	@$(call wait_ready,rapira-async)
+	@$(call run_wrk,rapira-async)
+	@$(call stop_server,rapira-async,INT)
+	@$(call reap_rapira)
+	@echo "==> rapira-async (wrk): done"
 
 bench-wrk-rapira-worker: | $(RESULTS)
 	@$(call port_guard)
@@ -454,6 +521,10 @@ start_all: | $(RESULTS)
 	@$(call wait_ready,roadrunner,$(PORT_ROADRUNNER))
 	@$(call start_swoole,$(PORT_SWOOLE))
 	@$(call wait_ready,swoole,$(PORT_SWOOLE))
+	@$(call start_rapira_async,$(PORT_RAPIRA_ASYNC))
+	@$(call wait_ready,rapira-async,$(PORT_RAPIRA_ASYNC))
+	@$(call start_fpm,$(PORT_FPM))
+	@$(call wait_ready,fpm,$(PORT_FPM))
 	@echo; echo "==> fleet up ($(BENCH) workload):"
 	@for e in $(FLEET); do printf '      %-16s 0.0.0.0:%s\n' "$${e%%:*}" "$${e##*:}"; done
 	@echo; echo "    from the load box:  make remote_bench_all_k6 REMOTE_HOST=<this box>$(if $(filter scenario,$(BENCH)), BENCH=scenario)"
@@ -463,6 +534,7 @@ start_all: | $(RESULTS)
 # only after all three rapira legs have been signalled, never between them.
 stop_all:
 	@$(call stop_server,rapira,INT,$(PORT_RAPIRA))
+	@$(call stop_server,rapira-async,INT,$(PORT_RAPIRA_ASYNC))
 	@$(call stop_server,rapira-worker,INT,$(PORT_RAPIRA_WORKER))
 	@$(call stop_server,rapira-classic,INT,$(PORT_RAPIRA_CLASSIC))
 	@$(call reap_rapira)
@@ -471,6 +543,8 @@ stop_all:
 	@$(call reap_roadrunner)
 	@$(call stop_server,swoole,TERM,$(PORT_SWOOLE))
 	@$(call reap_swoole)
+	@$(call stop_fpm,$(PORT_FPM))
+	@$(call reap_fpm)
 	@echo "==> fleet down"
 
 # remote_bench_all_k6 / _wrk: run the generator HERE against the fleet on REMOTE_HOST,
@@ -515,7 +589,7 @@ remote_bench_all_wrk: | $(RESULTS)
 #   scenario.js declares thresholds on them.
 define REPORT_PY
 import json, os, re, time
-SERVERS = ('rapira', 'rapira-worker', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole')
+SERVERS = ('rapira', 'rapira-async', 'rapira-worker', 'rapira-classic', 'franken', 'fpm', 'roadrunner', 'swoole')
 SCEN = ('browse', 'echoJson', 'form', 'misc')
 # '' = locally generated runs; '.remote' = runs driven from another box
 # (make remote_bench_all_*). Rendered as two separate table groups on purpose: a

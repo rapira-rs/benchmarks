@@ -4,16 +4,20 @@ declare(strict_types=1);
 
 require __DIR__ . '/../app/app.php';
 
-// Scenario worker (dispatcher mode): app.php routing over the ten-fiber
-// receive loop; the request never touches superglobals.
+// Scenario worker (dispatcher mode, SYNCHRONOUS) — core's examples/dispatcher-sync.php
+// shape: app.php routing over a blocking receive(), one request at a time. The request
+// never touches superglobals.
+//
+// Replaced a ten-fiber round-robin loop on 2026-08-16; see dispatcher.php for why those
+// fibers measured nothing. The fiber-per-request flavour is scenario-async-dispatcher.php.
 
 use Rapira\Exception\ClosedException;
+use Rapira\Exception\RapiraThrowable;
 
 $d = \Rapira\get_dispatcher();
 
-$fibers = [];
-for ($i = 0; $i < 10; $i++) {
-    $fibers[$i] = new Fiber(static function () use ($d): void {
+while (true) {
+    try {
         while (true) {
             $ex = $d->receive();
             $req = $ex->getRequest();
@@ -28,14 +32,11 @@ for ($i = 0; $i < 10; $i++) {
             }
             $ex->writeHead($status, $h);
             $ex->writeBody($body);
-            Fiber::suspend();
         }
-    });
-}
-
-try {
-    for ($i = 0; true; $i = ($i + 1) % 10) {
-        $fibers[$i]->isStarted() ? $fibers[$i]->resume() : $fibers[$i]->start();
+    } catch (ClosedException) {
+        // Drained: no more work will ever arrive.
+        break;
+    } catch (RapiraThrowable) {
+        // The host closed the exchange first — nothing to answer, take the next unit.
     }
-} catch (ClosedException) {
 }

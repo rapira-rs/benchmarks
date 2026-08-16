@@ -9,3 +9,7 @@ roadrunner/rr
 swoole/swoole.so
 rapira/rapira
 rapira/rapira-*
+
+# nginx configs rendered by start_fpm for a non-default port (fleet mode); the
+# checked-in nginx.conf / nginx.scenario.conf are the sources and stay tracked.
+fpm/nginx.*.generated.conf
