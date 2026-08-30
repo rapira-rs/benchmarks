@@ -22,7 +22,7 @@ AMI ?=
 TF := terraform -chdir=terraform
 AWSC := aws --profile $(PROFILE) --region $(REGION)
 
-.PHONY: up provision status bench bench_fleet perf sync extend report down nuke preflight
+.PHONY: up provision status bench bench_fleet bench_frameworks perf sync extend report down nuke preflight
 
 preflight:
 	@$(AWSC) sts get-caller-identity >/dev/null 2>&1 || \
@@ -72,6 +72,9 @@ bench:
 
 bench_fleet:
 	@scripts/bench-fleet.sh
+
+bench_frameworks:
+	@scripts/bench-frameworks.sh
 
 # LEG selects the binary (base or pr); REF stays the git-ref knob of up/provision.
 perf:

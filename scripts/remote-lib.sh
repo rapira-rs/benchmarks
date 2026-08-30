@@ -217,7 +217,11 @@ measure_cell() { # tag url [probe_tag]
   cl0=$(cpu_snap "$LOADER_PUB" || echo 0 0)
 
   # Keepalive sample at half-duration: ESTAB should sit near the connection
-  # count; a TIME-WAIT flood means framing broke keepalive.
+  # count; a TIME-WAIT flood means framing broke keepalive. The baseline
+  # taken before load discounts TIME-WAIT residue from the previous cell
+  # (those sockets linger for 60s across a leg change).
+  local tw_base
+  tw_base=$(rssh "$SERVER_PUB" "ss -Htan state time-wait '( sport = :8080 )' | wc -l" 2>/dev/null || echo 0)
   (
     sleep $((dur_s / 2 + 1))
     rssh "$SERVER_PUB" "echo \$(ss -Htan state established '( sport = :8080 )' | wc -l) \$(ss -Htan state time-wait '( sport = :8080 )' | wc -l)"
@@ -264,8 +268,8 @@ measure_cell() { # tag url [probe_tag]
 
   local est tw
   read -r est tw <"$OUT/cells/$tag.conns" 2>/dev/null || true
-  if [ -n "${tw:-}" ] && [ "$tw" -gt "$WRK_CONNS" ]; then
-    flag "$tag" keepalive_broken "est=$est tw=$tw"
+  if [ -n "${tw:-}" ] && [ $((tw - tw_base)) -gt "$WRK_CONNS" ]; then
+    flag "$tag" keepalive_broken "est=$est tw=$tw tw_base=$tw_base"
   fi
 
   local ena

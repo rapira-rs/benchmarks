@@ -13,7 +13,7 @@ cd "$(dirname "$0")/.."
 WORKLOAD=hello
 
 ROUNDS=${ROUNDS:-3}
-LEG_LIST=${LEG_LIST:-$(cd "php/$WORKLOAD" && for f in ./*.php; do m=${f#./}; printf 'rapira-%s ' "${m%.php}"; done)franken fpm roadrunner swoole rapira-static-hit rapira-static-miss franken-static-hit franken-static-miss}
+LEG_LIST=${LEG_LIST:-$(cd "php/$WORKLOAD" && for f in ./*.php; do m=${f#./}; printf 'rapira-%s ' "${m%.php}"; done)franken fpm rapira-static-hit rapira-static-miss franken-static-hit franken-static-miss}
 USER_CHECKS=${CHECKS:-1}
 WRK_DURATION=${WRK_DURATION:-15s}
 WRK_TIMEOUT=${WRK_TIMEOUT:-5s}

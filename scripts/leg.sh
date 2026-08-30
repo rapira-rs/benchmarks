@@ -12,8 +12,13 @@ start)
   ref=${2:?ref} mode=${3:?mode} procs=${4:?processes} tag=${5:?tag} workload=${6:-hello} config=${7:-}
   bin=$BENCH/bin/rapira-$ref
   # From the staged rig, so a re-staged workload edit benches fresh without a
-  # re-provision, and the wrk and k6 halves always see the same file.
-  script=$HOME/bench-rig/php/$workload/$mode.php
+  # re-provision, and the wrk and k6 halves always see the same file. An
+  # absolute workload is used verbatim: the framework legs pass the entry
+  # script of an app built on the box.
+  case "$workload" in
+  /*) script=$workload ;;
+  *) script=$HOME/bench-rig/php/$workload/$mode.php ;;
+  esac
   [ -x "$bin" ] || { echo "ERROR: $bin missing; run 'make provision'"; exit 1; }
   [ -f "$script" ] || { echo "ERROR: $script missing"; exit 1; }
   cfgflag=()
