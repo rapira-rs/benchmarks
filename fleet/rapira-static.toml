@@ -1,0 +1,8 @@
+# Static middleware for the rapira static hit and miss legs. Mode, processes,
+# listen, and the entrypoint come from the CLI flags, which override this file.
+# A miss falls through to the PHP worker.
+[http]
+middleware = ["static"]
+
+[http.static]
+root = "static"

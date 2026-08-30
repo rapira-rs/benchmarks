@@ -13,7 +13,8 @@ cd "$(dirname "$0")/.."
 WORKLOAD=hello
 
 ROUNDS=${ROUNDS:-3}
-LEG_LIST=${LEG_LIST:-$(cd "php/$WORKLOAD" && for f in ./*.php; do m=${f#./}; printf 'rapira-%s ' "${m%.php}"; done)franken fpm roadrunner swoole}
+LEG_LIST=${LEG_LIST:-$(cd "php/$WORKLOAD" && for f in ./*.php; do m=${f#./}; printf 'rapira-%s ' "${m%.php}"; done)franken fpm roadrunner swoole rapira-static-hit rapira-static-miss franken-static-hit franken-static-miss}
+USER_CHECKS=${CHECKS:-1}
 WRK_DURATION=${WRK_DURATION:-15s}
 WRK_TIMEOUT=${WRK_TIMEOUT:-5s}
 LOWC=${LOWC:-32}
@@ -53,7 +54,11 @@ url="http://$SERVER_PRIV:8080/?name=you"
 
 leg_start() { # leg tag
   case "$1" in
+  # The static legs run the pr worker with the static middleware config; hit
+  # and miss share one server shape and differ only in the request URL.
+  rapira-static-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start pr worker $PROCESSES $2 $WORKLOAD fleet/rapira-static.toml" ;;
   rapira-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start pr ${1#rapira-} $PROCESSES $2 $WORKLOAD" ;;
+  franken-static-*) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh start franken $PROCESSES $2" ;;
   *) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh start $1 $PROCESSES $2" ;;
   esac
 }
@@ -61,6 +66,7 @@ leg_start() { # leg tag
 leg_stop() { # leg tag
   case "$1" in
   rapira-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh stop $2 pr" ;;
+  franken-static-*) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh stop franken $2" ;;
   *) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh stop $1 $2" ;;
   esac
 }
@@ -78,6 +84,19 @@ for tag in "${plan[@]}"; do
   : >"$OUT/cells/$tag.meta"
   flag "$tag" leg "$leg"
 
+  # Static hit cells fetch the css asset; the k6 body checks describe the
+  # hello greeting, so they are off there (status failures still count).
+  case "$leg" in
+  *-static-hit)
+    cell_url="http://$SERVER_PRIV:8080/app.css"
+    CHECKS=0
+    ;;
+  *)
+    cell_url=$url
+    CHECKS=$USER_CHECKS
+    ;;
+  esac
+
   if ! leg_start "$leg" "$tag"; then
     flag "$tag" void "start failed"
     leg_stop "$leg" "$tag" 2>/dev/null || true
@@ -86,8 +105,8 @@ for tag in "${plan[@]}"; do
   CUR_LEG=$leg
   CUR_TAG=$tag
   case "$leg" in
-  rapira-*) measure_cell "$tag" "$url" "$tag" || true ;;
-  *) measure_cell "$tag" "$url" || true ;;
+  rapira-*) measure_cell "$tag" "$cell_url" "$tag" || true ;;
+  *) measure_cell "$tag" "$cell_url" || true ;;
   esac
   leg_stop "$leg" "$tag" || flag "$tag" stop_warn 1
   CUR_TAG=""

@@ -19,7 +19,8 @@ CORE=$HOME/core
 . "$(dirname "$0")/build-lib.sh"
 
 echo "==> packages"
-pkgs="php-cli php-devel php-embedded php-opcache clang clang-devel gcc make git perf ethtool curl tar python3"
+# cmake: older ref lockfiles build zlib-ng from source through it.
+pkgs="php-cli php-devel php-embedded php-opcache clang clang-devel gcc make cmake git perf ethtool curl tar python3"
 # php-opcache is a separate Fedora package and its silent absence would
 # corrupt exactly the classic-vs-fpm comparison; bindgen needs clang-devel.
 [ "$LEGS" = all ] && pkgs="$pkgs nginx php-fpm composer autoconf automake libtool openssl-devel"

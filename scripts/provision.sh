@@ -18,7 +18,9 @@ rig_init
 # Per-host preamble in parallel: the boxes are independent.
 prep() {
   wait_ssh "$1"
-  rssh "$1" cloud-init status --wait >/dev/null
+  # Root: the status file under /run/cloud-init is not world-readable on
+  # every boot state.
+  rssh "$1" sudo cloud-init status --wait >/dev/null
   arm_ttl "$1" "$TTL"
 }
 prep "$SERVER_PUB" &

@@ -26,12 +26,14 @@ OUT=results/$(date -u +%Y%m%dT%H%M%SZ)-$INSTANCE_TYPE-ab
 mkdir -p "$OUT/cells"
 
 rssh "$SERVER_PUB" cat /opt/bench/meta.json >"$OUT/server-meta.json"
-# Tab-separated: rustflags carry spaces.
-IFS=$'\t' read -r base_sha pr_sha base_bin pr_bin base_rf pr_rf opcache < <(python3 -c '
+# Unit-separator fields: rustflags carry spaces and can be empty, and bash
+# collapses runs of IFS whitespace (tabs included), which would shift every
+# field after an empty one.
+IFS=$'\x1f' read -r base_sha pr_sha base_bin pr_bin base_rf pr_rf opcache < <(python3 -c '
 import json, sys
 m = json.load(open(sys.argv[1]))
-print("\t".join([m["base_sha"], m["pr_sha"], m["base_sha256"], m["pr_sha256"],
-                 m["base_rustflags"], m["pr_rustflags"], str(m.get("opcache", 0))]))
+print("\x1f".join([m["base_sha"], m["pr_sha"], m["base_sha256"], m["pr_sha256"],
+                   m["base_rustflags"], m["pr_rustflags"], str(m.get("opcache", 0))]))
 ' "$OUT/server-meta.json")
 
 echo "==> A/B: base=$base_sha pr=$pr_sha workload=$WORKLOAD processes=$PROCESSES conns=$WRK_CONNS rounds=$ROUNDS modes=[$MODES]"

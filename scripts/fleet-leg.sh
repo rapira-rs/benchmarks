@@ -44,6 +44,9 @@ start-franken)
   sed -e "s/@@PROCS@@/$procs/" -e "s/@@THREADS@@/$((procs + 1))/" \
     "$RIG/franken/Caddyfile.tpl" >"$FLEET/franken/Caddyfile"
   install -m 0644 "$RIG/franken/index.php" "$FLEET/franken/index.php"
+  # php_server serves existing files before PHP; app.css feeds the static
+  # hit leg and is unreachable from the hello and miss URLs.
+  install -m 0644 "$RIG/static/app.css" "$FLEET/franken/app.css"
   (cd "$FLEET/franken" && exec nohup ../frankenphp run --config Caddyfile) \
     </dev/null >"$BENCH/log/$tag.server.log" 2>&1 &
   echo $! >"$BENCH/run/$tag.pid"

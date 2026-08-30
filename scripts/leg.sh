@@ -9,13 +9,18 @@ set -euo pipefail
 case "${1:?start|stop|probe}" in
 
 start)
-  ref=${2:?ref} mode=${3:?mode} procs=${4:?processes} tag=${5:?tag} workload=${6:-hello}
+  ref=${2:?ref} mode=${3:?mode} procs=${4:?processes} tag=${5:?tag} workload=${6:-hello} config=${7:-}
   bin=$BENCH/bin/rapira-$ref
   # From the staged rig, so a re-staged workload edit benches fresh without a
   # re-provision, and the wrk and k6 halves always see the same file.
   script=$HOME/bench-rig/php/$workload/$mode.php
   [ -x "$bin" ] || { echo "ERROR: $bin missing; run 'make provision'"; exit 1; }
   [ -f "$script" ] || { echo "ERROR: $script missing"; exit 1; }
+  cfgflag=()
+  if [ -n "$config" ]; then
+    [ -f "$HOME/bench-rig/$config" ] || { echo "ERROR: $config missing from the staged rig"; exit 1; }
+    cfgflag=(--config "$HOME/bench-rig/$config")
+  fi
   if port_busy; then
     echo "WARN: :$PORT busy; reaping leaked rapira legs"
     pkill -KILL -f 'bin/rapira-base serve' 2>/dev/null || true
@@ -23,7 +28,7 @@ start)
     wait_port_free 20 || { echo "ERROR: :$PORT still busy after the reap; something else holds it"; exit 1; }
   fi
   ulimit -n 65536 || true
-  nohup "$bin" serve --mode "$mode" --processes "$procs" --listen ":$PORT" "$script" \
+  nohup "$bin" serve --mode "$mode" --processes "$procs" --listen ":$PORT" "${cfgflag[@]}" "$script" \
     </dev/null >"$BENCH/log/$tag.server.log" 2>&1 &
   pid=$!
   echo "$pid" >"$BENCH/run/$tag.pid"
