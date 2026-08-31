@@ -1,8 +1,4 @@
 #!/bin/bash
-# Cost failsafe only; provisioning runs later over ssh and narrows the TTL.
-# Arms a fixed 180 minute outer bound first, then installs a unit that
-# re-arms the deadline after a reboot (a scheduled shutdown lives in /run).
-# The file must stay static: a user_data change stops and starts the instances.
 set -u
 
 outer=180
@@ -11,8 +7,6 @@ date -u -d "+$outer minutes" +%s > /etc/rapira-bench-deadline
 
 cat > /usr/local/sbin/rapira-bench-ttl-arm <<'ARM'
 #!/bin/bash
-# Owns the deadline protocol. With a minutes argument, set a new deadline
-# first; bare, re-arm from the stored one (the reboot unit calls it bare).
 set -u
 if [ $# -ge 1 ]; then
   date -u -d "+$1 minutes" +%s > /etc/rapira-bench-deadline

@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Runs on the loader box as user fedora (ssh-driven by `make provision`).
-# Env: WRK_TAG, K6_VERSION.
 set -euo pipefail
 
 WRK_TAG=${WRK_TAG:-4.2.0}
@@ -9,9 +7,6 @@ K6_VERSION=${K6_VERSION:-2.2.0}
 echo "==> packages"
 sudo dnf -y install gcc make git openssl-devel zlib-devel ethtool curl tar
 
-# wrk is not packaged in Fedora; build the canonical source at a pinned tag.
-# WITH_OPENSSL=/usr links the system OpenSSL: the vendored one needs perl
-# modules the cloud image lacks.
 if ! command -v wrk >/dev/null; then
   echo "==> build wrk $WRK_TAG"
   rm -rf "$HOME/wrk-src"

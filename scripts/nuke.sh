@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Teardown by aws cli for when tfstate is lost or the TTL already terminated
-# the instances. Strictly tag-scoped: the account holds unrelated resources,
-# so never match by name pattern and never delete-all.
 set -euo pipefail
 
 PROFILE=${PROFILE:-Rustatian}
@@ -12,8 +9,6 @@ awsx() {
   command aws --profile "$PROFILE" --region "$REGION" "$@"
 }
 
-# Terminated instances stay visible for about an hour; filter by live states so
-# terminate-instances never gets an empty or already-dead id list.
 ids=$(awsx ec2 describe-instances --filters "$TAGF" \
   Name=instance-state-name,Values=pending,running,shutting-down,stopping,stopped \
   --query 'Reservations[].Instances[].InstanceId' --output text)
@@ -40,8 +35,6 @@ trap 'rm -f "$err"' EXIT
 rc=0
 
 for g in $sgs; do
-  # DeleteSecurityGroup returns DependencyViolation while the ENI release
-  # lags instance termination; poll until it clears.
   ok=0
   for _ in $(seq 1 18); do
     if awsx ec2 delete-security-group --group-id "$g" 2>"$err"; then

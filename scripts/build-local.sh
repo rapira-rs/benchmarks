@@ -1,6 +1,4 @@
 #!/usr/bin/env bash
-# Runs on the server box: rebuild the pr binary from ~/core-sync, the local
-# working tree that `make sync` uploaded. Benches uncommitted work.
 set -euo pipefail
 
 PLAIN=${PLAIN:-0}
@@ -17,8 +15,6 @@ rustflags=$(rustflags_for "$PLAIN")
 build_rapira "$SRC" pr "$rustflags"
 rm -f "$BENCH/run/build-pr.marker"
 
-# pr_rustflags may now differ from the base build; the A/B driver warns on
-# the asymmetry.
 python3 - "$rustflags" <<'PY'
 import hashlib, json, sys
 meta = json.load(open("/opt/bench/meta.json"))

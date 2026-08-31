@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Runs on the server box. Starts and stops one rapira leg with identity checks.
-# Layout: binaries /opt/bench/bin/rapira-{base,pr}, pidfiles /opt/bench/run,
-# logs /opt/bench/log; the PHP workload comes from the staged rig.
 set -euo pipefail
 # shellcheck source=scripts/box-lib.sh
 . "$(dirname "$0")/box-lib.sh"
@@ -11,10 +8,6 @@ case "${1:?start|stop|probe}" in
 start)
   ref=${2:?ref} mode=${3:?mode} procs=${4:?processes} tag=${5:?tag} workload=${6:-hello} config=${7:-}
   bin=$BENCH/bin/rapira-$ref
-  # From the staged rig, so a re-staged workload edit benches fresh without a
-  # re-provision, and the wrk and k6 halves always see the same file. An
-  # absolute workload is used verbatim: the framework legs pass the entry
-  # script of an app built on the box.
   case "$workload" in
   /*) script=$workload ;;
   *) script=$HOME/bench-rig/php/$workload/$mode.php ;;
@@ -46,11 +39,6 @@ start)
     exit 1
   }
 
-  # The listener set must contain our pid: SO_REUSEADDR without REUSEPORT
-  # means a leaked older server could keep the port while this one dies on
-  # EADDRINUSE, and a readiness curl alone would greet the wrong binary.
-  # Workers inherit the listener fd, so ss lists master and worker pids; test
-  # membership (the trailing comma stops pid=12 matching pid=123).
   listener=
   for _ in $(seq 1 60); do
     if ss -HltnpO "sport = :$PORT" 2>/dev/null | grep -q "pid=$pid,"; then
@@ -66,9 +54,6 @@ start)
   wait_port_up "$tag" "$tag" >/dev/null || fail "never answered"
   ;;
 
-# One round trip for the cell baselines: worker pid set on line 1, log size
-# on line 2. Empty worker line when the master or all workers are gone, so
-# the driver can flag the cell without aborting the run.
 probe)
   tag=${2:?tag}
   pid=$(cat "$BENCH/run/$tag.pid" 2>/dev/null || true)
@@ -80,22 +65,16 @@ probe)
 stop)
   tag=${2:?tag} ref=${3:?ref}
   pid=$(cat "$BENCH/run/$tag.pid" 2>/dev/null || true)
-  # Fast path after a failed start: nothing of ours runs, so skip the drain
-  # wait that would burn 45s per cell.
   if [ -z "$pid" ] && ! pgrep -f "bin/rapira-$ref serve" >/dev/null 2>&1; then
     rm -f "$BENCH/run/$tag.pid"
     exit 0
   fi
   [ -n "$pid" ] && kill -INT "$pid" 2>/dev/null || true
-  # Workers hold the inherited listener while draining; the supervisor default
-  # gives them up to 30s, so wait 45s before forcing.
   if ! wait_port_free 90; then
     echo "WARN: $tag still holds :$PORT; force-killing"
     [ -n "$pid" ] && kill -KILL "$pid" 2>/dev/null || true
     sleep 1
   fi
-  # Workers share the master cmdline; the anchored pattern reaps master and
-  # workers of this ref only.
   pkill -KILL -f "bin/rapira-$ref serve" 2>/dev/null || true
   rm -f "$BENCH/run/$tag.pid"
   ;;

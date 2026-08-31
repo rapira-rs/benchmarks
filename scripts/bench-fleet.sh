@@ -1,15 +1,9 @@
 #!/usr/bin/env bash
-# Mac-side fleet driver: walk rapira (pr binary, one leg per handler) and the
-# competitor legs one at a time, round-interleaved with a rotated leg order so
-# no leg is always first or last in a round. Needs `make provision LEGS=all`.
-# The measurement window per cell lives in remote-lib.sh's measure_cell.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=scripts/remote-lib.sh
 . scripts/remote-lib.sh
 
-# The competitor configs serve the hello workload; scenario workloads are an
-# A/B (make bench WORKLOAD=...) concern until the fleet grows matching configs.
 WORKLOAD=hello
 
 ROUNDS=${ROUNDS:-3}
@@ -32,14 +26,9 @@ mkdir -p "$OUT/cells"
 rssh "$SERVER_PUB" cat /opt/bench/meta.json >"$OUT/server-meta.json"
 rssh "$SERVER_PUB" cat /opt/bench/fleet/versions.txt >"$OUT/fleet-versions.txt" 2>/dev/null || true
 
-# The rapira binary carries frame pointers unless it was provisioned with
-# PLAIN=1; the prebuilt competitors never do. Stamp it so a published table
-# cannot hide the asymmetry.
 rustflags=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pr_rustflags"])' "$OUT/server-meta.json")
 [ -n "$rustflags" ] && echo "NOTE: rapira built with '$rustflags'; competitors are plain release builds. Provision with PLAIN=1 for a publishable table."
 
-# The full plan, built once: cells.expected before anything runs, then the
-# same array drives the cell loop.
 plan=()
 for round in $(seq 1 "$ROUNDS"); do
   for i in $(seq 0 $((nlegs - 1))); do
@@ -52,10 +41,8 @@ ttl_ensure "$(estimate_run_s ${#plan[@]})" "$SERVER_PUB" "$LOADER_PUB"
 
 url="http://$SERVER_PRIV:8080/?name=you"
 
-leg_start() { # leg tag
+leg_start() {
   case "$1" in
-  # The static legs run the pr worker with the static middleware config; hit
-  # and miss share one server shape and differ only in the request URL.
   rapira-static-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start pr worker $PROCESSES $2 $WORKLOAD fleet/rapira-static.toml" ;;
   rapira-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start pr ${1#rapira-} $PROCESSES $2 $WORKLOAD" ;;
   franken-static-*) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh start franken $PROCESSES $2" ;;
@@ -63,7 +50,7 @@ leg_start() { # leg tag
   esac
 }
 
-leg_stop() { # leg tag
+leg_stop() {
   case "$1" in
   rapira-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh stop $2 pr" ;;
   franken-static-*) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh stop franken $2" ;;
@@ -84,8 +71,6 @@ for tag in "${plan[@]}"; do
   : >"$OUT/cells/$tag.meta"
   flag "$tag" leg "$leg"
 
-  # Static hit cells fetch the css asset; the k6 body checks describe the
-  # hello greeting, so they are off there (status failures still count).
   case "$leg" in
   *-static-hit)
     cell_url="http://$SERVER_PRIV:8080/app.css"
@@ -114,7 +99,6 @@ done
 
 write_run_meta "rounds=$ROUNDS" "legs=$LEG_LIST"
 
-# report.py exits nonzero on an incomplete or broken run; the results still land.
 python3 scripts/report.py "$OUT" | tee "$OUT/report.txt" || true
 echo
 echo "==> results in $OUT"

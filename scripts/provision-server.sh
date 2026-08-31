@@ -1,8 +1,4 @@
 #!/usr/bin/env bash
-# Runs on the server box as user fedora (ssh-driven by `make provision`).
-# Env: REF (required; branch, tag, sha, or pr/N), BASE_REF, LEGS
-# (rapira|all|frameworks), PLAIN=1 drops frame pointers (publishable fleet
-# tables).
 set -euo pipefail
 
 BASE_REF=${BASE_REF:-main}
@@ -11,8 +7,6 @@ LEGS=${LEGS:-rapira}
 PLAIN=${PLAIN:-0}
 CORE_REPO=${CORE_REPO:-https://github.com/rapira-rs/rapira}
 FRANKEN_VERSION=${FRANKEN_VERSION:-1.12.4}
-# 7.3.* packages sit behind composer security advisories that block
-# resolution outright; ^7.3 lands on the advisory-clean current stable.
 SYMFONY_SKELETON=${SYMFONY_SKELETON:-^7.3}
 LARAVEL_VERSION=${LARAVEL_VERSION:-^12.0}
 OCTANE_VERSION=${OCTANE_VERSION:-^2.12}
@@ -23,13 +17,8 @@ CORE=$HOME/core
 . "$(dirname "$0")/build-lib.sh"
 
 echo "==> packages"
-# cmake: older ref lockfiles build zlib-ng from source through it.
 pkgs="php-cli php-devel php-embedded php-opcache clang clang-devel gcc make cmake git perf ethtool curl tar python3"
-# php-opcache is a separate Fedora package and its silent absence would
-# corrupt exactly the classic-vs-fpm comparison; bindgen needs clang-devel.
 [ "$LEGS" != rapira ] && pkgs="$pkgs nginx php-fpm composer unzip"
-# Framework extension set for Symfony and Laravel; ctype, curl, fileinfo,
-# openssl, session, and tokenizer already live in php-cli/php-common.
 [ "$LEGS" = frameworks ] || [ "$LEGS" = all ] && pkgs="$pkgs php-mbstring php-xml php-pdo php-process php-sodium"
 # shellcheck disable=SC2086
 sudo dnf -y install $pkgs
@@ -47,8 +36,6 @@ fedora soft nofile 1048576
 fedora hard nofile 1048576
 EOF
 
-# The AMI root is 5 GiB; cloud-init growpart must have expanded it before the
-# builds, or cargo dies with ENOSPC after minutes of billed time.
 root_kb=$(df -Pk / | awk 'NR==2 {print $2}')
 if [ "$root_kb" -lt $((30 * 1024 * 1024)) ]; then
   echo "ERROR: root filesystem is $((root_kb / 1024 / 1024)) GiB; expected >= 30 GiB"
@@ -101,7 +88,6 @@ build_one() {
 
 base_sha=$(resolve_ref "$BASE_REF")
 pr_sha=$(resolve_ref "$REF")
-# Base first: the pr build then reuses the shared dependency cache.
 build_one base "$base_sha"
 build_one pr "$pr_sha"
 
@@ -141,7 +127,6 @@ if [ "$LEGS" != rapira ]; then
     chmod +x $BENCH/fleet/frankenphp
   fi
 
-  # Competitor provenance for the fleet run directory.
   echo "frankenphp $FRANKEN_VERSION" >$BENCH/fleet/versions.txt
 fi
 
@@ -151,24 +136,18 @@ if [ "$LEGS" = frameworks ] || [ "$LEGS" = all ]; then
   install -d "$APPS"
   export COMPOSER_NO_INTERACTION=1
 
-  # Guard on the finished install, not the directory: a failed create-project
-  # leaves a partial tree behind.
   if [ ! -f "$APPS/symfony/public/index.php" ]; then
     rm -rf "$APPS/symfony"
     composer create-project "symfony/skeleton:$SYMFONY_SKELETON" "$APPS/symfony" --no-progress
   fi
-  # The bench overlay: route table, controller, worker entries, prod env.
-  # Re-installed every provision so a rig edit reaches the box without a
-  # rebuild of the app. The franken worker twin goes into public/ where
-  # php_server can resolve requests to it.
   install -d "$APPS/symfony/bench" "$APPS/symfony/src/Controller"
   install -m 0644 "$HOME"/bench-rig/fleet/symfony/bench/worker-rapira.php "$APPS/symfony/bench/"
   install -m 0644 "$HOME"/bench-rig/fleet/symfony/bench/worker-franken.php "$APPS/symfony/public/"
   install -m 0644 "$HOME"/bench-rig/fleet/symfony/index.php "$APPS/symfony/public/index.php"
   install -m 0644 "$HOME"/bench-rig/fleet/symfony/BenchController.php "$APPS/symfony/src/Controller/"
+  install -m 0644 "$HOME"/bench-rig/fleet/static/app.css "$APPS/symfony/public/"
+  install -m 0644 "$HOME"/bench-rig/fleet/static/tiny.css "$APPS/symfony/public/"
   printf 'APP_ENV=prod\nAPP_DEBUG=0\nAPP_SECRET=8f2f4c9a51e04d0bafd3a7f22c1e6b90\n' >"$APPS/symfony/.env.local"
-  # dump-env spares the classic and fpm legs the per-request Dotenv parse,
-  # the standard prod deploy step.
   (cd "$APPS/symfony" &&
     composer dump-autoload --optimize --classmap-authoritative --quiet &&
     composer dump-env prod --quiet &&
@@ -176,9 +155,6 @@ if [ "$LEGS" = frameworks ] || [ "$LEGS" = all ]; then
     php bin/console cache:warmup -q)
 
   if [ ! -f "$APPS/laravel/public/index.php" ]; then
-    # --no-scripts skips the skeleton's sqlite create-and-migrate hook; the
-    # bench app never touches a database. Discovery runs on the octane
-    # require below, once the bench .env is in place.
     rm -rf "$APPS/laravel"
     composer create-project "laravel/laravel:$LARAVEL_VERSION" "$APPS/laravel" --no-progress --no-scripts
   fi
@@ -186,7 +162,6 @@ if [ "$LEGS" = frameworks ] || [ "$LEGS" = all ]; then
   install -m 0644 "$HOME"/bench-rig/fleet/laravel/BenchController.php "$APPS/laravel/app/Http/Controllers/"
   install -d "$APPS/laravel/bench"
   install -m 0644 "$HOME"/bench-rig/fleet/laravel/bench/worker-rapira.php "$APPS/laravel/bench/"
-  # No database and no filesystem state per request: array session and cache.
   cat >"$APPS/laravel/.env" <<'EOF'
 APP_NAME=bench
 APP_ENV=production
@@ -208,15 +183,11 @@ APP_MAINTENANCE_DRIVER=file
 BCRYPT_ROUNDS=4
 OCTANE_SERVER=frankenphp
 EOF
-  # The key must exist before config:cache freezes app.key. optimize covers
-  # config, events, routes, and views.
   (cd "$APPS/laravel" &&
     composer require "laravel/octane:$OCTANE_VERSION" --no-progress --quiet &&
     php artisan key:generate --force -q &&
     composer dump-autoload --optimize --classmap-authoritative --quiet &&
     php artisan optimize -q)
-  # Octane's FrankenPHP entry, self-locating from public/; what
-  # octane:install would have copied.
   install -m 0644 "$APPS/laravel/vendor/laravel/octane/src/Commands/stubs/frankenphp-worker.php" \
     "$APPS/laravel/public/frankenphp-worker.php"
 

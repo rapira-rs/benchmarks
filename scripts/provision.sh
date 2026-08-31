@@ -1,7 +1,4 @@
 #!/usr/bin/env bash
-# Mac-side provisioning driver: waits for both boxes, arms the TTL, stages
-# the rig once, then runs the two provision scripts with the loader in
-# parallel. Env: REF (required), BASE_REF, LEGS, TTL, PLAIN.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 # shellcheck source=scripts/remote-lib.sh
@@ -15,11 +12,8 @@ PLAIN=${PLAIN:-0}
 
 rig_init
 
-# Per-host preamble in parallel: the boxes are independent.
 prep() {
   wait_ssh "$1"
-  # Root: the status file under /run/cloud-init is not world-readable on
-  # every boot state.
   rssh "$1" sudo cloud-init status --wait >/dev/null
   arm_ttl "$1" "$TTL"
 }

@@ -1,5 +1,4 @@
 #!/usr/bin/env bash
-# Shared primitives for the box-side leg scripts. Source, do not execute.
 
 BENCH=/opt/bench
 PORT=8080
@@ -8,8 +7,6 @@ port_busy() {
   ss -HltnO "sport = :$PORT" | grep -q .
 }
 
-# All legs serve byte-identical bodies, so a leaked server would be benched
-# under the next leg's name.
 ensure_port_free() {
   if port_busy; then
     echo "ERROR: :$PORT busy; a previous leg leaked:"
@@ -18,7 +15,7 @@ ensure_port_free() {
   fi
 }
 
-wait_port_up() { # leg tag
+wait_port_up() {
   local i
   for i in $(seq 1 60); do
     curl -sf -m1 -o /dev/null "http://127.0.0.1:$PORT/?name=you" && return 0
@@ -29,7 +26,7 @@ wait_port_up() { # leg tag
   return 1
 }
 
-wait_port_free() { # [iterations, 0.5s each]
+wait_port_free() {
   local i
   for i in $(seq 1 "${1:-60}"); do
     port_busy || return 0

@@ -71,6 +71,45 @@ Laravel (Octane on the worker legs):
 - v0.7.0 flush bug found while building the legs: PHP `flush()` after output makes v0.7.0 seal the response lengthless and the front closes the connection (~every request under symfony/runtime's `Response::send(true)` tail; 170k resets per 5s cell). Fixed on main. The symfony classic entry now uses send(false) on all servers; the residual v0.7.0 resets above are the pre-existing hello-class ones.
 - Flags: symfony-franken worker and classic plus symfony-fpm ran server_unsaturated at c=2048 (their pool shape, matching the hello fleet); the rapira and laravel legs saturated.
 
+## Static cache bench (feature/cache-for-static vs main vs FrankenPHP), 2026-08-31
+
+Rig: the fixed c7a pair, plain release builds, eu-central-1a, AMI ami-040c604473c52f25f, 32 workers/threads per leg, wrk c=8000 d=15s, lowc c=32, k6 VUS=256, medians of 3 interleaved rounds, new `make bench_static` driver. Run dir: `results/20260831T190826Z-c7a.8xlarge-static`. Servers: rapira feature/cache-for-static `649b8c7` (pr, per-worker in-memory file cache: 16 MiB/process, 256 KiB/file cap, 1 s freshness), rapira main `5d188a0` (base, uncached ServeDir), FrankenPHP 1.12.4. Apps behind the fallthrough: the hello worker and the Symfony 7.4.18 kernel-loop worker. hit fetches tiny.css (128 B) with PHP never running; miss requests the hello URL through the same server shape so the static probe runs and falls through to PHP; plain is the same rapira worker with no static middleware (franken has no such shape).
+
+Asset size is the whole game: 27 KiB pegs the 12.5 Gbps wire at ~56k req/s on every leg (2026-08-30 fleet run), and even 1 KiB put the cache leg at ~11 Gbps with shaved bw allowances and the loader over its 6.25 Gbps sustained baseline (first launch of this run, aborted after one cell). At 128 B every hit leg is CPU-bound except the cache legs, which run into the ~1.27M req/s pair ceiling instead (loader ~95% CPU): the cache hit rows are floors, not ceilings, with busy_server only ~72%.
+
+Hello app:
+
+| leg | req/s (median) | lowc p50 | lowc p99 | spread |
+| --- | --- | --- | --- | --- |
+| rapira-cache hit | >= 1,266,878 (pair ceiling) | 0.12ms | 0.18ms | 0.6% |
+| rapira-cache miss | 973,109 | 0.14ms | 0.25ms | 2.0% |
+| rapira-cache plain | 1,161,508 | 0.14ms | 0.24ms | 0.9% |
+| rapira-main hit | 261,909 | 0.24ms | 0.43ms | 1.0% |
+| rapira-main miss | 578,811 | 0.17ms | 0.31ms | 0.6% |
+| rapira-main plain | 1,174,781 | 0.14ms | 0.23ms | 1.4% |
+| franken hit | 139,749 | 0.21ms | 1.22ms | 0.4% |
+| franken miss | 104,213 | 0.28ms | 1.77ms | 15.0% |
+
+Symfony (kernel-loop worker):
+
+| leg | req/s (median) | lowc p50 | lowc p99 | spread |
+| --- | --- | --- | --- | --- |
+| rapira-cache hit | >= 1,263,239 (pair ceiling) | 0.12ms | 0.19ms | 1.0% |
+| rapira-cache miss | 173,863 | 0.27ms | 0.62ms | 4.7% |
+| rapira-cache plain | 173,755 | 0.25ms | 0.54ms | 1.1% |
+| rapira-main hit | 259,373 | 0.25ms | 0.43ms | 1.6% |
+| rapira-main miss | 137,706 | 0.32ms | 0.83ms | 3.5% |
+| rapira-main plain | 176,592 | 0.25ms | 0.45ms | 0.7% |
+| franken hit | 145,077 | 0.20ms | 1.21ms | 0.8% |
+| franken miss | 89,695 | 0.34ms | 1.79ms | 0.6% |
+
+- Hit: the cache is worth at least 4.8x over main's uncached ServeDir path (1,267k floor vs 262k clean server ceiling at 96% busy) and at least 8.7x over franken's php_server file path; the true cache ceiling is unmeasurable on this pair. lowc per-request p50 halves (0.12ms vs 0.24-0.25ms).
+- Main's uncached hit (262k) is slower than its own miss fallthrough to resident hello PHP (579k): stat + open + read through spawn_blocking per request costs more than a full PHP hello round trip. The maindev-era note on ServeDir vs Caddy pointed the same way.
+- Miss (the branch's regression control) improved, not regressed: the probe tax vs plain is -50.7% on main hello and -16.2% on the branch (973k vs 579k, +68%); on symfony the branch's tax vanishes entirely (173.9k miss vs 173.8k plain, main -22.0%). The 2026-08-30 fleet's "static miss costs ~50% of worker" finding is specific to main.
+- Plain (middleware off): cache vs main is -1.1% hello / -1.6% symfony, inside or bordering the round spread; no baseline regression from the branch.
+- Flags: every cache hit cell is generator_bound at the pair ceiling, and four cells across the run grazed the PPS allowance by 20 to 946 packets (~0.004% of a cell's packets; ena_throttled per the strict rule, magnitudes noise). franken legs ran server_unsaturated at its usual pool shape. Zero voided cells, zero failed k6 checks, 48/48 cells.
+- Rig note: `WRK_CONNS` defaulted to the hello 250x (c=8000) for all legs including symfony; the symfony worker at ~174k req/s holds a ~46ms queue at that depth, well under the 5s timeout, and no cell voided. A future symfony-heavy static run could pin 64x for parity with bench_frameworks.
+
 ## Decisions and their reasons
 
 - Fixed pair, no size knobs. Measured on the null runs: wrk needs ~0.62 loader cores per saturated server core, and hello at a 32-core ceiling moves ~4.4 Gbps sustained. A c7a.2xlarge loader fails both (8 cores, 3.125 Gbps baseline); c7a.4xlarge clears both. The 8xlarge server has a fixed 12.5 Gbps link, no burst credits.

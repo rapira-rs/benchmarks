@@ -22,7 +22,7 @@ AMI ?=
 TF := terraform -chdir=terraform
 AWSC := aws --profile $(PROFILE) --region $(REGION)
 
-.PHONY: up provision status bench bench_fleet bench_frameworks perf sync extend report down nuke preflight
+.PHONY: up provision status bench bench_fleet bench_frameworks bench_static perf sync extend report down nuke preflight
 
 preflight:
 	@$(AWSC) sts get-caller-identity >/dev/null 2>&1 || \
@@ -76,6 +76,9 @@ bench_fleet:
 bench_frameworks:
 	@scripts/bench-frameworks.sh
 
+bench_static:
+	@scripts/bench-static.sh
+
 # LEG selects the binary (base or pr); REF stays the git-ref knob of up/provision.
 perf:
 	@scripts/perf.sh
@@ -93,8 +96,8 @@ extend:
 	echo "TTL set to $(TTL) minutes on both boxes"
 
 report:
-	@d=$$(ls -d results/*-ab results/*-fleet 2>/dev/null | sort | tail -1); \
-	test -n "$$d" || { echo "ERROR: no A/B or fleet run in results/"; exit 1; }; \
+	@d=$$(ls -d results/*-ab results/*-fleet results/*-static 2>/dev/null | sort | tail -1); \
+	test -n "$$d" || { echo "ERROR: no A/B, fleet, or static run in results/"; exit 1; }; \
 	python3 scripts/report.py "$$d"
 
 down: preflight
