@@ -96,8 +96,8 @@ extend:
 	echo "TTL set to $(TTL) minutes on both boxes"
 
 report:
-	@d=$$(ls -d results/*-ab results/*-fleet results/*-static 2>/dev/null | sort | tail -1); \
-	test -n "$$d" || { echo "ERROR: no A/B, fleet, or static run in results/"; exit 1; }; \
+	@d=$$(ls -d results/*-ab results/*-fleet results/*-frameworks results/*-static 2>/dev/null | sort | tail -1); \
+	test -n "$$d" || { echo "ERROR: no A/B, fleet, framework, or static run in results/"; exit 1; }; \
 	python3 scripts/report.py "$$d"
 
 down: preflight

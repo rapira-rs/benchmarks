@@ -9,32 +9,15 @@ WORKLOAD=hello
 ROUNDS=${ROUNDS:-3}
 LEG_LIST=${LEG_LIST:-$(cd "php/$WORKLOAD" && for f in ./*.php; do m=${f#./}; printf 'rapira-%s ' "${m%.php}"; done)franken fpm rapira-static-hit rapira-static-miss franken-static-hit franken-static-miss}
 USER_CHECKS=${CHECKS:-1}
-WRK_DURATION=${WRK_DURATION:-15s}
-WRK_TIMEOUT=${WRK_TIMEOUT:-5s}
-LOWC=${LOWC:-32}
-K6_VUS=${K6_VUS:-256}
 
 bench_init
 
 # shellcheck disable=SC2206
 legs=($LEG_LIST)
-nlegs=${#legs[@]}
 
-instance_type=$INSTANCE_TYPE
-OUT=results/$(date -u +%Y%m%dT%H%M%SZ)-$instance_type-fleet
-mkdir -p "$OUT/cells"
-rssh "$SERVER_PUB" cat /opt/bench/meta.json >"$OUT/server-meta.json"
-rssh "$SERVER_PUB" cat /opt/bench/fleet/versions.txt >"$OUT/fleet-versions.txt" 2>/dev/null || true
+fleet_run_init fleet
 
-rustflags=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pr_rustflags"])' "$OUT/server-meta.json")
-[ -n "$rustflags" ] && echo "NOTE: rapira built with '$rustflags'; competitors are plain release builds. Provision with PLAIN=1 for a publishable table."
-
-plan=()
-for round in $(seq 1 "$ROUNDS"); do
-  for i in $(seq 0 $((nlegs - 1))); do
-    plan+=("r$round-${legs[$(((i + round - 1) % nlegs))]}")
-  done
-done
+plan_rotated_cells "$ROUNDS" "${legs[@]}"
 printf '%s\n' "${plan[@]}" >"$OUT/cells.expected"
 
 ttl_ensure "$(estimate_run_s ${#plan[@]})" "$SERVER_PUB" "$LOADER_PUB"
@@ -99,6 +82,8 @@ done
 
 write_run_meta "rounds=$ROUNDS" "legs=$LEG_LIST"
 
-python3 scripts/report.py "$OUT" | tee "$OUT/report.txt" || true
+report_status=0
+python3 scripts/report.py "$OUT" | tee "$OUT/report.txt" || report_status=$?
 echo
 echo "==> results in $OUT"
+exit "$report_status"

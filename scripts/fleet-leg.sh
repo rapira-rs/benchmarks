@@ -7,23 +7,10 @@ FLEET=$BENCH/fleet
 RIG=$HOME/bench-rig/fleet
 
 verify_count() {
-  if [ "$1" -lt "$2" ] || [ "$1" -gt "$3" ]; then
-    echo "ERROR: $4 pool is $1, expected $2..$3; parity broken"
+  if [ "$1" -ne "$2" ]; then
+    echo "ERROR: $3 pool is $1, expected $2; parity broken"
     return 1
   fi
-}
-
-stop_simple() {
-  local pid
-  pid=$(cat "$BENCH/run/$1.pid" 2>/dev/null || true)
-  [ -n "$pid" ] && kill "-$2" "$pid" 2>/dev/null || true
-  if ! wait_port_free; then
-    echo "WARN: $1 still holds :$PORT; force-killing"
-    [ -n "$pid" ] && kill -KILL "$pid" 2>/dev/null || true
-    sleep 1
-  fi
-  pkill -KILL -f "$3" 2>/dev/null || true
-  rm -f "$BENCH/run/$1.pid"
 }
 
 cmd=${1:?start|stop} leg=${2:?leg}
@@ -54,7 +41,16 @@ start-franken)
   ;;
 
 stop-franken | stop-franken-app)
-  stop_simple "${3:?tag}" TERM '[f]rankenphp run'
+  tag=${3:?tag}
+  pid=$(cat "$BENCH/run/$tag.pid" 2>/dev/null || true)
+  [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null || true
+  if ! wait_port_free; then
+    echo "WARN: $tag still holds :$PORT; force-killing"
+    [ -n "$pid" ] && kill -KILL "$pid" 2>/dev/null || true
+    sleep 1
+  fi
+  pkill -KILL -f '[f]rankenphp run' 2>/dev/null || true
+  rm -f "$BENCH/run/$tag.pid"
   ;;
 
 start-franken-app)
@@ -70,12 +66,12 @@ start-franken-app)
   worker)
     case "$fw" in
     symfony)
-      indexfile=worker-franken.php
+      indexfile="worker-franken.php"
       env_lines=""
       ;;
     laravel)
       indexfile=frankenphp-worker.php
-      env_lines="env LARAVEL_OCTANE 1;env MAX_REQUESTS 100000000;env APP_DEBUG false"
+      env_lines=$'\t\t\tenv LARAVEL_OCTANE 1\n\t\t\tenv MAX_REQUESTS 100000000\n\t\t\tenv APP_DEBUG false'
       ;;
     *)
       echo "ERROR: unknown framework $fw"
@@ -84,10 +80,10 @@ start-franken-app)
     esac
     worker=$app/public/$indexfile
     [ -f "$worker" ] || { echo "ERROR: $worker missing; re-run provisioning"; exit 1; }
-    awk -v docroot="$app/public" -v threads="$((procs + 1))" -v workerf="$worker" \
-      -v procsn="$procs" -v indexf="$indexfile" -v envl="$env_lines" '
+    ENV_LINES="$env_lines" awk -v docroot="$app/public" -v threads="$((procs + 1))" -v workerf="$worker" \
+      -v procsn="$procs" -v indexf="$indexfile" '
       /@@WORKER_ENV@@/ {
-        if (envl != "") { n = split(envl, a, ";"); for (i = 1; i <= n; i++) printf "\t\t\t%s\n", a[i] }
+        if (ENVIRON["ENV_LINES"] != "") print ENVIRON["ENV_LINES"]
         next
       }
       {
@@ -110,38 +106,40 @@ start-franken-app)
     echo "WARN: franken num_threads $expect_threads not confirmed in the log"
   ;;
 
-start-fpm)
-  procs=${3:?procs} tag=${4:?tag}
+start-fpm | start-fpm-app)
   ensure_port_free
+  case "$leg" in
+  fpm)
+    docroot=.
+    indexfile=hello.php
+    procs=${3:?procs}
+    tag=${4:?tag}
+    readiness=fpm
+    install -d "$FLEET/fpm"
+    install -m 0644 "$RIG/fpm/hello.php" "$FLEET/fpm/hello.php"
+    ;;
+  fpm-app)
+    fw=${3:?framework}
+    procs=${4:?procs}
+    tag=${5:?tag}
+    app=$(app_dir "$fw")
+    docroot=$app/public
+    indexfile=index.php
+    readiness=fpm-$fw
+    ;;
+  esac
   install -d "$FLEET/fpm/run" "$FLEET/fpm/tmp"
   sed "s/@@PROCS@@/$procs/" "$RIG/fpm/php-fpm.conf.tpl" >"$FLEET/fpm/php-fpm.conf"
-  install -m 0644 "$RIG/fpm/nginx.conf" "$FLEET/fpm/nginx.conf"
-  install -m 0644 "$RIG/fpm/hello.php" "$FLEET/fpm/hello.php"
+  sed -e "s|@@DOCROOT@@|$docroot|" -e "s|@@INDEXFILE@@|$indexfile|g" \
+    "$RIG/fpm/nginx.app.conf.tpl" >"$FLEET/fpm/nginx.conf"
   (cd "$FLEET/fpm" && exec nohup php-fpm -F -p "$FLEET/fpm" -y php-fpm.conf) \
     </dev/null >"$BENCH/log/$tag.fpm.log" 2>&1 &
   echo $! >"$BENCH/run/$tag.fpm.pid"
   (cd "$FLEET/fpm" && exec nohup nginx -p "$FLEET/fpm" -e stderr -c nginx.conf -g 'daemon off;') \
     </dev/null >"$BENCH/log/$tag.server.log" 2>&1 &
   echo $! >"$BENCH/run/$tag.pid"
-  wait_port_up fpm "$tag"
-  verify_count "$(pgrep -c -f 'php-fpm: pool bench' || true)" "$procs" "$procs" php-fpm
-  ;;
-
-start-fpm-app)
-  fw=${3:?framework} procs=${4:?procs} tag=${5:?tag}
-  ensure_port_free
-  app=$(app_dir "$fw")
-  install -d "$FLEET/fpm/run" "$FLEET/fpm/tmp"
-  sed "s/@@PROCS@@/$procs/" "$RIG/fpm/php-fpm.conf.tpl" >"$FLEET/fpm/php-fpm.conf"
-  sed "s|@@DOCROOT@@|$app/public|" "$RIG/fpm/nginx.app.conf.tpl" >"$FLEET/fpm/nginx.conf"
-  (cd "$FLEET/fpm" && exec nohup php-fpm -F -p "$FLEET/fpm" -y php-fpm.conf) \
-    </dev/null >"$BENCH/log/$tag.fpm.log" 2>&1 &
-  echo $! >"$BENCH/run/$tag.fpm.pid"
-  (cd "$FLEET/fpm" && exec nohup nginx -p "$FLEET/fpm" -e stderr -c nginx.conf -g 'daemon off;') \
-    </dev/null >"$BENCH/log/$tag.server.log" 2>&1 &
-  echo $! >"$BENCH/run/$tag.pid"
-  wait_port_up "fpm-$fw" "$tag"
-  verify_count "$(pgrep -c -f 'php-fpm: pool bench' || true)" "$procs" "$procs" php-fpm
+  wait_port_up "$readiness" "$tag"
+  verify_count "$(pgrep -c -f 'php-fpm: pool bench' || true)" "$procs" php-fpm
   ;;
 
 stop-fpm | stop-fpm-app)

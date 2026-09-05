@@ -8,8 +8,6 @@ LEG=${LEG:-pr}
 MODE=${MODE:-worker}
 DUR=${DUR:-30}
 WORKLOAD=${WORKLOAD:-hello}
-WRK_DURATION=${WRK_DURATION:-15s}
-WRK_TIMEOUT=${WRK_TIMEOUT:-5s}
 
 bench_init
 ttl_ensure $((DUR + 600)) "$SERVER_PUB" "$LOADER_PUB"

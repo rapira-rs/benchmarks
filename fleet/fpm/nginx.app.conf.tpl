@@ -1,7 +1,5 @@
-# nginx front for the framework fpm legs. Same shape as nginx.conf, but the
-# front controller is the app's public/index.php: every path executes it over
-# fastcgi, the standard production deployment for Symfony and Laravel.
-# fleet-leg.sh renders @@DOCROOT@@ at start time.
+# nginx front for the fpm legs. fleet-leg.sh renders the document root and
+# front controller at start time.
 
 worker_processes auto;
 worker_rlimit_nofile 65536;
@@ -32,8 +30,8 @@ http {
             fastcgi_pass 127.0.0.1:9000;
             # fastcgi_params inlined: an include would resolve against this
             # prefix, not /etc/nginx.
-            fastcgi_param SCRIPT_FILENAME  $document_root/index.php;
-            fastcgi_param SCRIPT_NAME      /index.php;
+            fastcgi_param SCRIPT_FILENAME  $document_root/@@INDEXFILE@@;
+            fastcgi_param SCRIPT_NAME      /@@INDEXFILE@@;
             fastcgi_param QUERY_STRING     $query_string;
             fastcgi_param REQUEST_METHOD   $request_method;
             fastcgi_param CONTENT_TYPE     $content_type;

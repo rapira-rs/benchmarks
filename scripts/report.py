@@ -68,6 +68,24 @@ def load_cells(out):
     return cells
 
 
+def classify_cells(out, cells):
+    suffixes = {
+        "wrk": "wrk.txt",
+        "lowc": "lowc.wrk.txt",
+        "k6": "k6.summary.json",
+    }
+    for tag, cell in cells.items():
+        cell["artifact_issues"] = {}
+        if "void" in cell["meta"]:
+            continue
+        for artifact, suffix in suffixes.items():
+            if cell[artifact] is not None:
+                continue
+            path = out / "cells" / f"{tag}.{suffix}"
+            state = "unparseable" if path.exists() else "missing"
+            cell["artifact_issues"][artifact] = f"{state} {artifact} output"
+
+
 def ms(v):
     return f"{v:.2f}ms" if v is not None else "n/a"
 
@@ -103,7 +121,7 @@ def group_cells(cells, pick, field="wrk"):
     groups = {}
     for c in cells.values():
         key = pick(c["meta"])
-        if key is None or "void" in c["meta"] or not c[field]:
+        if key is None or "void" in c["meta"] or field in c["artifact_issues"]:
             continue
         groups.setdefault(key, []).append(c)
     return groups
@@ -126,12 +144,13 @@ def main():
         print(f"ERROR: no cells/ in {out}; not a bench run directory")
         return 1
     cells = load_cells(out)
+    classify_cells(out, cells)
 
     expected_path = out / "cells.expected"
     expected = expected_path.read_text().split() if expected_path.exists() else []
     missing = [t for t in expected if t not in cells]
     voided = {t: c["meta"]["void"] for t, c in cells.items() if "void" in c["meta"]}
-    invalid = [t for t, c in cells.items() if "void" not in c["meta"] and not c["wrk"]]
+    invalid = {t: c["artifact_issues"] for t, c in cells.items() if c["artifact_issues"]}
     broken = False
 
     # Run-level flags (null_run, asymmetric_build, ...) surface verbatim.
@@ -228,16 +247,28 @@ def main():
             print(f"  {tag}: {why}")
         print()
     if invalid:
-        print("INVALID cells (no parseable wrk output, excluded):")
-        for tag in sorted(invalid):
-            print(f"  {tag}")
+        print("INVALID cells (excluded from affected tables):")
+        for tag, issues in sorted(invalid.items()):
+            print(f"  {tag}: {', '.join(issues.values())}")
         print()
+
+    incomplete = []
+    if not expected_path.exists():
+        incomplete.append("cells.expected is missing")
+    elif not expected:
+        incomplete.append("cells.expected is empty")
     if missing:
-        print(f"INCOMPLETE RUN: {len(missing)} planned cells have no result: {' '.join(missing)}")
-        print("Do not publish these tables.")
-        return 1
+        incomplete.append(f"{len(missing)} planned cells have no result: {' '.join(missing)}")
+    if voided:
+        incomplete.append(f"{len(voided)} cells were voided")
+    if invalid:
+        incomplete.append(f"{len(invalid)} cells have missing or unparseable generator output")
+    if incomplete:
+        print(f"INCOMPLETE RUN: {'; '.join(incomplete)}.")
     if broken:
-        print("BROKEN RUN: a mode lost every cell of one ref, or k6 checks failed. Do not publish these tables.")
+        print("BROKEN RUN: a mode lost every cell of one ref, or k6 checks failed.")
+    if incomplete or broken:
+        print("Do not publish these tables.")
         return 1
     return 0
 
