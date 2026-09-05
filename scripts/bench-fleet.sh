@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 WORKLOAD=hello
 
 ROUNDS=${ROUNDS:-3}
-LEG_LIST=${LEG_LIST:-$(cd "php/$WORKLOAD" && for f in ./*.php; do m=${f#./}; printf 'rapira-%s ' "${m%.php}"; done)franken fpm rapira-static-hit rapira-static-miss franken-static-hit franken-static-miss}
+LEG_LIST=${LEG_LIST:-$(cd "php/$WORKLOAD" && for f in ./*.php; do m=${f#./}; printf 'rapira-%s ' "${m%.php}"; done)rapira-nginx-worker franken fpm rapira-static-hit rapira-static-miss franken-static-hit franken-static-miss}
 USER_CHECKS=${CHECKS:-1}
 
 bench_init
@@ -27,6 +27,7 @@ url="http://$SERVER_PRIV:8080/?name=you"
 leg_start() {
   case "$1" in
   rapira-static-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start pr worker $PROCESSES $2 $WORKLOAD fleet/rapira-static.toml" ;;
+  rapira-nginx-worker) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh start rapira-nginx $PROCESSES $2 $WORKLOAD" ;;
   rapira-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start pr ${1#rapira-} $PROCESSES $2 $WORKLOAD" ;;
   franken-static-*) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh start franken $PROCESSES $2" ;;
   *) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh start $1 $PROCESSES $2" ;;
@@ -35,6 +36,7 @@ leg_start() {
 
 leg_stop() {
   case "$1" in
+  rapira-nginx-worker) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh stop rapira-nginx $2" ;;
   rapira-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh stop $2 pr" ;;
   franken-static-*) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh stop franken $2" ;;
   *) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh stop $1 $2" ;;

@@ -13,6 +13,36 @@ verify_count() {
   fi
 }
 
+stop_rapira_nginx() {
+  local tag=$1 nginx_pid
+  nginx_pid=$(cat "$BENCH/run/$tag.nginx.pid" 2>/dev/null || true)
+  if [ -n "$nginx_pid" ] && kill -0 "$nginx_pid" 2>/dev/null; then
+    kill -QUIT "$nginx_pid" 2>/dev/null || true
+    if ! PORT=8080 wait_port_free 90; then
+      echo "WARN: $tag nginx still holds :8080; force-killing"
+      pkill -KILL -P "$nginx_pid" 2>/dev/null || true
+      kill -KILL "$nginx_pid" 2>/dev/null || true
+      sleep 1
+    fi
+  fi
+  rm -f "$BENCH/run/$tag.nginx.pid"
+  PORT=8081 LISTEN_HOST=127.0.0.1 "$HOME/bench-rig/scripts/leg.sh" stop "$tag" pr
+}
+
+fail_rapira_nginx() {
+  local tag=$1 message=$2
+  echo "ERROR: $tag $message; last nginx log lines:"
+  tail -5 "$BENCH/log/$tag.nginx.log" 2>/dev/null || true
+  exit 1
+}
+
+cleanup_rapira_nginx_start() {
+  local status=$?
+  trap - EXIT
+  [ "$status" -eq 0 ] || stop_rapira_nginx "$tag" 2>/dev/null || true
+  exit "$status"
+}
+
 cmd=${1:?start|stop} leg=${2:?leg}
 
 app_dir() {
@@ -22,6 +52,52 @@ app_dir() {
 }
 
 case "$cmd-$leg" in
+
+start-rapira-nginx)
+  procs=${3:?procs} tag=${4:?tag} workload=${5:-hello}
+  PORT=8080 ensure_port_free
+  PORT=8081 ensure_port_free
+  trap cleanup_rapira_nginx_start EXIT
+  nginx_bin=$(command -v nginx)
+  nginx_bin=$(readlink -f "$nginx_bin")
+  install -d "$FLEET/nginx/run" "$FLEET/nginx/tmp"
+  sed "s/@@PROCS@@/$procs/g" "$RIG/nginx/rapira.conf.tpl" >"$FLEET/nginx/nginx.conf"
+  if ! "$nginx_bin" -t -p "$FLEET/nginx" -e stderr -c nginx.conf; then
+    fail_rapira_nginx "$tag" "nginx configuration is invalid"
+  fi
+  if ! PORT=8081 LISTEN_HOST=127.0.0.1 "$HOME/bench-rig/scripts/leg.sh" start pr worker "$procs" "$tag" "$workload"; then
+    fail_rapira_nginx "$tag" "Rapira backend did not start"
+  fi
+  (cd "$FLEET/nginx" && exec nohup "$nginx_bin" -p "$FLEET/nginx" -e stderr -c nginx.conf -g 'daemon off;') \
+    </dev/null >"$BENCH/log/$tag.nginx.log" 2>&1 &
+  nginx_pid=$!
+  echo "$nginx_pid" >"$BENCH/run/$tag.nginx.pid"
+
+  listener=
+  for _ in $(seq 1 60); do
+    if ss -HltnpO "sport = :8080" 2>/dev/null | grep -q "pid=$nginx_pid,"; then
+      listener=$nginx_pid
+      break
+    fi
+    kill -0 "$nginx_pid" 2>/dev/null || break
+    sleep 0.5
+  done
+  [ "$listener" = "$nginx_pid" ] || fail_rapira_nginx "$tag" "nginx pid $nginx_pid never showed up as a :8080 listener"
+  nginx_exe=$(readlink "/proc/$nginx_pid/exe")
+  [ "$nginx_exe" = "$nginx_bin" ] || fail_rapira_nginx "$tag" "nginx exe $nginx_exe does not match $nginx_bin"
+  PORT=8080 wait_port_up rapira-nginx "$tag" >/dev/null || fail_rapira_nginx "$tag" "nginx never answered"
+  rapira_pid=$(cat "$BENCH/run/$tag.pid")
+  rapira_workers=$(pgrep -c -P "$rapira_pid" || true)
+  nginx_workers=$(pgrep -c -P "$nginx_pid" -f 'nginx: worker process' || true)
+  verify_count "$rapira_workers" "$procs" rapira || fail_rapira_nginx "$tag" "Rapira worker count is invalid"
+  verify_count "$nginx_workers" "$procs" nginx || fail_rapira_nginx "$tag" "nginx worker count is invalid"
+  trap - EXIT
+  ;;
+
+stop-rapira-nginx)
+  tag=${3:?tag}
+  stop_rapira_nginx "$tag"
+  ;;
 
 start-franken)
   procs=${3:?procs} tag=${4:?tag}

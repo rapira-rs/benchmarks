@@ -1,52 +1,117 @@
-# rapira AWS bench rig
+# Rapira AWS benchmark rig
 
-Two on-demand EC2 boxes in eu-central-1, managed by Terraform: a server box that builds and runs rapira, and a loader box that drives wrk and k6 over the free same-AZ private network. The default bench is an A/B of rapira at `BASE_REF` (main) against a PR ref, both built on the same box, so host drift cancels out. Tracked as rapira-rs/rapira#97.
+This repository runs Rapira benchmarks on Amazon AWS EC2. Terraform creates one server instance and one loader instance in the same Availability Zone. The loader runs `wrk` and `k6` against the private address of the server. The operator machine only controls the run through SSH.
 
-## Prerequisites
+The server is `c7a.8xlarge`. The loader is `c7a.4xlarge`. The default region is `eu-central-1`.
 
-- `terraform`, `aws` (v2), `python3`, `git` on this machine.
-- `aws sso login --profile Rustatian` with a fresh session.
+## Requirements on the operator machine
 
-## Flow
+- Bash, GNU Make, Git, Python 3, `curl`, `tar`, and an OpenSSH client
+- Terraform 1.5 or later
+- AWS CLI v2
+- An active session for the `Rustatian` AWS profile
+
+Start the AWS session before you create the rig:
 
 ```bash
-make up REF=pr/97          # apply + provision + build base and pr (~25 min first time)
-make bench                 # interleaved A/B, medians, report
-make perf MODE=worker      # flamegraph of one leg under load
-make down                  # destroy everything
+aws sso login --profile Rustatian
 ```
 
-Run `make provision REF=<ref>` to build another ref on a running rig. Run `make sync` to build the local `../core` working tree as the pr leg. Sync includes tracked files and untracked files that Git does not ignore. It excludes deleted files.
+## Software on the EC2 instances
 
-The scripts split into a control plane and box scripts. The control plane (`bench-*.sh`, `provision.sh`, `perf.sh`, `sync`, `remote-lib.sh`) runs on the operator machine and only orchestrates over ssh: start a leg on the server box, run wrk and k6 on the loader box, fetch the raw outputs into `results/`. The box scripts (`leg.sh`, `fleet-leg.sh`, `box-lib.sh`, `provision-server.sh`, `provision-loader.sh`, `build-*.sh`, `ena-check.sh`, `perf-snap.sh`) are staged to `~/bench-rig` on the boxes and execute there. All load is EC2-to-EC2: wrk and k6 run on the loader against the server's private IP, and the operator machine generates none of it.
+Provisioning installs these tools and packages:
 
-## Targets
+| Instance | Condition | Installed software |
+| --- | --- | --- |
+| Server | All runs | `php-cli`, `php-devel`, `php-embedded`, `php-opcache`, `clang`, `clang-devel`, `gcc`, `make`, `cmake`, `git`, `perf`, `ethtool`, `curl`, `tar`, and `python3` |
+| Server | Rust is absent | Minimal Rust toolchain from `rustup` |
+| Server | `LEGS=all` or `LEGS=frameworks` | `nginx`, `php-fpm`, `composer`, `unzip`, `php-mbstring`, `php-xml`, `php-pdo`, `php-process`, and `php-sodium` |
+| Server | `LEGS=all` or `LEGS=frameworks` | FrankenPHP binary and Composer application dependencies |
+| Loader | All runs | `gcc`, `make`, `git`, `openssl-devel`, `zlib-devel`, `ethtool`, `curl`, `tar`, `wrk`, and `k6` |
+| Server | `make perf` and tool is absent | `inferno` from Cargo; the script also tries to install `php-embedded-debuginfo` |
 
-- `up` - quota preflight, terraform apply, then provision. Knobs: `TTL` minutes (default 60), `AMI` (pin for a baseline set), `REF`, `BASE_REF`, `LEGS` (rapira, all, or frameworks), `PLAIN=1`. The pair is fixed: a c7a.8xlarge server (32 cores, no SMT, fixed 12.5 Gbps network) and a c7a.4xlarge loader, sized to saturate it on both CPU (~0.62 loader cores per server core, measured) and sustained bandwidth.
-- `provision` - rerun the ssh provisioning with new refs on a running rig.
-- `bench` - the A/B. Each cell runs three passes against one server start: wrk at saturating load (`WRK_CONNS` defaults to max(1000, 250x processes)), wrk at low concurrency for per-request latency (`LOWC`, 32), and k6 for checked latency (`K6_VUS`, 256). Knobs: `ROUNDS` (3), `MODES` ("dispatcher worker classic"), `WORKLOAD` (hello), `WRK_DURATION` (15s), `PROCESSES` (server cores), `AUTO_EXTEND=0` to fail on a short TTL, `ALLOW_SAME=1` for a null-run calibration.
-- `bench_frameworks` - the full bench with comparison to the latest release. It runs Symfony and Laravel through the full framework stack. Provision with `REF=main`, `BASE_REF=<latest release tag>`, `LEGS=frameworks`, and `PLAIN=1`. The default `SERVERS` are `rapira-pr-worker`, `rapira-pr-classic`, `rapira-base-classic`, `franken-worker`, `franken-classic`, and `fpm`. The pr and base labels identify the binaries built from `REF` and `BASE_REF`. Run metadata records the actual refs and hashes. Both Laravel worker legs use Octane. Both Symfony worker legs use the same kernel lifecycle. Composer builds the apps on the server. Settings: `ROUNDS`, `FRAMEWORKS`, `SERVERS`, and the wrk and k6 settings of `bench`. `WRK_CONNS` defaults to 64 times the process count because framework requests need fewer connections to saturate the server.
-- `bench_fleet` - rapira (pr) plus franken, fpm, and the static file legs; needs `LEGS=all` at provision time. Round-interleaved with rotated leg order. The static legs serve `fleet/static/app.css` (a 27 KiB stylesheet): hit fetches the file (rapira static middleware, franken php_server file path), miss requests the hello URL through the same server, so miss minus plain worker is the probe tax. Static hit throughput is wire-bound at 12.5 Gbps, so compare hit legs against each other, never against hello rows.
-- `bench_static` - the static file benchmark. Default `SERVERS`: `rapira-pr`, `rapira-base`, and `franken`. Each server runs with a hello worker and a Symfony worker. The request kinds are `hit`, `miss`, and `plain`. FrankenPHP has no plain leg because `php_server` always checks the document root. The driver rotates the leg order each round. Provision with `LEGS=all`. A hit fetches `ASSET` (default `tiny.css`, 128 B) without PHP execution. A miss checks the static path, then runs PHP. A plain leg runs the same Rapira worker without static middleware. Compare miss and plain to measure the static lookup cost. The 128 B asset keeps hit measurements below the network limit. Use `ASSET=app.css` for the 27 KiB bandwidth comparison. Settings: `ROUNDS`, `APPS`, `SERVERS`, `KINDS`, `ASSET`, and the wrk and k6 settings of `bench`.
-- `perf` - `LEG` (base or pr), `MODE`, `DUR` seconds; fetches flame.svg and perf.data. The server has perf, `kernel.perf_event_paranoid=-1`, `kernel.kptr_restrict=0`, php debuginfo, and every rapira build carries frame pointers plus line tables.
-- `sync` - upload the local core working tree, rebuild the pr binary from it.
-- `status` - instance states and remaining TTL. `extend TTL=120` re-arms the TTL.
-- `report` - re-render the latest run in `results/`.
-- `down` - terraform destroy. `nuke` - tag-scoped aws-cli teardown when tfstate is lost or the TTL already fired; after state loss the order is `make nuke`, then `make up`.
+The Fedora 44 EC2 image must supply Bash, `dnf`, `sudo`, OpenSSH server, cloud-init, systemd, RPM tools, core utilities, `awk`, `sed`, `grep`, procps tools, and iproute tools. Provisioning uses these base operating system tools but does not install them.
 
-## Workloads
+The loader installer selects wrk 4.2.0 and k6 2.2.0 when the tools are absent. It reuses installed binaries. Record the output of `wrk --version` and `k6 version` with each comparison.
 
-A workload is one k6 script plus one PHP handler per rapira mode: `k6/<name>.js` and `php/<name>/<mode>.php`. `WORKLOAD=<name>` selects it for the A/B, and the handler files define the mode set. The k6 script contract lives in the header of `k6/hello.js`; a script that declares thresholds on `http_reqs{scenario:x}` submetrics gets one report row per scenario automatically. The wrk passes always probe the plain GET route, so every workload must answer a bare GET. The fleet configs serve the hello workload only.
+## Standard flow
 
-## Money
+```bash
+make up REF=pr/97
+make bench
+make down
+```
 
-The pair costs about $2.83 per hour all-in (c7a.8xlarge $1.87 + c7a.4xlarge $0.94 + gp3 roots and public IPv4). A full session from apply to destroy is roughly 30 to 45 minutes, so $1.50 to $2.10. The instances self-terminate: the bootstrap arms a 180 minute outer bound at boot, provisioning narrows it to TTL, a systemd unit re-arms it after a reboot. The pair needs 48 on-demand vCPUs; the account quota (L-1216C47A, currently 64) is checked by the preflight.
+The instances use on-demand billing. A shutdown terminates an instance. The bootstrap sets a 180 minute maximum lifetime. Provisioning replaces this value with `TTL`, which defaults to 60 minutes.
 
-## Reading results
+## Benchmark suites
 
-- Each run writes `results/<stamp>-<type>-<kind>/` with raw wrk and k6 output per cell, per-cell metadata, `run-meta.json` (shas, binary and workload hashes, AMI, kernel, php build, knobs), and `report.txt`.
-- The report shows medians, the spread across rounds, and cell counts. It excludes voided cells from all measurements. A missing plan, missing cell output, voided cell, or failed k6 check makes the run incomplete or broken. The report and benchmark commands return a nonzero status for these runs. Partial tables remain available for diagnosis. Do not publish them.
-- Flags (`generator_bound`, `server_unsaturated`, `ena_throttled`, `keepalive_broken`, `worker_churn`, `log_growth`) mark cells whose number is not a clean server ceiling. `INSTRUCTIONS.md` explains each flag and how to read the tables (Little's law, the lowc pass, the k6 probe, network credits).
-- The server network is a fixed 12.5 Gbps; the loader's 6.25 Gbps sustained baseline covers hello traffic to about 2.3M req/s before burst credits come into play. The per-cell ENA counter diffs stay the truth on throttling either way.
-- AWS numbers form their own baseline set. Never mix numbers from another rig or instance size into one table, and pin `AMI` when a set spans days.
-- Fleet caveat: rapira carries frame pointers, the prebuilt competitors do not. Provision with `PLAIN=1` before a publishable fleet table.
+- `make bench` compares the Rapira build from `BASE_REF` with the build from `REF`. It runs the configured dispatcher, worker, and classic modes.
+- `make bench_fleet` compares the hello workload across Rapira, Rapira behind nginx, FrankenPHP, php-fpm behind nginx, and the static file legs. Provision with `LEGS=all`.
+- `make bench_frameworks` compares Symfony and Laravel across the configured servers. Laravel worker rows use Octane. The direct and nginx Rapira rows use the same application worker script. Provision with `LEGS=frameworks` or `LEGS=all`.
+- `make bench_static` measures static hits, static misses that continue to PHP, and direct Rapira worker requests. A hit returns `ASSET` without PHP execution. A miss checks the static path and then runs PHP. A plain row runs the same Rapira worker without the static middleware. FrankenPHP has no plain row. Provision with `LEGS=all`.
+- `make perf` records a Rapira profile while `wrk` supplies load. Profiling is optional and is not part of a result table.
+
+Use this command for a full framework bench with comparison to the latest release:
+
+```bash
+make up REF=main BASE_REF=<latest-release-tag> LEGS=frameworks PLAIN=1
+make bench_frameworks
+```
+
+Use `PLAIN=1` when a table compares Rapira with FrankenPHP or php-fpm. This setting removes the Rapira profiling build options from that comparison.
+
+## Rapira behind nginx
+
+The fleet row is `rapira-nginx-worker`. Its matching direct row is `rapira-worker`.
+
+The framework row is `rapira-pr-nginx-worker`. Its matching direct row is `rapira-pr-worker`.
+
+For an nginx worker row, the loader connects to nginx on server port 8080. nginx sends the request through an HTTP/1.1 keepalive upstream to the Rapira worker at `127.0.0.1:8081`. Rapira uses `PROCESSES` worker processes. nginx uses `PROCESSES` worker processes. Both tiers use the CPUs of the same EC2 server. The row measures the complete nginx and Rapira path.
+
+Run only the matching fleet rows:
+
+```bash
+make bench_fleet LEG_LIST='rapira-worker rapira-nginx-worker'
+```
+
+Run only the matching framework rows:
+
+```bash
+make bench_frameworks SERVERS='rapira-pr-worker rapira-pr-nginx-worker'
+```
+
+## Settings and other targets
+
+- `BASE_REF` selects the base Git ref. It defaults to `main`.
+- `REF` selects the other Git ref. It accepts a branch, tag, commit, or `pr/N`.
+- `ROUNDS` defaults to 3.
+- `PROCESSES` defaults to the server CPU count.
+- `WRK_DURATION` defaults to 15 seconds.
+- `WRK_THREADS` defaults to the loader CPU count.
+- `WRK_CONNS` defaults to 250 times `PROCESSES`, with a minimum of 1000. Framework runs use 64 times `PROCESSES` by default.
+- `LOWC` defaults to 32 connections.
+- `K6_VUS` defaults to 256.
+- `WORKLOAD` selects `k6/<name>.js` and the handlers in `php/<name>/`.
+- `MODES` selects the Rapira modes for `make bench`.
+- `FRAMEWORKS` and `SERVERS` select framework rows.
+- `LEG_LIST` selects fleet rows.
+- `APPS`, `SERVERS`, `KINDS`, and `ASSET` select static rows. `ASSET` defaults to `tiny.css`.
+- `ALLOW_SAME=1` permits a deliberate comparison of identical Rapira builds.
+- `AUTO_EXTEND=0` stops a run when the remaining instance lifetime is too short.
+- `make provision REF=<ref>` provisions new refs on an active rig.
+- `make sync` builds the local `../core` working tree as the `pr` leg.
+- `make status` shows the instance state and the remaining lifetime.
+- `make extend TTL=<minutes>` sets a new lifetime on both instances.
+- `make report` renders the latest benchmark result again.
+- `make nuke` removes tagged AWS resources when the Terraform state is not usable.
+
+## Results
+
+Each run creates `results/<timestamp>-<server-type>-<suite>/`. The directory contains raw `wrk` output, raw `k6` output, cell metadata, the expected cell list, server metadata, `run-meta.json`, and `report.txt`. Each nginx worker cell also contains `<cell>.nginx.conf` with the rendered configuration and `<cell>.nginx.txt` with the nginx build data and executable SHA-256 value.
+
+The report uses the median across rounds and shows the spread and surviving cell count. It excludes voided cells and invalid artifacts from the affected values. The benchmark command returns a nonzero status when a planned cell is missing, a cell is voided, generator output is missing or invalid, either `wrk` pass reports request errors, a k6 HTTP request fails, or a k6 check fails. An nginx worker report also requires nonempty configuration and build evidence files.
+
+Cell flags show possible measurement limits. They do not always make the command fail. Review `generator_bound`, `server_unsaturated`, `ena_throttled`, `keepalive_broken`, `worker_churn`, and `log_growth` before you publish a result.
+
+Use only results from the same AWS rig and run for a direct comparison. Pin `AMI` when one result set takes more than one day. See `INSTRUCTIONS.md` for the review checklist and the limits of the automated checks.

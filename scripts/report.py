@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Render the tables for one run directory (A/B or fleet).
-
-Reads results/<run>/cells/*.{meta,wrk.txt,lowc.wrk.txt,k6.summary.json} plus
-cells.expected and run.flags. Voided and invalid cells are listed, never
-averaged. Saturated-cell latency is queue depth restated (Little's law);
-per-request p50/p99 comes from the lowc pass each cell runs.
-"""
+"""Render benchmark tables and reject incomplete or failed measurements."""
 
 import json
 import re
@@ -37,6 +31,7 @@ def parse_wrk(path):
         "avg": wrk_ms(lat.group(1)) if lat else None,
         "p50": wrk_ms(p50.group(1)) if p50 else None,
         "p99": wrk_ms(p99.group(1)) if p99 else None,
+        "errors": "Non-2xx" in txt or "Socket errors" in txt,
     }
 
 
@@ -80,10 +75,19 @@ def classify_cells(out, cells):
             continue
         for artifact, suffix in suffixes.items():
             if cell[artifact] is not None:
+                if artifact in ("wrk", "lowc") and cell[artifact]["errors"]:
+                    cell["artifact_issues"][artifact] = f"{artifact} request errors"
+                elif artifact == "k6" and cell[artifact].get("http_req_failed", {}).get("value", 0) > 0:
+                    cell["artifact_issues"][artifact] = "k6 HTTP request failures"
                 continue
             path = out / "cells" / f"{tag}.{suffix}"
             state = "unparseable" if path.exists() else "missing"
             cell["artifact_issues"][artifact] = f"{state} {artifact} output"
+        if cell["meta"].get("leg", "").endswith("-nginx-worker"):
+            for artifact in ("nginx.conf", "nginx.txt"):
+                path = out / "cells" / f"{tag}.{artifact}"
+                if not path.is_file() or path.stat().st_size == 0:
+                    cell["artifact_issues"][artifact] = f"missing or empty {artifact}"
 
 
 def ms(v):
@@ -262,7 +266,7 @@ def main():
     if voided:
         incomplete.append(f"{len(voided)} cells were voided")
     if invalid:
-        incomplete.append(f"{len(invalid)} cells have missing or unparseable generator output")
+        incomplete.append(f"{len(invalid)} cells have missing or invalid artifacts")
     if incomplete:
         print(f"INCOMPLETE RUN: {'; '.join(incomplete)}.")
     if broken:

@@ -193,6 +193,16 @@ k6_pass() {
 measure_cell() {
   local tag=$1 url=$2 probe_tag=${3:-}
 
+  case "$tag" in
+  *-nginx-worker)
+    if ! rssh "$SERVER_PUB" cat /opt/bench/fleet/nginx/nginx.conf >"$OUT/cells/$tag.nginx.conf" ||
+      ! rssh "$SERVER_PUB" 'nginx -V 2>&1 && sha256sum "$(command -v nginx)"' >"$OUT/cells/$tag.nginx.txt"; then
+      flag "$tag" void "nginx configuration or build data unavailable"
+      return 1
+    fi
+    ;;
+  esac
+
   if ! rssh "$LOADER_PUB" "curl -sf -m2 -o /dev/null '$url' || exit 1; ulimit -n 65536; wrk -t$WRK_THREADS -c$WRK_CONNS -d5s --timeout $WRK_TIMEOUT '$url' >/dev/null 2>&1 || true"; then
     flag "$tag" void "not reachable from the loader"
     return 1

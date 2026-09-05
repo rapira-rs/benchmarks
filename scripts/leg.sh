@@ -3,6 +3,8 @@ set -euo pipefail
 # shellcheck source=scripts/box-lib.sh
 . "$(dirname "$0")/box-lib.sh"
 
+LISTEN_HOST=${LISTEN_HOST:-}
+
 case "${1:?start|stop|probe}" in
 
 start)
@@ -26,7 +28,7 @@ start)
     wait_port_free 20 || { echo "ERROR: :$PORT still busy after the reap; something else holds it"; exit 1; }
   fi
   ulimit -n 65536 || true
-  nohup "$bin" serve --mode "$mode" --processes "$procs" --listen ":$PORT" "${cfgflag[@]}" "$script" \
+  nohup "$bin" serve --mode "$mode" --processes "$procs" --listen "$LISTEN_HOST:$PORT" "${cfgflag[@]}" "$script" \
     </dev/null >"$BENCH/log/$tag.server.log" 2>&1 &
   pid=$!
   echo "$pid" >"$BENCH/run/$tag.pid"
@@ -57,9 +59,18 @@ start)
 probe)
   tag=${2:?tag}
   pid=$(cat "$BENCH/run/$tag.pid" 2>/dev/null || true)
-  { [ -n "$pid" ] && pgrep -P "$pid" 2>/dev/null | sort -n | tr '\n' ' '; } || true
+  nginx_pid=$(cat "$BENCH/run/$tag.nginx.pid" 2>/dev/null || true)
+  {
+    { [ -n "$pid" ] && pgrep -P "$pid" 2>/dev/null; } || true
+    { [ -n "$nginx_pid" ] && pgrep -P "$nginx_pid" 2>/dev/null; } || true
+  } | sort -n | tr '\n' ' '
   echo
-  wc -c <"$BENCH/log/$tag.server.log" 2>/dev/null || echo 0
+  server_log_bytes=$(wc -c <"$BENCH/log/$tag.server.log" 2>/dev/null || echo 0)
+  nginx_log_bytes=0
+  if [ -n "$nginx_pid" ]; then
+    nginx_log_bytes=$(wc -c <"$BENCH/log/$tag.nginx.log" 2>/dev/null || echo 0)
+  fi
+  echo "$((server_log_bytes + nginx_log_bytes))"
   ;;
 
 stop)

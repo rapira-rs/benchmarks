@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 
 BENCH=/opt/bench
-PORT=8080
+PORT=${PORT:-8080}
 
 port_busy() {
   ss -HltnO "sport = :$PORT" | grep -q .

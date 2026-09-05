@@ -210,6 +210,53 @@ class ReportTests(unittest.TestCase):
         self.assertIn("BROKEN RUN", result.stdout)
         self.assertIn("Do not publish these tables.", result.stdout)
 
+    def test_wrk_request_errors_prevent_publication(self):
+        for artifact in ("wrk", "lowc"):
+            for error in ("Non-2xx or 3xx responses: 1", "Socket errors: connect 0, read 1, write 0, timeout 0"):
+                with self.subTest(artifact=artifact, error=error):
+                    self.write_expected("cell")
+                    paths = self.write_cell()
+                    paths[artifact].write_text(paths[artifact].read_text() + error + "\n")
+
+                    result = self.report()
+
+                    self.assertEqual(1, result.returncode, result.stdout)
+                    self.assertIn("Do not publish these tables.", result.stdout)
+
+    def test_k6_http_failures_prevent_publication_without_checks(self):
+        self.write_expected("cell")
+        paths = self.write_cell(leg="rapira-static-hit", include_checks=False)
+        data = json.loads(paths["k6"].read_text())
+        data["metrics"]["http_req_failed"]["value"] = 0.25
+        paths["k6"].write_text(json.dumps(data))
+
+        result = self.report()
+
+        self.assertEqual(1, result.returncode, result.stdout)
+        self.assertIn("Do not publish these tables.", result.stdout)
+
+    def test_proxy_report_requires_configuration_and_build_evidence(self):
+        for missing in (None, "nginx.conf", "nginx.txt"):
+            for empty in (False, True):
+                with self.subTest(artifact=missing, empty=empty):
+                    self.write_expected("cell")
+                    self.write_cell(leg="rapira-nginx-worker")
+                    for artifact in ("nginx.conf", "nginx.txt"):
+                        path = self.run_dir / "cells" / f"cell.{artifact}"
+                        path.write_text("proxy evidence\n")
+                        if artifact == missing:
+                            if empty:
+                                path.write_text("")
+                            else:
+                                path.unlink()
+
+                    result = self.report()
+
+                    self.assertEqual(0 if missing is None else 1, result.returncode, result.stdout)
+                    if missing is not None:
+                        self.assertIn(missing, result.stdout)
+                        self.assertIn("Do not publish these tables.", result.stdout)
+
 
 if __name__ == "__main__":
     unittest.main()

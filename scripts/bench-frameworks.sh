@@ -8,7 +8,7 @@ WORKLOAD=hello
 
 ROUNDS=${ROUNDS:-3}
 FRAMEWORKS=${FRAMEWORKS:-symfony laravel}
-SERVERS=${SERVERS:-rapira-pr-worker rapira-pr-classic rapira-base-classic franken-worker franken-classic fpm}
+SERVERS=${SERVERS:-rapira-pr-worker rapira-pr-nginx-worker rapira-pr-classic rapira-base-classic franken-worker franken-classic fpm}
 
 fw_conns_default=${WRK_CONNS:+set}
 
@@ -35,6 +35,7 @@ APPS=/opt/bench/fleet/apps
 leg_start() {
   local fw=$1 srv=$2 tag=$3 app=$APPS/$1
   case "$srv" in
+  rapira-pr-nginx-worker) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh start rapira-nginx $PROCESSES $tag $app/bench/worker-rapira.php" ;;
   rapira-pr-worker) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start pr worker $PROCESSES $tag $app/bench/worker-rapira.php" ;;
   rapira-pr-classic) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start pr classic $PROCESSES $tag $app/public/index.php" ;;
   rapira-base-classic) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start base classic $PROCESSES $tag $app/public/index.php" ;;
@@ -50,6 +51,7 @@ leg_start() {
 leg_stop() {
   local srv=$1 tag=$2
   case "$srv" in
+  rapira-pr-nginx-worker) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh stop rapira-nginx $tag" ;;
   rapira-pr-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh stop $tag pr" ;;
   rapira-base-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh stop $tag base" ;;
   franken-*) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh stop franken-app $tag" ;;
