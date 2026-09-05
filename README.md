@@ -42,7 +42,7 @@ make bench
 make down
 ```
 
-The instances use on-demand billing. A shutdown terminates an instance. The bootstrap sets a 180 minute maximum lifetime. Provisioning replaces this value with `TTL`, which defaults to 60 minutes.
+The instances use on-demand billing. A shutdown terminates an instance. The bootstrap sets a maximum lifetime of 180 minutes. Provisioning replaces this value with `TTL`, which defaults to 60 minutes.
 
 ## Benchmark suites
 

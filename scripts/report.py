@@ -73,6 +73,10 @@ def classify_cells(out, cells):
         cell["artifact_issues"] = {}
         if "void" in cell["meta"]:
             continue
+        meta = cell["meta"]
+        if not meta.get("leg") and not (meta.get("ref") and meta.get("mode")):
+            cell["artifact_issues"]["meta"] = "missing cell identity"
+            continue
         for artifact, suffix in suffixes.items():
             if cell[artifact] is not None:
                 if artifact in ("wrk", "lowc") and cell[artifact]["errors"]:
@@ -124,6 +128,8 @@ def group_cells(cells, pick, field="wrk"):
     """pick(meta) -> group key or None; only valid measured cells count."""
     groups = {}
     for c in cells.values():
+        if "meta" in c["artifact_issues"]:
+            continue
         key = pick(c["meta"])
         if key is None or "void" in c["meta"] or field in c["artifact_issues"]:
             continue

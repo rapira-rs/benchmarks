@@ -9,7 +9,6 @@ import os
 import shutil
 import socket
 import subprocess
-import threading
 import time
 import unittest
 from pathlib import Path
@@ -30,7 +29,6 @@ BACKEND = r'''#!/usr/bin/env python3
 import os
 import signal
 import sys
-import time
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -71,7 +69,9 @@ class Handler(BaseHTTPRequestHandler):
 
 server = HTTPServer((host, int(port)), Handler)
 Path(started).touch()
-time.sleep(0.2)
+if ready := os.environ.get("RAPIRA_NGINX_TEST_READY"):
+    with open(ready) as channel:
+        channel.read(1)
 children = []
 
 
@@ -350,39 +350,45 @@ class NginxLifecycleTests(unittest.TestCase):
         self.assertFalse((BENCH / "run/invalid.nginx.pid").exists())
 
     def test_nginx_runtime_failure_cleans_the_backend(self):
-        release = threading.Event()
-        bound = threading.Event()
-        errors = []
-
-        def occupy_frontend():
+        ready = WORK / "fake-backend-ready"
+        os.mkfifo(ready)
+        self.env["RAPIRA_NGINX_TEST_READY"] = str(ready)
+        command = [
+            str(RIG / "scripts/fleet-leg.sh"),
+            "start",
+            "rapira-nginx",
+            "2",
+            "runtime",
+        ]
+        process = subprocess.Popen(
+            command,
+            cwd=WORK,
+            env=self.env,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        try:
             deadline = time.monotonic() + 5
             while time.monotonic() < deadline and not STARTED.exists():
                 time.sleep(0.005)
-            if not STARTED.exists():
-                errors.append("the backend did not start")
-                return
-            try:
-                with socket.socket() as busy:
-                    busy.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
-                    busy.bind(("127.0.0.1", 8080))
-                    busy.listen()
-                    bound.set()
-                    release.wait(15)
-            except OSError as error:
-                errors.append(str(error))
-
-        holder = threading.Thread(target=occupy_frontend, daemon=True)
-        holder.start()
-        try:
-            result = self.fleet("start", "rapira-nginx", 2, "runtime", timeout=20)
+            self.assertTrue(STARTED.exists(), "the backend did not start")
+            with socket.socket() as busy:
+                busy.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+                busy.bind(("127.0.0.1", 8080))
+                busy.listen()
+                ready.write_text("1")
+                stdout, stderr = process.communicate(timeout=20)
         finally:
-            release.set()
-            holder.join(timeout=2)
+            if process.poll() is None:
+                process.kill()
+                process.communicate()
 
-        self.assertTrue(bound.is_set(), errors)
-        self.assertEqual([], errors)
-        self.assertNotEqual(0, result.returncode, result.stdout)
-        self.assertTrue(STARTED.exists())
+        self.assertNotEqual(
+            0,
+            process.returncode,
+            f"stdout:\n{stdout}\nstderr:\n{stderr}",
+        )
         self.assert_port(8080, False)
         self.assert_port(8081, False)
         self.assertFalse((BENCH / "run/runtime.pid").exists())

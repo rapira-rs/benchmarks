@@ -131,6 +131,33 @@ class ReportTests(unittest.TestCase):
         self.assertIn("missing", result.stdout)
         self.assertIn("Do not publish these tables.", result.stdout)
 
+    def test_cell_without_identity_is_excluded_and_incomplete(self):
+        for meta in ("", "leg=\n", "ref=pr\n", "mode=worker\n", "ref=\nmode=worker\n", "ref=pr\nmode=\n"):
+            with self.subTest(meta=meta):
+                self.write_expected("cell")
+                self.write_cell(rate=987654)
+                (self.run_dir / "cells/cell.meta").write_text(meta)
+
+                result = self.report()
+
+                self.assertEqual(1, result.returncode, result.stdout)
+                self.assertIn("cell: missing cell identity", result.stdout)
+                self.assertNotIn("987654", result.stdout)
+                self.assertNotIn("lowc latency", result.stdout)
+                self.assertIn("Do not publish these tables.", result.stdout)
+
+    def test_ref_and_mode_identify_complete_comparison_cells(self):
+        self.write_expected("base-cell", "pr-cell")
+        for ref in ("base", "pr"):
+            self.write_cell(f"{ref}-cell")
+            (self.run_dir / "cells" / f"{ref}-cell.meta").write_text(f"ref={ref}\nmode=worker\n")
+
+        result = self.report()
+
+        self.assertEqual(0, result.returncode, result.stdout)
+        self.assertIn("worker", result.stdout)
+        self.assertIn("base req/s", result.stdout)
+
     def test_missing_required_artifact_is_incomplete(self):
         for artifact in ("wrk", "lowc", "k6"):
             with self.subTest(artifact=artifact):
