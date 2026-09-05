@@ -13,3 +13,4 @@ terraform/rig-key.pem
 # ssh session files the drivers create.
 .ssh-known-hosts
 .ssh-cm-*
+__pycache__/

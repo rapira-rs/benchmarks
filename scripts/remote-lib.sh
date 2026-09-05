@@ -120,6 +120,10 @@ ena_delta() {
 }
 
 bench_init() {
+  WRK_DURATION=${WRK_DURATION:-15s}
+  WRK_TIMEOUT=${WRK_TIMEOUT:-5s}
+  LOWC=${LOWC:-32}
+  K6_VUS=${K6_VUS:-256}
   dur_s=${WRK_DURATION%s}
   case "$dur_s" in
   '' | *[!0-9]*)
@@ -139,6 +143,30 @@ bench_init() {
     [ "$WRK_CONNS" -lt 1000 ] && WRK_CONNS=1000
   fi
   return 0
+}
+
+fleet_run_init() {
+  local kind=$1 rustflags
+  OUT=results/$(date -u +%Y%m%dT%H%M%SZ)-$INSTANCE_TYPE-$kind
+  mkdir -p "$OUT/cells"
+  rssh "$SERVER_PUB" cat /opt/bench/meta.json >"$OUT/server-meta.json"
+  rssh "$SERVER_PUB" cat /opt/bench/fleet/versions.txt >"$OUT/fleet-versions.txt" 2>/dev/null || true
+  rustflags=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pr_rustflags"])' "$OUT/server-meta.json")
+  if [ -n "$rustflags" ]; then
+    echo "NOTE: rapira built with '$rustflags'; competitors are plain release builds. Provision with PLAIN=1 for a publishable table."
+  fi
+}
+
+plan_rotated_cells() {
+  local rounds=$1 round i
+  shift
+  local legs=("$@")
+  plan=()
+  for ((round = 1; round <= rounds; round++)); do
+    for ((i = 0; i < ${#legs[@]}; i++)); do
+      plan+=("r$round-${legs[$(((i + round - 1) % ${#legs[@]}))]}")
+    done
+  done
 }
 
 flag() {
@@ -164,6 +192,16 @@ k6_pass() {
 
 measure_cell() {
   local tag=$1 url=$2 probe_tag=${3:-}
+
+  case "$tag" in
+  *-nginx-worker)
+    if ! rssh "$SERVER_PUB" cat /opt/bench/fleet/nginx/nginx.conf >"$OUT/cells/$tag.nginx.conf" ||
+      ! rssh "$SERVER_PUB" 'nginx -V 2>&1 && sha256sum "$(command -v nginx)"' >"$OUT/cells/$tag.nginx.txt"; then
+      flag "$tag" void "nginx configuration or build data unavailable"
+      return 1
+    fi
+    ;;
+  esac
 
   if ! rssh "$LOADER_PUB" "curl -sf -m2 -o /dev/null '$url' || exit 1; ulimit -n 65536; wrk -t$WRK_THREADS -c$WRK_CONNS -d5s --timeout $WRK_TIMEOUT '$url' >/dev/null 2>&1 || true"; then
     flag "$tag" void "not reachable from the loader"

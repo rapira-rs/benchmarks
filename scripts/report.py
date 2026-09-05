@@ -1,11 +1,5 @@
 #!/usr/bin/env python3
-"""Render the tables for one run directory (A/B or fleet).
-
-Reads results/<run>/cells/*.{meta,wrk.txt,lowc.wrk.txt,k6.summary.json} plus
-cells.expected and run.flags. Voided and invalid cells are listed, never
-averaged. Saturated-cell latency is queue depth restated (Little's law);
-per-request p50/p99 comes from the lowc pass each cell runs.
-"""
+"""Render benchmark tables and reject incomplete or failed measurements."""
 
 import json
 import re
@@ -37,6 +31,7 @@ def parse_wrk(path):
         "avg": wrk_ms(lat.group(1)) if lat else None,
         "p50": wrk_ms(p50.group(1)) if p50 else None,
         "p99": wrk_ms(p99.group(1)) if p99 else None,
+        "errors": "Non-2xx" in txt or "Socket errors" in txt,
     }
 
 
@@ -66,6 +61,37 @@ def load_cells(out):
             "k6": parse_k6(k6_path) if k6_path.exists() else None,
         }
     return cells
+
+
+def classify_cells(out, cells):
+    suffixes = {
+        "wrk": "wrk.txt",
+        "lowc": "lowc.wrk.txt",
+        "k6": "k6.summary.json",
+    }
+    for tag, cell in cells.items():
+        cell["artifact_issues"] = {}
+        if "void" in cell["meta"]:
+            continue
+        meta = cell["meta"]
+        if not meta.get("leg") and not (meta.get("ref") and meta.get("mode")):
+            cell["artifact_issues"]["meta"] = "missing cell identity"
+            continue
+        for artifact, suffix in suffixes.items():
+            if cell[artifact] is not None:
+                if artifact in ("wrk", "lowc") and cell[artifact]["errors"]:
+                    cell["artifact_issues"][artifact] = f"{artifact} request errors"
+                elif artifact == "k6" and cell[artifact].get("http_req_failed", {}).get("value", 0) > 0:
+                    cell["artifact_issues"][artifact] = "k6 HTTP request failures"
+                continue
+            path = out / "cells" / f"{tag}.{suffix}"
+            state = "unparseable" if path.exists() else "missing"
+            cell["artifact_issues"][artifact] = f"{state} {artifact} output"
+        if cell["meta"].get("leg", "").endswith("-nginx-worker"):
+            for artifact in ("nginx.conf", "nginx.txt"):
+                path = out / "cells" / f"{tag}.{artifact}"
+                if not path.is_file() or path.stat().st_size == 0:
+                    cell["artifact_issues"][artifact] = f"missing or empty {artifact}"
 
 
 def ms(v):
@@ -102,8 +128,10 @@ def group_cells(cells, pick, field="wrk"):
     """pick(meta) -> group key or None; only valid measured cells count."""
     groups = {}
     for c in cells.values():
+        if "meta" in c["artifact_issues"]:
+            continue
         key = pick(c["meta"])
-        if key is None or "void" in c["meta"] or not c[field]:
+        if key is None or "void" in c["meta"] or field in c["artifact_issues"]:
             continue
         groups.setdefault(key, []).append(c)
     return groups
@@ -126,12 +154,13 @@ def main():
         print(f"ERROR: no cells/ in {out}; not a bench run directory")
         return 1
     cells = load_cells(out)
+    classify_cells(out, cells)
 
     expected_path = out / "cells.expected"
     expected = expected_path.read_text().split() if expected_path.exists() else []
     missing = [t for t in expected if t not in cells]
     voided = {t: c["meta"]["void"] for t, c in cells.items() if "void" in c["meta"]}
-    invalid = [t for t, c in cells.items() if "void" not in c["meta"] and not c["wrk"]]
+    invalid = {t: c["artifact_issues"] for t, c in cells.items() if c["artifact_issues"]}
     broken = False
 
     # Run-level flags (null_run, asymmetric_build, ...) surface verbatim.
@@ -228,16 +257,28 @@ def main():
             print(f"  {tag}: {why}")
         print()
     if invalid:
-        print("INVALID cells (no parseable wrk output, excluded):")
-        for tag in sorted(invalid):
-            print(f"  {tag}")
+        print("INVALID cells (excluded from affected tables):")
+        for tag, issues in sorted(invalid.items()):
+            print(f"  {tag}: {', '.join(issues.values())}")
         print()
+
+    incomplete = []
+    if not expected_path.exists():
+        incomplete.append("cells.expected is missing")
+    elif not expected:
+        incomplete.append("cells.expected is empty")
     if missing:
-        print(f"INCOMPLETE RUN: {len(missing)} planned cells have no result: {' '.join(missing)}")
-        print("Do not publish these tables.")
-        return 1
+        incomplete.append(f"{len(missing)} planned cells have no result: {' '.join(missing)}")
+    if voided:
+        incomplete.append(f"{len(voided)} cells were voided")
+    if invalid:
+        incomplete.append(f"{len(invalid)} cells have missing or invalid artifacts")
+    if incomplete:
+        print(f"INCOMPLETE RUN: {'; '.join(incomplete)}.")
     if broken:
-        print("BROKEN RUN: a mode lost every cell of one ref, or k6 checks failed. Do not publish these tables.")
+        print("BROKEN RUN: a mode lost every cell of one ref, or k6 checks failed.")
+    if incomplete or broken:
+        print("Do not publish these tables.")
         return 1
     return 0
 

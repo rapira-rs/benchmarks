@@ -7,23 +7,40 @@ FLEET=$BENCH/fleet
 RIG=$HOME/bench-rig/fleet
 
 verify_count() {
-  if [ "$1" -lt "$2" ] || [ "$1" -gt "$3" ]; then
-    echo "ERROR: $4 pool is $1, expected $2..$3; parity broken"
+  if [ "$1" -ne "$2" ]; then
+    echo "ERROR: $3 pool is $1, expected $2; parity broken"
     return 1
   fi
 }
 
-stop_simple() {
-  local pid
-  pid=$(cat "$BENCH/run/$1.pid" 2>/dev/null || true)
-  [ -n "$pid" ] && kill "-$2" "$pid" 2>/dev/null || true
-  if ! wait_port_free; then
-    echo "WARN: $1 still holds :$PORT; force-killing"
-    [ -n "$pid" ] && kill -KILL "$pid" 2>/dev/null || true
-    sleep 1
+stop_rapira_nginx() {
+  local tag=$1 nginx_pid
+  nginx_pid=$(cat "$BENCH/run/$tag.nginx.pid" 2>/dev/null || true)
+  if [ -n "$nginx_pid" ] && kill -0 "$nginx_pid" 2>/dev/null; then
+    kill -QUIT "$nginx_pid" 2>/dev/null || true
+    if ! PORT=8080 wait_port_free 90; then
+      echo "WARN: $tag nginx still holds :8080; force-killing"
+      pkill -KILL -P "$nginx_pid" 2>/dev/null || true
+      kill -KILL "$nginx_pid" 2>/dev/null || true
+      sleep 1
+    fi
   fi
-  pkill -KILL -f "$3" 2>/dev/null || true
-  rm -f "$BENCH/run/$1.pid"
+  rm -f "$BENCH/run/$tag.nginx.pid"
+  PORT=8081 LISTEN_HOST=127.0.0.1 "$HOME/bench-rig/scripts/leg.sh" stop "$tag" pr
+}
+
+fail_rapira_nginx() {
+  local tag=$1 message=$2
+  echo "ERROR: $tag $message; last nginx log lines:"
+  tail -5 "$BENCH/log/$tag.nginx.log" 2>/dev/null || true
+  exit 1
+}
+
+cleanup_rapira_nginx_start() {
+  local status=$?
+  trap - EXIT
+  [ "$status" -eq 0 ] || stop_rapira_nginx "$tag" 2>/dev/null || true
+  exit "$status"
 }
 
 cmd=${1:?start|stop} leg=${2:?leg}
@@ -35,6 +52,52 @@ app_dir() {
 }
 
 case "$cmd-$leg" in
+
+start-rapira-nginx)
+  procs=${3:?procs} tag=${4:?tag} workload=${5:-hello}
+  PORT=8080 ensure_port_free
+  PORT=8081 ensure_port_free
+  trap cleanup_rapira_nginx_start EXIT
+  nginx_bin=$(command -v nginx)
+  nginx_bin=$(readlink -f "$nginx_bin")
+  install -d "$FLEET/nginx/run" "$FLEET/nginx/tmp"
+  sed "s/@@PROCS@@/$procs/g" "$RIG/nginx/rapira.conf.tpl" >"$FLEET/nginx/nginx.conf"
+  if ! "$nginx_bin" -t -p "$FLEET/nginx" -e stderr -c nginx.conf; then
+    fail_rapira_nginx "$tag" "nginx configuration is invalid"
+  fi
+  if ! PORT=8081 LISTEN_HOST=127.0.0.1 "$HOME/bench-rig/scripts/leg.sh" start pr worker "$procs" "$tag" "$workload"; then
+    fail_rapira_nginx "$tag" "Rapira backend did not start"
+  fi
+  (cd "$FLEET/nginx" && exec nohup "$nginx_bin" -p "$FLEET/nginx" -e stderr -c nginx.conf -g 'daemon off;') \
+    </dev/null >"$BENCH/log/$tag.nginx.log" 2>&1 &
+  nginx_pid=$!
+  echo "$nginx_pid" >"$BENCH/run/$tag.nginx.pid"
+
+  listener=
+  for _ in $(seq 1 60); do
+    if ss -HltnpO "sport = :8080" 2>/dev/null | grep -q "pid=$nginx_pid,"; then
+      listener=$nginx_pid
+      break
+    fi
+    kill -0 "$nginx_pid" 2>/dev/null || break
+    sleep 0.5
+  done
+  [ "$listener" = "$nginx_pid" ] || fail_rapira_nginx "$tag" "nginx pid $nginx_pid never showed up as a :8080 listener"
+  nginx_exe=$(readlink "/proc/$nginx_pid/exe")
+  [ "$nginx_exe" = "$nginx_bin" ] || fail_rapira_nginx "$tag" "nginx exe $nginx_exe does not match $nginx_bin"
+  PORT=8080 wait_port_up rapira-nginx "$tag" >/dev/null || fail_rapira_nginx "$tag" "nginx never answered"
+  rapira_pid=$(cat "$BENCH/run/$tag.pid")
+  rapira_workers=$(pgrep -c -P "$rapira_pid" || true)
+  nginx_workers=$(pgrep -c -P "$nginx_pid" -f 'nginx: worker process' || true)
+  verify_count "$rapira_workers" "$procs" rapira || fail_rapira_nginx "$tag" "Rapira worker count is invalid"
+  verify_count "$nginx_workers" "$procs" nginx || fail_rapira_nginx "$tag" "nginx worker count is invalid"
+  trap - EXIT
+  ;;
+
+stop-rapira-nginx)
+  tag=${3:?tag}
+  stop_rapira_nginx "$tag"
+  ;;
 
 start-franken)
   procs=${3:?procs} tag=${4:?tag}
@@ -54,7 +117,16 @@ start-franken)
   ;;
 
 stop-franken | stop-franken-app)
-  stop_simple "${3:?tag}" TERM '[f]rankenphp run'
+  tag=${3:?tag}
+  pid=$(cat "$BENCH/run/$tag.pid" 2>/dev/null || true)
+  [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null || true
+  if ! wait_port_free; then
+    echo "WARN: $tag still holds :$PORT; force-killing"
+    [ -n "$pid" ] && kill -KILL "$pid" 2>/dev/null || true
+    sleep 1
+  fi
+  pkill -KILL -f '[f]rankenphp run' 2>/dev/null || true
+  rm -f "$BENCH/run/$tag.pid"
   ;;
 
 start-franken-app)
@@ -70,12 +142,12 @@ start-franken-app)
   worker)
     case "$fw" in
     symfony)
-      indexfile=worker-franken.php
+      indexfile="worker-franken.php"
       env_lines=""
       ;;
     laravel)
       indexfile=frankenphp-worker.php
-      env_lines="env LARAVEL_OCTANE 1;env MAX_REQUESTS 100000000;env APP_DEBUG false"
+      env_lines=$'\t\t\tenv LARAVEL_OCTANE 1\n\t\t\tenv MAX_REQUESTS 100000000\n\t\t\tenv APP_DEBUG false'
       ;;
     *)
       echo "ERROR: unknown framework $fw"
@@ -84,10 +156,10 @@ start-franken-app)
     esac
     worker=$app/public/$indexfile
     [ -f "$worker" ] || { echo "ERROR: $worker missing; re-run provisioning"; exit 1; }
-    awk -v docroot="$app/public" -v threads="$((procs + 1))" -v workerf="$worker" \
-      -v procsn="$procs" -v indexf="$indexfile" -v envl="$env_lines" '
+    ENV_LINES="$env_lines" awk -v docroot="$app/public" -v threads="$((procs + 1))" -v workerf="$worker" \
+      -v procsn="$procs" -v indexf="$indexfile" '
       /@@WORKER_ENV@@/ {
-        if (envl != "") { n = split(envl, a, ";"); for (i = 1; i <= n; i++) printf "\t\t\t%s\n", a[i] }
+        if (ENVIRON["ENV_LINES"] != "") print ENVIRON["ENV_LINES"]
         next
       }
       {
@@ -110,38 +182,40 @@ start-franken-app)
     echo "WARN: franken num_threads $expect_threads not confirmed in the log"
   ;;
 
-start-fpm)
-  procs=${3:?procs} tag=${4:?tag}
+start-fpm | start-fpm-app)
   ensure_port_free
+  case "$leg" in
+  fpm)
+    docroot=.
+    indexfile=hello.php
+    procs=${3:?procs}
+    tag=${4:?tag}
+    readiness=fpm
+    install -d "$FLEET/fpm"
+    install -m 0644 "$RIG/fpm/hello.php" "$FLEET/fpm/hello.php"
+    ;;
+  fpm-app)
+    fw=${3:?framework}
+    procs=${4:?procs}
+    tag=${5:?tag}
+    app=$(app_dir "$fw")
+    docroot=$app/public
+    indexfile=index.php
+    readiness=fpm-$fw
+    ;;
+  esac
   install -d "$FLEET/fpm/run" "$FLEET/fpm/tmp"
   sed "s/@@PROCS@@/$procs/" "$RIG/fpm/php-fpm.conf.tpl" >"$FLEET/fpm/php-fpm.conf"
-  install -m 0644 "$RIG/fpm/nginx.conf" "$FLEET/fpm/nginx.conf"
-  install -m 0644 "$RIG/fpm/hello.php" "$FLEET/fpm/hello.php"
+  sed -e "s|@@DOCROOT@@|$docroot|" -e "s|@@INDEXFILE@@|$indexfile|g" \
+    "$RIG/fpm/nginx.app.conf.tpl" >"$FLEET/fpm/nginx.conf"
   (cd "$FLEET/fpm" && exec nohup php-fpm -F -p "$FLEET/fpm" -y php-fpm.conf) \
     </dev/null >"$BENCH/log/$tag.fpm.log" 2>&1 &
   echo $! >"$BENCH/run/$tag.fpm.pid"
   (cd "$FLEET/fpm" && exec nohup nginx -p "$FLEET/fpm" -e stderr -c nginx.conf -g 'daemon off;') \
     </dev/null >"$BENCH/log/$tag.server.log" 2>&1 &
   echo $! >"$BENCH/run/$tag.pid"
-  wait_port_up fpm "$tag"
-  verify_count "$(pgrep -c -f 'php-fpm: pool bench' || true)" "$procs" "$procs" php-fpm
-  ;;
-
-start-fpm-app)
-  fw=${3:?framework} procs=${4:?procs} tag=${5:?tag}
-  ensure_port_free
-  app=$(app_dir "$fw")
-  install -d "$FLEET/fpm/run" "$FLEET/fpm/tmp"
-  sed "s/@@PROCS@@/$procs/" "$RIG/fpm/php-fpm.conf.tpl" >"$FLEET/fpm/php-fpm.conf"
-  sed "s|@@DOCROOT@@|$app/public|" "$RIG/fpm/nginx.app.conf.tpl" >"$FLEET/fpm/nginx.conf"
-  (cd "$FLEET/fpm" && exec nohup php-fpm -F -p "$FLEET/fpm" -y php-fpm.conf) \
-    </dev/null >"$BENCH/log/$tag.fpm.log" 2>&1 &
-  echo $! >"$BENCH/run/$tag.fpm.pid"
-  (cd "$FLEET/fpm" && exec nohup nginx -p "$FLEET/fpm" -e stderr -c nginx.conf -g 'daemon off;') \
-    </dev/null >"$BENCH/log/$tag.server.log" 2>&1 &
-  echo $! >"$BENCH/run/$tag.pid"
-  wait_port_up "fpm-$fw" "$tag"
-  verify_count "$(pgrep -c -f 'php-fpm: pool bench' || true)" "$procs" "$procs" php-fpm
+  wait_port_up "$readiness" "$tag"
+  verify_count "$(pgrep -c -f 'php-fpm: pool bench' || true)" "$procs" php-fpm
   ;;
 
 stop-fpm | stop-fpm-app)

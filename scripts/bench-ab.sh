@@ -7,10 +7,6 @@ cd "$(dirname "$0")/.."
 ROUNDS=${ROUNDS:-3}
 WORKLOAD=${WORKLOAD:-hello}
 MODES=${MODES:-$(cd "php/$WORKLOAD" 2>/dev/null && ls ./*.php 2>/dev/null | sed 's|^\./||; s|\.php$||' | tr '\n' ' ')}
-WRK_DURATION=${WRK_DURATION:-15s}
-WRK_TIMEOUT=${WRK_TIMEOUT:-5s}
-LOWC=${LOWC:-32}
-K6_VUS=${K6_VUS:-256}
 ALLOW_SAME=${ALLOW_SAME:-0}
 
 [ -f "k6/$WORKLOAD.js" ] || { echo "ERROR: k6/$WORKLOAD.js missing"; exit 1; }
@@ -93,6 +89,8 @@ done
 
 write_run_meta "rounds=$ROUNDS"
 
-python3 scripts/report.py "$OUT" | tee "$OUT/report.txt" || true
+report_status=0
+python3 scripts/report.py "$OUT" | tee "$OUT/report.txt" || report_status=$?
 echo
 echo "==> results in $OUT"
+exit "$report_status"

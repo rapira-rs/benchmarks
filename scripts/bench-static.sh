@@ -8,13 +8,9 @@ WORKLOAD=hello
 
 ROUNDS=${ROUNDS:-3}
 APPS=${APPS:-hello symfony}
-SERVERS=${SERVERS:-rapira-cache rapira-main franken}
+SERVERS=${SERVERS:-rapira-pr rapira-base franken}
 KINDS=${KINDS:-hit miss plain}
 ASSET=${ASSET:-tiny.css}
-WRK_DURATION=${WRK_DURATION:-15s}
-WRK_TIMEOUT=${WRK_TIMEOUT:-5s}
-LOWC=${LOWC:-32}
-K6_VUS=${K6_VUS:-256}
 USER_CHECKS=${CHECKS:-1}
 
 bench_init
@@ -28,22 +24,10 @@ for app in $APPS; do
     done
   done
 done
-nlegs=${#legs[@]}
 
-OUT=results/$(date -u +%Y%m%dT%H%M%SZ)-$INSTANCE_TYPE-static
-mkdir -p "$OUT/cells"
-rssh "$SERVER_PUB" cat /opt/bench/meta.json >"$OUT/server-meta.json"
-rssh "$SERVER_PUB" cat /opt/bench/fleet/versions.txt >"$OUT/fleet-versions.txt" 2>/dev/null || true
+fleet_run_init static
 
-rustflags=$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1]))["pr_rustflags"])' "$OUT/server-meta.json")
-[ -n "$rustflags" ] && echo "NOTE: rapira built with '$rustflags'; franken is a plain release build. Provision with PLAIN=1 for a publishable table."
-
-plan=()
-for round in $(seq 1 "$ROUNDS"); do
-  for i in $(seq 0 $((nlegs - 1))); do
-    plan+=("r$round-${legs[$(((i + round - 1) % nlegs))]}")
-  done
-done
+plan_rotated_cells "$ROUNDS" "${legs[@]}"
 printf '%s\n' "${plan[@]}" >"$OUT/cells.expected"
 
 ttl_ensure "$(estimate_run_s ${#plan[@]})" "$SERVER_PUB" "$LOADER_PUB"
@@ -53,8 +37,8 @@ APPDIR=/opt/bench/fleet/apps
 leg_start() {
   local app=$1 srv=$2 kind=$3 tag=$4 ref entry config
   case "$srv" in
-  rapira-cache) ref="pr" ;;
-  rapira-main) ref="base" ;;
+  rapira-pr) ref="pr" ;;
+  rapira-base) ref="base" ;;
   esac
   case "$app" in
   hello)
@@ -89,8 +73,8 @@ leg_start() {
 leg_stop() {
   local app=$1 srv=$2 tag=$3
   case "$srv" in
-  rapira-cache) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh stop $tag pr" ;;
-  rapira-main) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh stop $tag base" ;;
+  rapira-pr) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh stop $tag pr" ;;
+  rapira-base) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh stop $tag base" ;;
   franken)
     case "$app" in
     hello) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh stop franken $tag" ;;
@@ -152,6 +136,8 @@ done
 write_run_meta "rounds=$ROUNDS" "apps=$APPS" "servers=$SERVERS" "kinds=$KINDS" "asset=$ASSET" \
   "asset_bytes=$(wc -c <"fleet/static/$ASSET" | tr -d ' ')"
 
-python3 scripts/report.py "$OUT" | tee "$OUT/report.txt" || true
+report_status=0
+python3 scripts/report.py "$OUT" | tee "$OUT/report.txt" || report_status=$?
 echo
 echo "==> results in $OUT"
+exit "$report_status"
