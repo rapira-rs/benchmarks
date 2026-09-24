@@ -10,7 +10,7 @@ from pathlib import Path
 UNIT_MS = {"us": 0.001, "ms": 1.0, "s": 1000.0, "m": 60000.0}
 MODE_ORDER = ["dispatcher", "worker", "classic"]
 # Everything else in a cell meta is a flag and self-registers in the tables.
-DATA_KEYS = {"ref", "mode", "leg", "conns", "busy_server", "busy_loader", "void"}
+DATA_KEYS = {"ref", "mode", "leg", "proto", "conns", "expect_len", "pss_kb", "busy_server", "busy_loader", "void"}
 
 
 def wrk_ms(tok):
@@ -35,12 +35,48 @@ def parse_wrk(path):
     }
 
 
+def parse_h2load(path):
+    txt = path.read_text()
+    fin = re.search(r"^finished in \S+, ([0-9.]+) req/s", txt, re.M)
+    # h2load 1.68 prints "time for request:" and has no median column.
+    hdr = re.search(r"^\s+min\s+max\s+median\s", txt, re.M)
+    if not fin or not hdr:
+        return None
+    req = re.search(r"(\d+) succeeded, (\d+) failed, (\d+) errored, (\d+) timeout", txt)
+    codes = re.search(r"(\d+) 3xx, (\d+) 4xx, (\d+) 5xx", txt)
+    data = re.search(r"\((\d+)\) data", txt)
+    # Columns: min, max, median, p95, p99, mean, sd, +/- sd.
+    row = re.search(r"^request\s+:" + r"\s+(\S+)" * 6, txt, re.M).groups()
+    succeeded, failed, errored, timeout = map(int, req.groups())
+    s3xx, s4xx, s5xx = map(int, codes.groups())
+    return {
+        "rate": float(fin.group(1)),
+        "succeeded": succeeded,
+        "failed": failed,
+        "errored": errored,
+        "timeout": timeout,
+        "s3xx": s3xx,
+        "s4xx": s4xx,
+        "s5xx": s5xx,
+        "data": int(data.group(1)),
+        "p50": wrk_ms(row[2]),
+        "p99": wrk_ms(row[4]),
+        "avg": wrk_ms(row[5]),
+        "errors": any((failed, errored, timeout, s3xx, s4xx, s5xx)),
+    }
+
+
 def parse_k6(path):
     try:
         metrics = json.loads(path.read_text())["metrics"]
     except (ValueError, KeyError):
         return None
-    return metrics if "http_reqs" in metrics else None
+    if "http_reqs" in metrics:
+        return metrics
+    # k6/grpc.js: a proto grpc run has no HTTP metrics.
+    if "iterations" in metrics and ("grpc_req_duration" in metrics or "http_req_duration" in metrics):
+        return metrics
+    return None
 
 
 def load_cells(out):
@@ -54,11 +90,15 @@ def load_cells(out):
         wrk_path = out / "cells" / f"{tag}.wrk.txt"
         lowc_path = out / "cells" / f"{tag}.lowc.wrk.txt"
         k6_path = out / "cells" / f"{tag}.k6.summary.json"
+        h2load_path = out / "cells" / f"{tag}.h2load.txt"
+        lowc_h2load_path = out / "cells" / f"{tag}.lowc.h2load.txt"
         cells[tag] = {
             "meta": meta,
             "wrk": parse_wrk(wrk_path) if wrk_path.exists() else None,
             "lowc": parse_wrk(lowc_path) if lowc_path.exists() else None,
             "k6": parse_k6(k6_path) if k6_path.exists() else None,
+            "h2load": parse_h2load(h2load_path) if h2load_path.exists() else None,
+            "lowc_h2load": parse_h2load(lowc_h2load_path) if lowc_h2load_path.exists() else None,
         }
     return cells
 
@@ -68,6 +108,8 @@ def classify_cells(out, cells):
         "wrk": "wrk.txt",
         "lowc": "lowc.wrk.txt",
         "k6": "k6.summary.json",
+        "h2load": "h2load.txt",
+        "lowc_h2load": "lowc.h2load.txt",
     }
     for tag, cell in cells.items():
         cell["artifact_issues"] = {}
@@ -77,14 +119,29 @@ def classify_cells(out, cells):
         if not meta.get("leg") and not (meta.get("ref") and meta.get("mode")):
             cell["artifact_issues"]["meta"] = "missing cell identity"
             continue
-        for artifact, suffix in suffixes.items():
-            if cell[artifact] is not None:
-                if artifact in ("wrk", "lowc") and cell[artifact]["errors"]:
+        proto = meta.get("proto")
+        if proto is None:
+            required = ["wrk", "lowc", "k6"]
+        else:
+            # k6 has no h2c client; the http-h1 reference also runs wrk.
+            required = ["h2load", "lowc_h2load"]
+            if proto != "connect-h2c":
+                required.append("k6")
+            if proto == "http-h1":
+                required.append("wrk")
+        for artifact in required:
+            data = cell[artifact]
+            if data is not None:
+                if artifact in ("wrk", "lowc", "h2load", "lowc_h2load") and data["errors"]:
                     cell["artifact_issues"][artifact] = f"{artifact} request errors"
-                elif artifact == "k6" and cell[artifact].get("http_req_failed", {}).get("value", 0) > 0:
+                elif artifact in ("h2load", "lowc_h2load") and data["data"] < data["succeeded"] * int(meta["expect_len"]):
+                    cell["artifact_issues"][artifact] = "short responses"
+                elif artifact == "k6" and data.get("http_req_failed", {}).get("value", 0) > 0:
                     cell["artifact_issues"][artifact] = "k6 HTTP request failures"
+                elif artifact == "k6" and data.get("dropped_iterations", {}).get("count", 0) > 0:
+                    cell["artifact_issues"][artifact] = "k6 dropped iterations"
                 continue
-            path = out / "cells" / f"{tag}.{suffix}"
+            path = out / "cells" / f"{tag}.{suffixes[artifact]}"
             state = "unparseable" if path.exists() else "missing"
             cell["artifact_issues"][artifact] = f"{state} {artifact} output"
         if cell["meta"].get("leg", "").endswith("-nginx-worker"):
@@ -104,6 +161,8 @@ def mode_key(mode):
 
 def cell_label(meta):
     """(sort key, display label) for the lowc and k6 tables, or None."""
+    if "proto" in meta:
+        return None
     if "ref" in meta and "mode" in meta:
         return ((0, *mode_key(meta["mode"]), meta["ref"]), f"{meta['mode']} {meta['ref']}")
     if "leg" in meta:
@@ -137,12 +196,24 @@ def group_cells(cells, pick, field="wrk"):
     return groups
 
 
-def stats_of(group):
-    rates = [c["wrk"]["rate"] for c in group]
+def stats_of(group, field="wrk"):
+    rates = [c[field]["rate"] for c in group]
     med = statistics.median(rates)
     spread = 100.0 * (max(rates) - min(rates)) / med if med else 0.0
     flags = sorted({f for c in group for f in flags_of(c["meta"])})
     return med, spread, flags, len(rates)
+
+
+def latency_table(title, floor, rows, field):
+    """Print the median p50, p99 and avg of one latency artifact per (label, cells) row."""
+    w = width([label for label, _ in rows], floor)
+    hdr = f"{title:<{w}} {'p50':>10} {'p99':>10} {'avg':>10} {'n':>3}"
+    print(hdr)
+    print("-" * len(hdr))
+    for label, group in rows:
+        row = {f: median_of(c[field][f] for c in group) for f in ("p50", "p99", "avg")}
+        print(f"{label:<{w}} {ms(row['p50']):>10} {ms(row['p99']):>10} {ms(row['avg']):>10} {len(group):>3}")
+    print()
 
 
 def main():
@@ -193,7 +264,7 @@ def main():
             print(f"{mode:<12} {bm:>12.0f} {pm:>12.0f} {delta:>+7.1f}% {bn:>3}/{pn:<2} {bs:>5.1f}/{ps:>5.1f}%  {flags}")
         print()
 
-    fleet = group_cells(cells, lambda m: m.get("leg"))
+    fleet = group_cells(cells, lambda m: m.get("leg") if "proto" not in m else None)
     if fleet:
         w = width(fleet, 18)
         rows = sorted(((leg, *stats_of(group)) for leg, group in fleet.items()), key=lambda r: -r[1])
@@ -206,15 +277,7 @@ def main():
 
     lowc = group_cells(cells, cell_label, field="lowc")
     if lowc:
-        w = width([lbl for (_, lbl) in lowc], 22)
-        hdr = f"{'lowc latency (c=low)':<{w}} {'p50':>10} {'p99':>10} {'avg':>10} {'n':>3}"
-        print(hdr)
-        print("-" * len(hdr))
-        for (key, label) in sorted(lowc):
-            group = lowc[(key, label)]
-            row = {f: median_of(c["lowc"][f] for c in group) for f in ("p50", "p99", "avg")}
-            print(f"{label:<{w}} {ms(row['p50']):>10} {ms(row['p99']):>10} {ms(row['avg']):>10} {len(group):>3}")
-        print()
+        latency_table("lowc latency (c=low)", 22, [(label, lowc[(key, label)]) for (key, label) in sorted(lowc)], "lowc")
 
     # k6 columns are a latency probe with per-request checks; on a small
     # loader k6 is generator-bound, so its req/s is never a ceiling.
@@ -249,6 +312,48 @@ def main():
                 srate = median_of(g.get(f"http_reqs{{scenario:{s}}}", {}).get("rate") for g in group)
                 if srate is not None:
                     print(f"{'  ' + s:<{w}} {srate:>10.0f}")
+        print()
+
+    # The http-h1 reference leg also has a row for the same request under wrk.
+    grpc = group_cells(cells, lambda m: (m["leg"], m["proto"]) if "proto" in m else None, field="h2load")
+    grpc_wrk = group_cells(cells, lambda m: (f"{m['leg']} (wrk)", m["proto"]) if m.get("proto") == "http-h1" else None)
+    rows = []
+    for groups, field in ((grpc, "h2load"), (grpc_wrk, "wrk")):
+        for (leg, proto), group in groups.items():
+            pss = median_of(int(c["meta"]["pss_kb"]) / 1024 if c["meta"].get("pss_kb") else None for c in group)
+            rows.append((leg, proto, *stats_of(group, field), pss))
+    if rows:
+        w = width([r[0] for r in rows], 18)
+        hdr = f"{'grpc legs':<{w}} {'proto':<14} {'req/s (median)':>14} {'n':>3} {'spread':>8} {'pss MiB':>8}  flags"
+        print(hdr)
+        print("-" * len(hdr))
+        for leg, proto, med, spread, flags, n, pss in sorted(rows, key=lambda r: -r[2]):
+            pss_mib = f"{pss:.1f}" if pss is not None else "n/a"
+            print(f"{leg:<{w}} {proto:<14} {med:>14.0f} {n:>3} {spread:>7.1f}% {pss_mib:>8}  {','.join(flags) or '-'}")
+        print()
+
+    grpc_lowc = group_cells(cells, lambda m: m["leg"] if "proto" in m else None, field="lowc_h2load")
+    if grpc_lowc:
+        latency_table("grpc lowc latency (c=processes)", 33, sorted(grpc_lowc.items()), "lowc_h2load")
+
+    # The open loop runs at a fixed rate: the achieved rate and the dropped
+    # iterations show whether the server kept up.
+    open_loop = group_cells(cells, lambda m: m["leg"] if m.get("proto") not in (None, "connect-h2c") else None, field="k6")
+    if open_loop:
+        w = width(open_loop, 16)
+        hdr = f"{'grpc open loop':<{w}} {'req/s':>10} {'p50':>9} {'p99':>9} {'p99.9':>9} {'dropped':>8} {'chk-fail':>9} {'n':>3}"
+        print(hdr)
+        print("-" * len(hdr))
+        for leg, group in sorted(open_loop.items()):
+            k6s = [c["k6"] for c in group]
+            trends = [g.get("grpc_req_duration") or g["http_req_duration"] for g in k6s]
+            rate = median_of(g["iterations"]["rate"] for g in k6s)
+            p50, p99, p999 = (median_of(t[f] for t in trends) for f in ("med", "p(99)", "p(99.9)"))
+            dropped = sum(int(g["dropped_iterations"]["count"]) for g in k6s)
+            chk = sum(int(g["checks"]["fails"]) for g in k6s)
+            if chk:
+                broken = True
+            print(f"{leg:<{w}} {rate:>10.0f} {ms(p50):>9} {ms(p99):>9} {ms(p999):>9} {dropped:>8} {chk:>9} {len(group):>3}")
         print()
 
     if voided:
