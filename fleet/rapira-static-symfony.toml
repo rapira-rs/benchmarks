@@ -1,9 +1,7 @@
-# Static middleware for the symfony static legs. Mode, processes, listen, and
-# the entrypoint come from the CLI flags, which override this file. A miss
-# falls through to the symfony worker.
-# root is the on-box docroot of the app provisioning builds with composer; a
-# relative path would resolve against this file's directory in the staged rig.
-[http]
+# A fragment of the [http] table for the symfony static legs. leg.sh pastes it
+# into the rendered rapira.toml. @@RIG@@ is the staged rig directory
+# ($HOME/bench-rig). A miss falls through to the symfony worker.
+# root is the on-box docroot of the app provisioning builds with composer.
 middleware = ["static"]
 
 [http.static]

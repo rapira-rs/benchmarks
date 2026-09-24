@@ -5,22 +5,12 @@ set -euo pipefail
 
 LISTEN_HOST=${LISTEN_HOST:-}
 
-case "${1:?start|stop|probe}" in
-
-start)
-  ref=${2:?ref} mode=${3:?mode} procs=${4:?processes} tag=${5:?tag} workload=${6:-hello} config=${7:-}
-  bin=$BENCH/bin/rapira-$ref
-  case "$workload" in
-  /*) script=$workload ;;
-  *) script=$HOME/bench-rig/php/$workload/$mode.php ;;
-  esac
-  [ -x "$bin" ] || { echo "ERROR: $bin missing; run 'make provision'"; exit 1; }
-  [ -f "$script" ] || { echo "ERROR: $script missing"; exit 1; }
-  cfgflag=()
-  if [ -n "$config" ]; then
-    [ -f "$HOME/bench-rig/$config" ] || { echo "ERROR: $config missing from the staged rig"; exit 1; }
-    cfgflag=(--config "$HOME/bench-rig/$config")
-  fi
+# launch <bin> <tag> <args...> runs "$bin" with args in the background and
+# checks that its pid listens on :$PORT. It sets pid. The caller can use fail
+# after launch returns.
+launch() {
+  local bin=$1 tag=$2 listener exe
+  shift 2
   if port_busy; then
     echo "WARN: :$PORT busy; reaping leaked rapira legs"
     pkill -KILL -f 'bin/rapira-base serve' 2>/dev/null || true
@@ -28,8 +18,7 @@ start)
     wait_port_free 20 || { echo "ERROR: :$PORT still busy after the reap; something else holds it"; exit 1; }
   fi
   ulimit -n 65536 || true
-  nohup "$bin" serve --mode "$mode" --processes "$procs" --listen "$LISTEN_HOST:$PORT" "${cfgflag[@]}" "$script" \
-    </dev/null >"$BENCH/log/$tag.server.log" 2>&1 &
+  nohup "$bin" "$@" </dev/null >"$BENCH/log/$tag.server.log" 2>&1 &
   pid=$!
   echo "$pid" >"$BENCH/run/$tag.pid"
 
@@ -53,6 +42,46 @@ start)
   [ "$listener" = "$pid" ] || fail "pid $pid never showed up as a :$PORT listener"
   exe=$(readlink "/proc/$pid/exe")
   [ "$exe" = "$bin" ] || fail "exe $exe does not match $bin"
+}
+
+case "${1:?start|stop|probe}" in
+
+start)
+  ref=${2:?ref} mode=${3:?mode} procs=${4:?processes} tag=${5:?tag} workload=${6:-hello} config=${7:-}
+  bin=$BENCH/bin/rapira-$ref
+  toml=$BENCH/run/$tag.toml
+  case "$workload" in
+  /*) script=$workload ;;
+  *) script=$HOME/bench-rig/php/$workload/$mode.php ;;
+  esac
+  [ -x "$bin" ] || { echo "ERROR: $bin missing; run 'make provision'"; exit 1; }
+  [ -f "$script" ] || { echo "ERROR: $script missing"; exit 1; }
+  if [ -n "$config" ]; then
+    [ -f "$HOME/bench-rig/$config" ] || { echo "ERROR: $config missing from the staged rig"; exit 1; }
+  fi
+  # rapira v0.8.x takes CLI flags. A later rapira takes only a rapira.toml path.
+  help=$("$bin" serve --help 2>/dev/null || true)
+  case "$help" in
+  *--mode*)
+    cfgflag=()
+    if [ -n "$config" ]; then
+      {
+        printf '[http]\n'
+        sed "s|@@RIG@@|$HOME/bench-rig|g" "$HOME/bench-rig/$config"
+      } >"$toml"
+      cfgflag=(--config "$toml")
+    fi
+    launch "$bin" "$tag" serve --mode "$mode" --processes "$procs" --listen "$LISTEN_HOST:$PORT" "${cfgflag[@]}" "$script"
+    ;;
+  *)
+    {
+      printf '[http]\nlisten = "%s"\n' "$LISTEN_HOST:$PORT"
+      [ -z "$config" ] || sed "s|@@RIG@@|$HOME/bench-rig|g" "$HOME/bench-rig/$config"
+      printf '[http.pool]\nentrypoint = "%s"\nmode = "%s"\nprocesses = %s\n' "$script" "$mode" "$procs"
+    } >"$toml"
+    launch "$bin" "$tag" serve "$toml"
+    ;;
+  esac
   wait_port_up "$tag" "$tag" >/dev/null || fail "never answered"
   ;;
 
