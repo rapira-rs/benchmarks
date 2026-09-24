@@ -1,5 +1,6 @@
-# rapira.toml for the rapira gRPC legs. leg.sh fills @@LISTEN@@, @@RIG@@ (the
-# staged rig directory, $HOME/bench-rig) and @@PROCS@@.
+# rapira.toml for the rapira gRPC legs. leg.sh fills the listen, rig and
+# processes placeholders. The rig placeholder is the staged rig directory
+# ($HOME/bench-rig).
 # The paths are absolute: the rendered file is in /opt/bench/run, and rapira
 # resolves a relative path against the directory of the file.
 # rapira logs at the error level by default. The warn level is necessary: a

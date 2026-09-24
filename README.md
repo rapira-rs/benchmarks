@@ -32,6 +32,8 @@ Provisioning installs these tools and packages:
 | Loader | All runs | `gcc`, `gcc-c++`, `make`, `git`, `openssl-devel`, `zlib-devel`, `libev-devel`, `c-ares-devel`, `ethtool`, `curl`, `tar`, `diffutils`, `wrk`, `k6`, and `h2load` built from nghttp2 1.70.0 |
 | Server | `make perf` and tool is absent | `inferno` from Cargo; the script also tries to install `php-embedded-debuginfo` |
 
+With `LEGS=all`, provisioning loads the PECL `protobuf` extension into every PHP SAPI except FrankenPHP, so the Rapira and php-fpm rows of the fleet and framework tables from that rig run with it, in the base build and in the pr build.
+
 The Fedora 44 EC2 image must supply Bash, `dnf`, `sudo`, OpenSSH server, cloud-init, systemd, RPM tools, core utilities, `awk`, `sed`, `grep`, procps tools, and iproute tools. Provisioning uses these base operating system tools but does not install them.
 
 The loader installer selects wrk 4.2.0 and k6 2.2.0 when the tools are absent. It reuses installed wrk and k6 binaries. It builds h2load 1.70.0 when h2load is absent or has a different version. Record the output of `wrk --version`, `k6 version`, and `h2load --version` with each comparison.
@@ -102,7 +104,7 @@ make up REF=chore/grpc-echo-ceiling LEGS=grpc PLAIN=1
 make bench_grpc
 ```
 
-Read the rows in the order of added cost: the hello request under `wrk`, the same request under `h2load --h1`, Connect proto, Connect JSON, gRPC over h2c, and the Rust ceiling.
+Read `rapira-http-h1 (wrk)` and `rapira-http-h1` first. These rows send the same request under `wrk` and under `h2load --h1`. Then read `rapira-connect-h1`, `rapira-connectjson-h1`, `rapira-grpcweb-h1`, `rapira-connect-h2c`, and `rapira-grpc` for the cost of each protocol step on Rapira. `ceiling-connect-h1` and `ceiling-grpc` show the transport without PHP. `rr-grpc` is the RoadRunner comparison for `rapira-grpc`. Do not state one row as a percentage of another row.
 
 A `generator_bound` flag on a ceiling row means that the loader was the limit. The ceiling can be faster than the row value. State that value as "at least" the row value.
 

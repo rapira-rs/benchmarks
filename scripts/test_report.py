@@ -188,7 +188,7 @@ OPEN_LOOP_CASES = [
         "k6": k6_metrics("grpc", fails=2),
         "issues": [],
         "status": ["BROKEN RUN: a mode lost every cell of one ref, or k6 checks failed."],
-        "open_loop": [["rapira-grpc", "19998", "0.30ms", "1.20ms", "4.00ms", "0", "2", "1"]],
+        "open_loop": [["rapira-grpc", "19998", "0.30ms", "1.20ms", "4.00ms", "2", "1"]],
     },
     {
         "name": "dropped iterations",
@@ -601,8 +601,8 @@ class ReportTests(unittest.TestCase):
         # = 0.35, p99 median(1.20, 1.40) = 1.30, p99.9 median(4, 6) = 5.
         self.assertEqual(
             [
-                ["rapira-grpc", "19994", "0.35ms", "1.30ms", "5.00ms", "0", "0", "2"],
-                ["rapira-http-h1", "20000", "0.25ms", "0.90ms", "2.50ms", "0", "0", "1"],
+                ["rapira-grpc", "19994", "0.35ms", "1.30ms", "5.00ms", "0", "2"],
+                ["rapira-http-h1", "20000", "0.25ms", "0.90ms", "2.50ms", "0", "1"],
             ],
             table_rows(result.stdout, "grpc open loop"),
         )
@@ -680,7 +680,7 @@ class ReportTests(unittest.TestCase):
             table_rows(result.stdout, "grpc lowc latency (c=processes)"),
         )
         self.assertEqual(
-            [["rapira-grpc", "19998", "0.30ms", "1.20ms", "4.00ms", "0", "0", "1"]],
+            [["rapira-grpc", "19998", "0.30ms", "1.20ms", "4.00ms", "0", "1"]],
             table_rows(result.stdout, "grpc open loop"),
         )
 

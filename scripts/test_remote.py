@@ -106,7 +106,11 @@ measure_grpc_cell() {
   printf '\t%s' "$@" >>"$TRACE"
   printf '\n' >>"$TRACE"
 }
-write_run_meta() { :; }
+write_run_meta() {
+  printf 'write_run_meta\tLOWC=%s' "${LOWC-unset}" >>"$TRACE"
+  printf '\t%s' "$@" >>"$TRACE"
+  printf '\n' >>"$TRACE"
+}
 ''')
         result = subprocess.run(
             ["bash", str(root / "scripts" / driver)],
@@ -594,6 +598,19 @@ class GrpcDriverTests(unittest.TestCase):
             self.assertEqual([], [line for line in lines if line not in trace], row["name"])
             positions = [trace.index(line) for line in lines]
             self.assertEqual(sorted(positions), positions, row["name"])
+
+    def test_run_meta_arguments(self):
+        trace, plan = self.run_driver("bench-grpc.sh", LEG_LIST="rapira-grpc")
+        # The harness has PROCESSES=2 and an empty php/hello/dispatcher.php.
+        # e3b0c442...b855 is the SHA-256 of an empty input.
+        self.assertEqual(
+            [[
+                "write_run_meta", "LOWC=2", "rounds=2", "legs=rapira-grpc", "grpc_conns=32", "open_rate=20000",
+                "loader_tools=h2load nghttp2/1.70.0;k6 v2.2.0;wrk 4.2.0 [epoll] Copyright (C) 2012 Will Glozer;",
+                "hello_dispatcher_sha256=e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+            ]],
+            [line.split("\t") for line in trace if line.startswith("write_run_meta\t")],
+        )
 
     def test_unknown_leg_exits_before_the_rig(self):
         trace, plan = self.run_driver("bench-grpc.sh", status=1, LEG_LIST="rapira-grpc rr-connect-h1")

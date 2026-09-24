@@ -1,7 +1,7 @@
 // k6 gRPC workload: an open-loop run of one protocol against
 // bench.v1.EchoService/Echo, or against the hello worker for http-h1. The
-// request rate is fixed, so a server that cannot keep up shows as dropped
-// iterations.
+// request rate is fixed, so a server that cannot serve the fixed rate shows as
+// dropped iterations.
 //
 // - env: TARGET (full URL; grpc uses only its host:port, because connect()
 //   takes an address), PROTO (grpc, grpcweb-h1, connect-h1, connectjson-h1 or
@@ -76,12 +76,12 @@ const POSTS = {
 		expect: open("../grpc/expect.grpcweb", "b"),
 	},
 	"connect-h1": {
-		headers: { "content-type": "application/proto", "connect-protocol-version": "1" },
+		headers: { "content-type": "application/proto", "connect-protocol-version": "1", "accept-encoding": "identity" },
 		body: open("../grpc/echo.bin", "b"),
 		expect: open("../grpc/expect.bin", "b"),
 	},
 	"connectjson-h1": {
-		headers: { "content-type": "application/json", "connect-protocol-version": "1" },
+		headers: { "content-type": "application/json", "connect-protocol-version": "1", "accept-encoding": "identity" },
 		body: open("../grpc/echo.json"),
 		expect: open("../grpc/expect.json"),
 	},

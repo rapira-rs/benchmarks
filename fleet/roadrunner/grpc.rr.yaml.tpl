@@ -1,5 +1,6 @@
-# RoadRunner config for the RoadRunner gRPC leg. fleet-leg.sh fills @@RIG@@
-# (the staged rig directory, $HOME/bench-rig) and @@PROCS@@.
+# RoadRunner config for the RoadRunner gRPC leg. fleet-leg.sh fills the rig
+# and processes placeholders. The rig placeholder is the staged rig directory
+# ($HOME/bench-rig).
 # rr refuses a config without version "3". max_concurrent_streams 200 is the
 # hyper default on the rapira side.
 version: "3"
@@ -15,3 +16,13 @@ grpc:
     max_jobs: 0
 logs:
   level: error
+  # The grpc and server channels log one ERROR line each for a call that the
+  # client cancels. h2load cancels the queued calls at the end of each pass,
+  # and the rig voids a cell on any WARN or ERROR line. A failed call still
+  # fails the h2load byte rule and the k6 checks.
+  # https://docs.roadrunner.dev/docs/logging-and-observability/logger#channels
+  channels:
+    grpc:
+      level: panic
+    server:
+      level: panic

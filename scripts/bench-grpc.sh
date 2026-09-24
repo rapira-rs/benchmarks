@@ -12,9 +12,10 @@ OPEN_RATE=${OPEN_RATE:-20000}
 
 bench_init
 GRPC_CONNS=${GRPC_CONNS:-$((16 * PROCESSES))}
-# The saturated passes of this suite use GRPC_CONNS. write_run_meta records
-# WRK_CONNS as wrk_conns.
+# The saturated passes of this suite use GRPC_CONNS, and the lowc passes use
+# PROCESSES. write_run_meta records WRK_CONNS as wrk_conns and LOWC as lowc.
 WRK_CONNS=$GRPC_CONNS
+LOWC=$PROCESSES
 
 # shellcheck disable=SC2206
 legs=($LEG_LIST)
@@ -126,7 +127,10 @@ for tag in "${plan[@]}"; do
   CUR_TAG=""
 done
 
-write_run_meta "rounds=$ROUNDS" "legs=$LEG_LIST" "grpc_conns=$GRPC_CONNS" "open_rate=$OPEN_RATE" "loader_tools=$(tr '\n' ';' <"$OUT/loader-tools.txt")"
+# rapira-http-h1 runs php/hello/dispatcher.php, and WORKLOAD=grpc does not hash it.
+hello_sha256=$(python3 -c 'import hashlib, sys; print(hashlib.sha256(open(sys.argv[1], "rb").read()).hexdigest())' php/hello/dispatcher.php)
+write_run_meta "rounds=$ROUNDS" "legs=$LEG_LIST" "grpc_conns=$GRPC_CONNS" "open_rate=$OPEN_RATE" "loader_tools=$(tr '\n' ';' <"$OUT/loader-tools.txt")" \
+  "hello_dispatcher_sha256=$hello_sha256"
 
 report_status=0
 python3 scripts/report.py "$OUT" | tee "$OUT/report.txt" || report_status=$?

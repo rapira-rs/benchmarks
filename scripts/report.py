@@ -336,12 +336,13 @@ def main():
     if grpc_lowc:
         latency_table("grpc lowc latency (c=processes)", 33, sorted(grpc_lowc.items()), "lowc_h2load")
 
-    # The open loop runs at a fixed rate: the achieved rate and the dropped
-    # iterations show whether the server kept up.
+    # The open loop runs at a fixed rate: the achieved rate shows whether the
+    # server served the fixed rate. A cell with dropped iterations is invalid
+    # and is not in this table.
     open_loop = group_cells(cells, lambda m: m["leg"] if m.get("proto") not in (None, "connect-h2c") else None, field="k6")
     if open_loop:
         w = width(open_loop, 16)
-        hdr = f"{'grpc open loop':<{w}} {'req/s':>10} {'p50':>9} {'p99':>9} {'p99.9':>9} {'dropped':>8} {'chk-fail':>9} {'n':>3}"
+        hdr = f"{'grpc open loop':<{w}} {'req/s':>10} {'p50':>9} {'p99':>9} {'p99.9':>9} {'chk-fail':>9} {'n':>3}"
         print(hdr)
         print("-" * len(hdr))
         for leg, group in sorted(open_loop.items()):
@@ -349,11 +350,10 @@ def main():
             trends = [g.get("grpc_req_duration") or g["http_req_duration"] for g in k6s]
             rate = median_of(g["iterations"]["rate"] for g in k6s)
             p50, p99, p999 = (median_of(t[f] for t in trends) for f in ("med", "p(99)", "p(99.9)"))
-            dropped = sum(int(g["dropped_iterations"]["count"]) for g in k6s)
             chk = sum(int(g["checks"]["fails"]) for g in k6s)
             if chk:
                 broken = True
-            print(f"{leg:<{w}} {rate:>10.0f} {ms(p50):>9} {ms(p99):>9} {ms(p999):>9} {dropped:>8} {chk:>9} {len(group):>3}")
+            print(f"{leg:<{w}} {rate:>10.0f} {ms(p50):>9} {ms(p99):>9} {ms(p999):>9} {chk:>9} {len(group):>3}")
         print()
 
     if voided:

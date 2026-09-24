@@ -29,6 +29,6 @@ while (true) {
         // Drained: no more work will arrive.
         break;
     } catch (RapiraThrowable) {
-        // The client cancelled the call or its deadline passed.
+        // The host already closed the call.
     }
 }
