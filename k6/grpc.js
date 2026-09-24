@@ -27,10 +27,17 @@ const REPLY = `Hello from worker, ${TEXT}!`;
 export const options = {
 	scenarios: {
 		open: {
-			executor: "constant-arrival-rate",
-			rate: Number(__ENV.RATE || 1000),
+			// The rate increases from 0 to RATE in one second and then stays at
+			// RATE for DURATION. k6 starts the schedule before its VUs are
+			// active, and a constant rate from the start drops the iterations of
+			// that start-up window.
+			executor: "ramping-arrival-rate",
+			startRate: 0,
 			timeUnit: "1s",
-			duration: __ENV.DURATION || "15s",
+			stages: [
+				{ duration: "1s", target: Number(__ENV.RATE || 1000) },
+				{ duration: __ENV.DURATION || "15s", target: Number(__ENV.RATE || 1000) },
+			],
 			preAllocatedVUs: VUS,
 			maxVUs: VUS,
 		},

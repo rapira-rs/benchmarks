@@ -7,7 +7,7 @@ cd "$(dirname "$0")/.."
 WORKLOAD=grpc
 
 ROUNDS=${ROUNDS:-3}
-LEG_LIST=${LEG_LIST:-rapira-http-h1 rapira-grpc rapira-grpcweb-h1 rapira-connect-h1 rapira-connect-h2c rapira-connectjson-h1 rr-grpc ceiling-grpc ceiling-connect-h1}
+LEG_LIST=${LEG_LIST:-rapira-http-h1 rapira-grpc rapira-grpcweb-h1 rapira-connect-h1 rapira-connect-h2c rapira-connectjson-h1 rr-grpc}
 OPEN_RATE=${OPEN_RATE:-20000}
 
 bench_init
@@ -30,7 +30,7 @@ leg_request() {
     proto=http-h1 wire=h1 hdrs='' body='' expect=grpc/expect.http
     url="http://$SERVER_PRIV:8080/?name=you"
     ;;
-  rapira-grpc | rr-grpc | ceiling-grpc)
+  rapira-grpc | rr-grpc)
     proto=grpc wire=h2c body=echo.grpc expect=grpc/expect.grpc
     hdrs="-H 'content-type: application/grpc' -H 'te: trailers' -H 'grpc-accept-encoding: identity'"
     ;;
@@ -38,7 +38,7 @@ leg_request() {
     proto=grpcweb-h1 wire=h1 body=echo.grpc expect=grpc/expect.grpcweb
     hdrs="-H 'content-type: application/grpc-web+proto' -H 'x-grpc-web: 1'"
     ;;
-  rapira-connect-h1 | ceiling-connect-h1)
+  rapira-connect-h1)
     proto=connect-h1 wire=h1 body=echo.bin expect=grpc/expect.bin
     hdrs=$connect_hdrs
     ;;
@@ -61,7 +61,6 @@ leg_start() {
   case "$1" in
   rapira-http-h1) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start pr dispatcher $PROCESSES $2 hello" ;;
   rapira-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start-grpc pr $PROCESSES $2" ;;
-  ceiling-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh start-grpc ceiling $PROCESSES $2" ;;
   rr-grpc) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh start rr-grpc $PROCESSES $2" ;;
   esac
 }
@@ -69,7 +68,6 @@ leg_start() {
 leg_stop() {
   case "$1" in
   rapira-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh stop $2 pr" ;;
-  ceiling-*) rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh stop $2 ceiling" ;;
   rr-grpc) rssh "$SERVER_PUB" "bench-rig/scripts/fleet-leg.sh stop rr-grpc $2" ;;
   esac
 }

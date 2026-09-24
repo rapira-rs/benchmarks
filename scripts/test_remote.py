@@ -151,7 +151,7 @@ write_run_meta() {
             self.assertIn(f"measure {tag} http://10.0.0.1:8080/?name=you {tag}", trace)
 
 
-# h2load 1.70.0 from rapira-bench-loader:local against the gRPC echo ceiling:
+# h2load 1.70.0 from rapira-bench-loader:local against a gRPC Echo server:
 # -t2 -c4 -m1 -D 2 with grpc/echo.grpc. Each response is 91 bytes, so data is
 # exactly succeeded x 91.
 H2LOAD_SAMPLE = """\
@@ -547,22 +547,6 @@ GRPC_DRIVER_CASES = [
         "config": "server cat /opt/bench/run/{tag}.rr.yaml",
         "measure": ["grpc", "h2c", ECHO_URL, GRPC_HDRS, "echo.grpc", "grpc/expect.grpc", "{tag}"],
     },
-    {
-        "name": "Rust ceiling gRPC over h2c",
-        "leg": "ceiling-grpc",
-        "start": "server bench-rig/scripts/leg.sh start-grpc ceiling 2 {tag}",
-        "stop": "server bench-rig/scripts/leg.sh stop {tag} ceiling",
-        "config": "server cat /opt/bench/run/{tag}.toml",
-        "measure": ["grpc", "h2c", ECHO_URL, GRPC_HDRS, "echo.grpc", "grpc/expect.grpc", "{tag}"],
-    },
-    {
-        "name": "Rust ceiling Connect proto over HTTP/1.1",
-        "leg": "ceiling-connect-h1",
-        "start": "server bench-rig/scripts/leg.sh start-grpc ceiling 2 {tag}",
-        "stop": "server bench-rig/scripts/leg.sh stop {tag} ceiling",
-        "config": "server cat /opt/bench/run/{tag}.toml",
-        "measure": ["connect-h1", "h1", ECHO_URL, CONNECT_HDRS, "echo.bin", "grpc/expect.bin", "{tag}"],
-    },
 ]
 
 LOADER_TOOLS = "loader h2load --version 2>&1 | head -1; k6 version | head -1; wrk --version 2>&1 | head -1"
@@ -572,10 +556,10 @@ class GrpcDriverTests(unittest.TestCase):
     run_driver = ProxyDriverTests.run_driver
 
     def test_rotated_plan(self):
-        trace, plan = self.run_driver("bench-grpc.sh", LEG_LIST="rapira-grpc rr-grpc ceiling-connect-h1")
+        trace, plan = self.run_driver("bench-grpc.sh", LEG_LIST="rapira-grpc rr-grpc rapira-connect-h1")
         self.assertEqual([
-            "r1-rapira-grpc", "r1-rr-grpc", "r1-ceiling-connect-h1",
-            "r2-rr-grpc", "r2-ceiling-connect-h1", "r2-rapira-grpc",
+            "r1-rapira-grpc", "r1-rr-grpc", "r1-rapira-connect-h1",
+            "r2-rr-grpc", "r2-rapira-connect-h1", "r2-rapira-grpc",
         ], plan)
         self.assertEqual(plan, [line.split("\t")[1] for line in trace if line.startswith("measure_grpc_cell\t")])
 

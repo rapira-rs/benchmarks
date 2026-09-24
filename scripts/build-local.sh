@@ -13,20 +13,15 @@ BENCH=/opt/bench
 
 rustflags=$(rustflags_for "$PLAIN")
 build_rapira "$SRC" pr "$rustflags"
-build_ceiling "$SRC" "$rustflags"
 rm -f "$BENCH/run/build-pr.marker"
 
 python3 - "$rustflags" <<'PY'
-import hashlib, json, os, sys
+import hashlib, json, sys
 meta = json.load(open("/opt/bench/meta.json"))
 meta["pr_ref"] = "local"
 meta["pr_sha"] = "local"
 meta["pr_sha256"] = hashlib.sha256(open("/opt/bench/bin/rapira-pr", "rb").read()).hexdigest()
 meta["pr_rustflags"] = sys.argv[1]
-if os.path.exists("/opt/bench/bin/rapira-ceiling"):
-    meta["ceiling_sha256"] = hashlib.sha256(open("/opt/bench/bin/rapira-ceiling", "rb").read()).hexdigest()
-else:
-    meta.pop("ceiling_sha256", None)
 json.dump(meta, open("/opt/bench/meta.json", "w"), indent=1)
 PY
 

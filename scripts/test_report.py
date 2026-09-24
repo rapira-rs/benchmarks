@@ -16,7 +16,7 @@ LOWC = """Latency 1.00ms 0.10ms 2.00ms
 Requests/sec: 50.00
 """
 
-# A real h2load 1.70.0 run against the Rust ceiling: 616660 succeeded x 91
+# A real h2load 1.70.0 run against a gRPC Echo server: 616660 succeeded x 91
 # bytes of expected reply = 56116060 data bytes.
 H2LOAD = """\
 starting benchmark...

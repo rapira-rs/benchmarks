@@ -25,7 +25,6 @@ Provisioning installs these tools and packages:
 | --- | --- | --- |
 | Server | All runs | `php-cli`, `php-devel`, `php-embedded`, `php-opcache`, `clang`, `clang-devel`, `gcc`, `make`, `cmake`, `git`, `perf`, `ethtool`, `curl`, `tar`, `diffutils`, and `python3` |
 | Server | Rust is absent | Minimal Rust toolchain from `rustup` |
-| Server | The `REF` tree has `crates/plugins/grpc/examples/echo_ceiling.rs` | `rapira-ceiling` binary built from that example |
 | Server | `LEGS=all`, `LEGS=frameworks`, or `LEGS=grpc` | `nginx`, `php-fpm`, `composer`, `unzip`, and the FrankenPHP binary |
 | Server | `LEGS=all` or `LEGS=frameworks` | `php-mbstring`, `php-xml`, `php-pdo`, `php-process`, `php-sodium`, and Composer application dependencies |
 | Server | `LEGS=all` or `LEGS=grpc` | PECL `protobuf` 5.36.2 built from source, RoadRunner 2025.1.15 in `/opt/bench/fleet/rr`, and the RoadRunner PHP worker packages under `/opt/bench/fleet/roadrunner-grpc` |
@@ -54,7 +53,7 @@ The instances use on-demand billing. A shutdown terminates an instance. The boot
 - `make bench_fleet` compares the hello workload across Rapira, Rapira behind nginx, FrankenPHP, php-fpm behind nginx, and the static file legs. Provision with `LEGS=all`.
 - `make bench_frameworks` compares Symfony and Laravel across the configured servers. Laravel worker rows use Octane. The direct and nginx Rapira rows use the same application worker script. Provision with `LEGS=frameworks` or `LEGS=all`.
 - `make bench_static` measures static hits, static misses that continue to PHP, and direct Rapira worker requests. A hit returns `ASSET` without PHP execution. A miss checks the static path and then runs PHP. A plain row runs the same Rapira worker without the static middleware. FrankenPHP has no plain row. Provision with `LEGS=all`.
-- `make bench_grpc` measures unary gRPC, gRPC-Web, and Connect calls on Rapira. It also measures the same call on the RoadRunner gRPC plugin and on the Rust ceiling, and the hello request on the Rapira HTTP dispatcher. h2load runs the closed-loop passes. k6 runs an open loop at a fixed request rate. Provision with `LEGS=grpc` or `LEGS=all`, and with `PLAIN=1`. `REF` must contain `crates/plugins/grpc/examples/echo_ceiling.rs`. Until that example merges, use `REF=chore/grpc-echo-ceiling`.
+- `make bench_grpc` measures unary gRPC, gRPC-Web, and Connect calls on Rapira. It also measures the same call on the RoadRunner gRPC plugin, and the hello request on the Rapira HTTP dispatcher. h2load runs the closed-loop passes. k6 runs an open loop at a fixed request rate. Provision with `LEGS=grpc` or `LEGS=all`, and with `PLAIN=1`. `REF` must contain the Rapira gRPC plugin.
 - `make perf` records a Rapira profile while `wrk` supplies load. Profiling is optional and is not part of a result table.
 
 Use this command for a full framework bench with comparison to the latest release:
@@ -93,20 +92,19 @@ The gRPC suite has these rows:
 - `rapira-http-h1` sends the hello request to the Rapira HTTP dispatcher. It is the reference row.
 - `rapira-grpc`, `rapira-grpcweb-h1`, `rapira-connect-h1`, `rapira-connect-h2c`, and `rapira-connectjson-h1` send the unary Echo call to the Rapira gRPC plugin.
 - `rr-grpc` sends the gRPC Echo call to the RoadRunner gRPC plugin.
-- `ceiling-grpc` and `ceiling-connect-h1` send the Echo call to `rapira-ceiling`. This binary runs the Rapira gRPC server with a Rust handler and no PHP. These rows are the Rust ceiling: they show the transport throughput without PHP.
 
 `h1` in a row name means HTTP/1.1. `h2c` means HTTP/2 without TLS. The gRPC rows use h2c.
 
-Each cell sends one probe request before load and compares the response with the expected bytes. Then h2load runs a saturated pass with `GRPC_CONNS` connections and a low-concurrency pass with `PROCESSES` connections. Each connection has one request in progress at a time. Then k6 sends requests at `OPEN_RATE` requests per second. `rapira-http-h1` also runs a saturated `wrk` pass with `GRPC_CONNS` connections. `rapira-connect-h2c` has no k6 pass, because k6 has no h2c client.
+Each cell sends one probe request before load and compares the response with the expected bytes. Then h2load runs a saturated pass with `GRPC_CONNS` connections and a low-concurrency pass with `PROCESSES` connections. Each connection has one request in progress at a time. Then k6 runs the open loop. The request rate increases from 0 to `OPEN_RATE` requests per second in one second and then stays at `OPEN_RATE` for `WRK_DURATION`. k6 starts its schedule before its VUs are active, and a constant rate from the start drops the iterations of that start-up window. The achieved rate in the open-loop table is the average over the whole k6 run, so it is a little below `OPEN_RATE`: for 15 s, about 97%. A dropped iteration still makes the cell invalid. `rapira-http-h1` also runs a saturated `wrk` pass with `GRPC_CONNS` connections. `rapira-connect-h2c` has no k6 pass, because k6 has no h2c client.
 
 ```bash
-make up REF=chore/grpc-echo-ceiling LEGS=grpc PLAIN=1
+make up REF=feature/grpc-connectrpc LEGS=grpc PLAIN=1
 make bench_grpc
 ```
 
-Read `rapira-http-h1 (wrk)` and `rapira-http-h1` first. These rows send the same request under `wrk` and under `h2load --h1`. Then read `rapira-connect-h1`, `rapira-connectjson-h1`, `rapira-grpcweb-h1`, `rapira-connect-h2c`, and `rapira-grpc` for the cost of each protocol step on Rapira. `ceiling-connect-h1` and `ceiling-grpc` show the transport without PHP. `rr-grpc` is the RoadRunner comparison for `rapira-grpc`. Do not state one row as a percentage of another row.
+Read `rapira-http-h1 (wrk)` and `rapira-http-h1` first. These rows send the same request under `wrk` and under `h2load --h1`. Then read `rapira-connect-h1`, `rapira-connectjson-h1`, `rapira-grpcweb-h1`, `rapira-connect-h2c`, and `rapira-grpc` for the cost of each protocol step on Rapira. `rr-grpc` is the RoadRunner comparison for `rapira-grpc`. Do not state one row as a percentage of another row.
 
-A `generator_bound` flag on a ceiling row means that the loader was the limit. The ceiling can be faster than the row value. State that value as "at least" the row value.
+A `generator_bound` flag on a row means that the loader was the limit and the row value is a floor. State that value as "at least" the row value.
 
 A `lowc_doubled=<n>` flag means that `<n>` workers held two or more connections during the low-concurrency warm-up.
 

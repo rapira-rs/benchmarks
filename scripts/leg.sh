@@ -92,13 +92,17 @@ start-grpc)
   for f in grpc/bench.binpb php/grpc/dispatcher.php; do
     [ -f "$HOME/bench-rig/$f" ] || { echo "ERROR: $f missing from the staged rig"; exit 1; }
   done
-  # rapira-ceiling reads the same file. It ignores the entrypoint and forks
-  # the same number of processes.
   sed -e "s|@@LISTEN@@|$LISTEN_HOST:$PORT|" -e "s|@@RIG@@|$HOME/bench-rig|g" -e "s|@@PROCS@@|$procs|" \
     "$HOME/bench-rig/fleet/rapira-grpc.toml.tpl" >"$toml"
   launch "$bin" "$tag" serve "$toml"
   wait_grpc_up "$tag" "$tag" >/dev/null || fail "never answered"
-  workers=$(pgrep -c -P "$pid" || true)
+  # The first worker can answer while the master still forks the other workers.
+  workers=0
+  for _ in $(seq 1 60); do
+    workers=$(pgrep -c -P "$pid" || true)
+    [ "$workers" -ge "$procs" ] && break
+    sleep 0.5
+  done
   [ "$workers" -eq "$procs" ] || fail "has $workers workers, expected $procs"
   ;;
 

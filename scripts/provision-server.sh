@@ -92,14 +92,10 @@ base_sha=$(resolve_ref "$BASE_REF")
 pr_sha=$(resolve_ref "$REF")
 build_one base "$base_sha"
 build_one pr "$pr_sha"
-echo "==> build rapira-ceiling at $pr_sha"
-# build_one does not check out a ref whose marker matches.
-git -C "$CORE" checkout -q "$pr_sha"
-build_ceiling "$CORE" "$rustflags"
 
 echo "==> metadata"
 python3 - "$base_sha" "$pr_sha" "$BASE_REF" "$REF" "$rustflags" <<'PY'
-import hashlib, json, os, platform, subprocess, sys
+import hashlib, json, platform, subprocess, sys
 
 def sha256(path):
     with open(path, "rb") as f:
@@ -120,8 +116,6 @@ meta = {
     "php": subprocess.run(["php", "-v"], capture_output=True, text=True).stdout.splitlines()[0],
     "php_embedded": subprocess.run(["rpm", "-q", "php-embedded"], capture_output=True, text=True).stdout.strip(),
 }
-if os.path.exists("/opt/bench/bin/rapira-ceiling"):
-    meta["ceiling_sha256"] = sha256("/opt/bench/bin/rapira-ceiling")
 with open("/opt/bench/meta.json", "w") as f:
     json.dump(meta, f, indent=1)
 PY
