@@ -577,22 +577,23 @@ class GrpcDriverTests(unittest.TestCase):
 
     def test_default_legs_start_measure_and_stop(self):
         trace, plan = self.run_driver("bench-grpc.sh")
-        self.assertEqual([f"r1-{row['leg']}" for row in GRPC_DRIVER_CASES], plan[:len(GRPC_DRIVER_CASES)])
-        self.assertEqual(2 * len(GRPC_DRIVER_CASES), len(plan))
-        for row in GRPC_DRIVER_CASES:
-            tags = [tag for tag in plan if tag.split("-", 1)[1] == row["leg"]]
-            self.assertEqual([f"r1-{row['leg']}", f"r2-{row['leg']}"], tags, row["name"])
-            for tag in tags:
-                lines = [
-                    row["start"].format(tag=tag),
-                    row["config"].format(tag=tag),
-                    "\t".join(["measure_grpc_cell", tag, *(arg.format(tag=tag) for arg in row["measure"])]),
-                    row["stop"].format(tag=tag),
-                ]
-                for line in lines:
-                    self.assertIn(line, trace, row["name"])
-                positions = [trace.index(line) for line in lines]
-                self.assertEqual(sorted(positions), positions, row["name"])
+        self.assertEqual(
+            [f"r1-{row['leg']}" for row in GRPC_DRIVER_CASES]
+            + [f"r2-{row['leg']}" for row in GRPC_DRIVER_CASES[1:] + GRPC_DRIVER_CASES[:1]],
+            plan,
+        )
+        rows = {row["leg"]: row for row in GRPC_DRIVER_CASES}
+        for tag in plan:
+            row = rows[tag.split("-", 1)[1]]
+            lines = [
+                row["start"].format(tag=tag),
+                row["config"].format(tag=tag),
+                "\t".join(["measure_grpc_cell", tag, *(arg.format(tag=tag) for arg in row["measure"])]),
+                row["stop"].format(tag=tag),
+            ]
+            self.assertEqual([], [line for line in lines if line not in trace], row["name"])
+            positions = [trace.index(line) for line in lines]
+            self.assertEqual(sorted(positions), positions, row["name"])
 
     def test_unknown_leg_exits_before_the_rig(self):
         trace, plan = self.run_driver("bench-grpc.sh", status=1, LEG_LIST="rapira-grpc rr-connect-h1")
