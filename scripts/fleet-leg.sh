@@ -36,6 +36,24 @@ fail_rapira_nginx() {
   exit 1
 }
 
+# stop_leg <tag> <leftover pattern>... stops the pid of the tag, then kills
+# the processes that match each pattern, in order.
+stop_leg() {
+  local tag=$1 pid pattern
+  shift
+  pid=$(cat "$BENCH/run/$tag.pid" 2>/dev/null || true)
+  [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null || true
+  if ! wait_port_free; then
+    echo "WARN: $tag still holds :$PORT; force-killing"
+    [ -n "$pid" ] && kill -KILL "$pid" 2>/dev/null || true
+    sleep 1
+  fi
+  for pattern in "$@"; do
+    pkill -KILL -f "$pattern" 2>/dev/null || true
+  done
+  rm -f "$BENCH/run/$tag.pid"
+}
+
 cleanup_rapira_nginx_start() {
   local status=$?
   trap - EXIT
@@ -118,15 +136,7 @@ start-franken)
 
 stop-franken | stop-franken-app)
   tag=${3:?tag}
-  pid=$(cat "$BENCH/run/$tag.pid" 2>/dev/null || true)
-  [ -n "$pid" ] && kill -TERM "$pid" 2>/dev/null || true
-  if ! wait_port_free; then
-    echo "WARN: $tag still holds :$PORT; force-killing"
-    [ -n "$pid" ] && kill -KILL "$pid" 2>/dev/null || true
-    sleep 1
-  fi
-  pkill -KILL -f '[f]rankenphp run' 2>/dev/null || true
-  rm -f "$BENCH/run/$tag.pid"
+  stop_leg "$tag" '[f]rankenphp run'
   ;;
 
 start-franken-app)
@@ -216,6 +226,26 @@ start-fpm | start-fpm-app)
   echo $! >"$BENCH/run/$tag.pid"
   wait_port_up "$readiness" "$tag"
   verify_count "$(pgrep -c -f 'php-fpm: pool bench' || true)" "$procs" php-fpm
+  ;;
+
+start-rr-grpc)
+  procs=${3:?procs} tag=${4:?tag}
+  ensure_port_free
+  [ -x "$FLEET/rr" ] || { echo "ERROR: $FLEET/rr missing; provision with LEGS=grpc"; exit 1; }
+  [ -f "$FLEET/roadrunner-grpc/vendor/autoload.php" ] ||
+    { echo "ERROR: $FLEET/roadrunner-grpc/vendor missing; provision with LEGS=grpc"; exit 1; }
+  sed -e "s|@@RIG@@|$HOME/bench-rig|g" -e "s/@@PROCS@@/$procs/" \
+    "$RIG/roadrunner/grpc.rr.yaml.tpl" >"$BENCH/run/$tag.rr.yaml"
+  nohup "$FLEET/rr" serve -c "$BENCH/run/$tag.rr.yaml" </dev/null >"$BENCH/log/$tag.server.log" 2>&1 &
+  echo $! >"$BENCH/run/$tag.pid"
+  wait_grpc_up rr-grpc "$tag"
+  verify_count "$(pgrep -c -f '[r]r-worker.php' || true)" "$procs" rr
+  ;;
+
+stop-rr-grpc)
+  tag=${3:?tag}
+  # Kill rr before the PHP workers, because rr replaces a worker that exits.
+  stop_leg "$tag" '[r]r serve' '[r]r-worker.php'
   ;;
 
 stop-fpm | stop-fpm-app)

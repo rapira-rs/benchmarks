@@ -13,8 +13,7 @@ launch() {
   shift 2
   if port_busy; then
     echo "WARN: :$PORT busy; reaping leaked rapira legs"
-    pkill -KILL -f 'bin/rapira-base serve' 2>/dev/null || true
-    pkill -KILL -f 'bin/rapira-pr serve' 2>/dev/null || true
+    pkill -KILL -f 'bin/rapira-[a-z]* serve' 2>/dev/null || true
     wait_port_free 20 || { echo "ERROR: :$PORT still busy after the reap; something else holds it"; exit 1; }
   fi
   ulimit -n 65536 || true
@@ -44,7 +43,7 @@ launch() {
   [ "$exe" = "$bin" ] || fail "exe $exe does not match $bin"
 }
 
-case "${1:?start|stop|probe}" in
+case "${1:?start|start-grpc|stop|probe|mem|conns}" in
 
 start)
   ref=${2:?ref} mode=${3:?mode} procs=${4:?processes} tag=${5:?tag} workload=${6:-hello} config=${7:-}
@@ -83,6 +82,46 @@ start)
     ;;
   esac
   wait_port_up "$tag" "$tag" >/dev/null || fail "never answered"
+  ;;
+
+start-grpc)
+  ref=${2:?ref} procs=${3:?processes} tag=${4:?tag}
+  bin=$BENCH/bin/rapira-$ref
+  toml=$BENCH/run/$tag.toml
+  [ -x "$bin" ] || { echo "ERROR: $bin missing; run 'make provision' with LEGS=grpc"; exit 1; }
+  for f in grpc/bench.binpb php/grpc/dispatcher.php; do
+    [ -f "$HOME/bench-rig/$f" ] || { echo "ERROR: $f missing from the staged rig"; exit 1; }
+  done
+  # rapira-ceiling reads the same file. It ignores the entrypoint and forks
+  # the same number of processes.
+  sed -e "s|@@LISTEN@@|$LISTEN_HOST:$PORT|" -e "s|@@RIG@@|$HOME/bench-rig|g" -e "s|@@PROCS@@|$procs|" \
+    "$HOME/bench-rig/fleet/rapira-grpc.toml.tpl" >"$toml"
+  launch "$bin" "$tag" serve "$toml"
+  wait_grpc_up "$tag" "$tag" >/dev/null || fail "never answered"
+  workers=$(pgrep -c -P "$pid" || true)
+  [ "$workers" -eq "$procs" ] || fail "has $workers workers, expected $procs"
+  ;;
+
+mem)
+  # Prints the sum of the proportional set size (Pss, kB) of the leg's pid and
+  # its children. https://docs.kernel.org/filesystems/proc.html#process-specific-subdirectories
+  tag=${2:?tag}
+  pid=$(cat "$BENCH/run/$tag.pid")
+  for p in "$pid" $(pgrep -P "$pid" || true); do
+    cat "/proc/$p/smaps_rollup"
+  done | awk '/^Pss:/ { kb += $2 } END { print kb }'
+  ;;
+
+conns)
+  # Prints one line "<pid> <count>" for each child of the leg's pid that holds
+  # established connections on :$PORT.
+  tag=${2:?tag}
+  pid=$(cat "$BENCH/run/$tag.pid")
+  established=$(ss -Htnp state established "( sport = :$PORT )")
+  for child in $(pgrep -P "$pid" || true); do
+    count=$(printf '%s\n' "$established" | grep -c "pid=$child," || true)
+    [ "$count" -eq 0 ] || echo "$child $count"
+  done
   ;;
 
 probe)
