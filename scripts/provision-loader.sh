@@ -6,7 +6,7 @@ K6_VERSION=${K6_VERSION:-2.2.0}
 NGHTTP2_VERSION=${NGHTTP2_VERSION:-1.70.0}
 
 echo "==> packages"
-sudo dnf -y install gcc make git openssl-devel zlib-devel ethtool curl tar
+sudo dnf -y install gcc make git openssl-devel zlib-devel ethtool curl tar diffutils
 
 if ! command -v wrk >/dev/null; then
   echo "==> build wrk $WRK_TAG"

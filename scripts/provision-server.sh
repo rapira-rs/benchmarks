@@ -19,7 +19,7 @@ CORE=$HOME/core
 . "$(dirname "$0")/build-lib.sh"
 
 echo "==> packages"
-pkgs="php-cli php-devel php-embedded php-opcache clang clang-devel gcc make cmake git perf ethtool curl tar python3"
+pkgs="php-cli php-devel php-embedded php-opcache clang clang-devel gcc make cmake git perf ethtool curl tar diffutils python3"
 [ "$LEGS" != rapira ] && pkgs="$pkgs nginx php-fpm composer unzip"
 [ "$LEGS" = frameworks ] || [ "$LEGS" = all ] && pkgs="$pkgs php-mbstring php-xml php-pdo php-process php-sodium"
 # shellcheck disable=SC2086

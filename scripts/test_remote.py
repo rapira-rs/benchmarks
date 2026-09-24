@@ -77,7 +77,7 @@ measure_cell r1-symfony-rapira-pr-nginx-worker http://server:8080/ tag
 
 
 class ProxyDriverTests(unittest.TestCase):
-    def run_driver(self, driver, **settings):
+    def run_driver(self, driver, status=0, **settings):
         temp = tempfile.TemporaryDirectory()
         self.addCleanup(temp.cleanup)
         root = Path(temp.name)
@@ -97,20 +97,30 @@ rssh() {
   printf '%s\n' "$*" >>"$TRACE"
   case "$*" in
   *meta.json*) printf '{"pr_rustflags":""}\n' ;;
+  *'h2load --version'*) printf '%s\nk6 v2.2.0\nwrk 4.2.0 [epoll] Copyright (C) 2012 Will Glozer\n' "$H2LOAD_LINE" ;;
   esac
 }
 measure_cell() { printf 'measure %s\n' "$*" >>"$TRACE"; }
+measure_grpc_cell() {
+  printf 'measure_grpc_cell' >>"$TRACE"
+  printf '\t%s' "$@" >>"$TRACE"
+  printf '\n' >>"$TRACE"
+}
 write_run_meta() { :; }
 ''')
         result = subprocess.run(
             ["bash", str(root / "scripts" / driver)],
-            env={**os.environ, "TRACE": str(root / "trace"), "ROUNDS": "2", **settings},
+            env={
+                **os.environ, "TRACE": str(root / "trace"), "ROUNDS": "2",
+                "H2LOAD_LINE": "h2load nghttp2/1.70.0", **settings,
+            },
             capture_output=True,
             text=True,
         )
-        self.assertEqual(0, result.returncode, result.stdout + result.stderr)
-        trace = (root / "trace").read_text().splitlines()
-        plan = next((root / "results").glob("*/cells.expected")).read_text().splitlines()
+        self.assertEqual(status, result.returncode, result.stdout + result.stderr)
+        trace = (root / "trace").read_text().splitlines() if (root / "trace").exists() else []
+        expected = list((root / "results").glob("*/cells.expected"))
+        plan = expected[0].read_text().splitlines() if expected else []
         return trace, plan
 
     def test_fleet_proxy_uses_worker_lifecycle_in_rotated_rounds(self):
@@ -460,6 +470,140 @@ measure_grpc_cell r1-x "$PROTO" "$WIRE" http://server:8080/bench.v1.EchoService/
             self.assertEqual(0, result.returncode, row["name"] + result.stdout + result.stderr)
             meta = json.loads((root / "out/run-meta.json").read_text())
             self.assertEqual(row["files"], sorted(meta["workload_files"]), row["name"])
+
+
+GRPC_HDRS = "-H 'content-type: application/grpc' -H 'te: trailers' -H 'grpc-accept-encoding: identity'"
+CONNECT_HDRS = "-H 'content-type: application/proto' -H 'connect-protocol-version: 1' -H 'accept-encoding: identity'"
+ECHO_URL = "http://10.0.0.1:8080/bench.v1.EchoService/Echo"
+
+# One row per leg, in the default LEG_LIST order. run_driver sets PROCESSES=2
+# and SERVER_PRIV=10.0.0.1. measure is the measure_grpc_cell argument list
+# after the tag: proto, wire, url, hdrs, body, expect and probe tag.
+GRPC_DRIVER_CASES = [
+    {
+        "name": "rapira HTTP dispatcher reference",
+        "leg": "rapira-http-h1",
+        "start": "server bench-rig/scripts/leg.sh start pr dispatcher 2 {tag} hello",
+        "stop": "server bench-rig/scripts/leg.sh stop {tag} pr",
+        "config": "server cat /opt/bench/run/{tag}.toml",
+        "measure": ["http-h1", "h1", "http://10.0.0.1:8080/?name=you", "", "", "grpc/expect.http", "{tag}"],
+    },
+    {
+        "name": "rapira gRPC over h2c",
+        "leg": "rapira-grpc",
+        "start": "server bench-rig/scripts/leg.sh start-grpc pr 2 {tag}",
+        "stop": "server bench-rig/scripts/leg.sh stop {tag} pr",
+        "config": "server cat /opt/bench/run/{tag}.toml",
+        "measure": ["grpc", "h2c", ECHO_URL, GRPC_HDRS, "echo.grpc", "grpc/expect.grpc", "{tag}"],
+    },
+    {
+        "name": "rapira gRPC-Web over HTTP/1.1",
+        "leg": "rapira-grpcweb-h1",
+        "start": "server bench-rig/scripts/leg.sh start-grpc pr 2 {tag}",
+        "stop": "server bench-rig/scripts/leg.sh stop {tag} pr",
+        "config": "server cat /opt/bench/run/{tag}.toml",
+        "measure": [
+            "grpcweb-h1", "h1", ECHO_URL, "-H 'content-type: application/grpc-web+proto' -H 'x-grpc-web: 1'",
+            "echo.grpc", "grpc/expect.grpcweb", "{tag}",
+        ],
+    },
+    {
+        "name": "rapira Connect proto over HTTP/1.1",
+        "leg": "rapira-connect-h1",
+        "start": "server bench-rig/scripts/leg.sh start-grpc pr 2 {tag}",
+        "stop": "server bench-rig/scripts/leg.sh stop {tag} pr",
+        "config": "server cat /opt/bench/run/{tag}.toml",
+        "measure": ["connect-h1", "h1", ECHO_URL, CONNECT_HDRS, "echo.bin", "grpc/expect.bin", "{tag}"],
+    },
+    {
+        "name": "rapira Connect proto over h2c",
+        "leg": "rapira-connect-h2c",
+        "start": "server bench-rig/scripts/leg.sh start-grpc pr 2 {tag}",
+        "stop": "server bench-rig/scripts/leg.sh stop {tag} pr",
+        "config": "server cat /opt/bench/run/{tag}.toml",
+        "measure": ["connect-h2c", "h2c", ECHO_URL, CONNECT_HDRS, "echo.bin", "grpc/expect.bin", "{tag}"],
+    },
+    {
+        "name": "rapira Connect JSON over HTTP/1.1",
+        "leg": "rapira-connectjson-h1",
+        "start": "server bench-rig/scripts/leg.sh start-grpc pr 2 {tag}",
+        "stop": "server bench-rig/scripts/leg.sh stop {tag} pr",
+        "config": "server cat /opt/bench/run/{tag}.toml",
+        "measure": [
+            "connectjson-h1", "h1", ECHO_URL,
+            "-H 'content-type: application/json' -H 'connect-protocol-version: 1' -H 'accept-encoding: identity'",
+            "echo.json", "grpc/expect.json", "{tag}",
+        ],
+    },
+    {
+        "name": "RoadRunner gRPC over h2c",
+        "leg": "rr-grpc",
+        "start": "server bench-rig/scripts/fleet-leg.sh start rr-grpc 2 {tag}",
+        "stop": "server bench-rig/scripts/fleet-leg.sh stop rr-grpc {tag}",
+        "config": "server cat /opt/bench/run/{tag}.rr.yaml",
+        "measure": ["grpc", "h2c", ECHO_URL, GRPC_HDRS, "echo.grpc", "grpc/expect.grpc", "{tag}"],
+    },
+    {
+        "name": "Rust ceiling gRPC over h2c",
+        "leg": "ceiling-grpc",
+        "start": "server bench-rig/scripts/leg.sh start-grpc ceiling 2 {tag}",
+        "stop": "server bench-rig/scripts/leg.sh stop {tag} ceiling",
+        "config": "server cat /opt/bench/run/{tag}.toml",
+        "measure": ["grpc", "h2c", ECHO_URL, GRPC_HDRS, "echo.grpc", "grpc/expect.grpc", "{tag}"],
+    },
+    {
+        "name": "Rust ceiling Connect proto over HTTP/1.1",
+        "leg": "ceiling-connect-h1",
+        "start": "server bench-rig/scripts/leg.sh start-grpc ceiling 2 {tag}",
+        "stop": "server bench-rig/scripts/leg.sh stop {tag} ceiling",
+        "config": "server cat /opt/bench/run/{tag}.toml",
+        "measure": ["connect-h1", "h1", ECHO_URL, CONNECT_HDRS, "echo.bin", "grpc/expect.bin", "{tag}"],
+    },
+]
+
+LOADER_TOOLS = "loader h2load --version 2>&1 | head -1; k6 version | head -1; wrk --version 2>&1 | head -1"
+
+
+class GrpcDriverTests(unittest.TestCase):
+    run_driver = ProxyDriverTests.run_driver
+
+    def test_rotated_plan(self):
+        trace, plan = self.run_driver("bench-grpc.sh", LEG_LIST="rapira-grpc rr-grpc ceiling-connect-h1")
+        self.assertEqual([
+            "r1-rapira-grpc", "r1-rr-grpc", "r1-ceiling-connect-h1",
+            "r2-rr-grpc", "r2-ceiling-connect-h1", "r2-rapira-grpc",
+        ], plan)
+        self.assertEqual(plan, [line.split("\t")[1] for line in trace if line.startswith("measure_grpc_cell\t")])
+
+    def test_default_legs_start_measure_and_stop(self):
+        trace, plan = self.run_driver("bench-grpc.sh")
+        self.assertEqual([f"r1-{row['leg']}" for row in GRPC_DRIVER_CASES], plan[:len(GRPC_DRIVER_CASES)])
+        self.assertEqual(2 * len(GRPC_DRIVER_CASES), len(plan))
+        for row in GRPC_DRIVER_CASES:
+            tags = [tag for tag in plan if tag.split("-", 1)[1] == row["leg"]]
+            self.assertEqual([f"r1-{row['leg']}", f"r2-{row['leg']}"], tags, row["name"])
+            for tag in tags:
+                lines = [
+                    row["start"].format(tag=tag),
+                    row["config"].format(tag=tag),
+                    "\t".join(["measure_grpc_cell", tag, *(arg.format(tag=tag) for arg in row["measure"])]),
+                    row["stop"].format(tag=tag),
+                ]
+                for line in lines:
+                    self.assertIn(line, trace, row["name"])
+                positions = [trace.index(line) for line in lines]
+                self.assertEqual(sorted(positions), positions, row["name"])
+
+    def test_unknown_leg_exits_before_the_rig(self):
+        trace, plan = self.run_driver("bench-grpc.sh", status=1, LEG_LIST="rapira-grpc rr-connect-h1")
+        self.assertEqual([], trace)
+        self.assertEqual([], plan)
+
+    def test_other_h2load_version_exits_before_the_legs(self):
+        trace, plan = self.run_driver("bench-grpc.sh", status=1, H2LOAD_LINE="h2load nghttp2/1.68.0")
+        self.assertIn(LOADER_TOOLS, trace)
+        self.assertEqual([], [line for line in trace if " start" in line])
+        self.assertEqual([], plan)
 
 
 if __name__ == "__main__":
