@@ -190,6 +190,76 @@ k6_pass() {
   rm -f "$raw"
 }
 
+# Takes the snapshots before a saturated pass and sets the CELL_* variables for cell_end.
+# Call it in the shell that calls cell_end: wait works only for a child of that shell.
+cell_begin() {
+  local tag=$1 probe_tag=$2 probe0
+  if [ -n "$probe_tag" ]; then
+    probe0=$(rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh probe $probe_tag" || true)
+    CELL_W0=$(sed -n 1p <<<"$probe0")
+    CELL_LOG0=$(sed -n 2p <<<"$probe0")
+  fi
+  ena_snap "$SERVER_PUB" >"$OUT/cells/$tag.ena-server.0" || true
+  ena_snap "$LOADER_PUB" >"$OUT/cells/$tag.ena-loader.0" || true
+  CELL_CS0=$(cpu_snap "$SERVER_PUB" || echo 0 0)
+  CELL_CL0=$(cpu_snap "$LOADER_PUB" || echo 0 0)
+
+  CELL_TW_BASE=$(rssh "$SERVER_PUB" "ss -Htan state time-wait '( sport = :8080 )' | wc -l" 2>/dev/null || echo 0)
+  (
+    sleep $((dur_s / 2 + 1))
+    rssh "$SERVER_PUB" "echo \$(ss -Htan state established '( sport = :8080 )' | wc -l) \$(ss -Htan state time-wait '( sport = :8080 )' | wc -l)"
+  ) >"$OUT/cells/$tag.conns" 2>/dev/null &
+  CELL_SAMPLER=$!
+}
+
+# Takes the snapshots after a saturated pass and writes the cell flags.
+cell_end() {
+  local tag=$1 probe_tag=$2 keepalive_threshold=$3 generator_threshold=$4
+  local probe1 w1 log1 cs1 cl1
+  wait "$CELL_SAMPLER" 2>/dev/null || true
+
+  cs1=$(cpu_snap "$SERVER_PUB" || echo 0 0)
+  cl1=$(cpu_snap "$LOADER_PUB" || echo 0 0)
+  ena_snap "$SERVER_PUB" >"$OUT/cells/$tag.ena-server.1" || true
+  ena_snap "$LOADER_PUB" >"$OUT/cells/$tag.ena-loader.1" || true
+  if [ -n "$probe_tag" ]; then
+    probe1=$(rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh probe $probe_tag" || true)
+    w1=$(sed -n 1p <<<"$probe1")
+    log1=$(sed -n 2p <<<"$probe1")
+  fi
+
+  # shellcheck disable=SC2086
+  local busy_server busy_loader
+  busy_server=$(cpu_pct $CELL_CS0 $cs1)
+  busy_loader=$(cpu_pct $CELL_CL0 $cl1)
+  flag "$tag" busy_server "$busy_server"
+  flag "$tag" busy_loader "$busy_loader"
+  [ "$busy_loader" -ge "$generator_threshold" ] && [ "$busy_server" -lt 90 ] && flag "$tag" generator_bound 1
+  [ "$busy_server" -lt 90 ] && [ "$busy_loader" -lt "$generator_threshold" ] && flag "$tag" server_unsaturated 1
+
+  if [ -n "$probe_tag" ]; then
+    [ "$CELL_W0" != "$w1" ] && flag "$tag" worker_churn 1
+    [ $((${log1:-0} - ${CELL_LOG0:-0})) -gt 65536 ] && flag "$tag" log_growth $((${log1:-0} - ${CELL_LOG0:-0}))
+  fi
+
+  local est tw
+  read -r est tw <"$OUT/cells/$tag.conns" 2>/dev/null || true
+  if [ -n "${tw:-}" ] && [ $((tw - CELL_TW_BASE)) -gt "$keepalive_threshold" ]; then
+    flag "$tag" keepalive_broken "est=$est tw=$tw tw_base=$CELL_TW_BASE"
+  fi
+
+  local ena
+  ena=$(
+    ena_delta "$OUT/cells/$tag.ena-server.0" "$OUT/cells/$tag.ena-server.1" 2>/dev/null
+    ena_delta "$OUT/cells/$tag.ena-loader.0" "$OUT/cells/$tag.ena-loader.1" 2>/dev/null
+  ) || true
+  if [ -n "$ena" ]; then
+    echo "WARN: $tag moved ENA allowance counters:"
+    echo "$ena"
+    flag "$tag" ena_throttled "$(echo "$ena" | tr '\n' ';')"
+  fi
+}
+
 measure_cell() {
   local tag=$1 url=$2 probe_tag=${3:-}
 
@@ -208,73 +278,13 @@ measure_cell() {
     return 1
   fi
 
-  local probe0 probe1 w0 w1 log0 log1
-  if [ -n "$probe_tag" ]; then
-    probe0=$(rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh probe $probe_tag" || true)
-    w0=$(sed -n 1p <<<"$probe0")
-    log0=$(sed -n 2p <<<"$probe0")
-  fi
-  ena_snap "$SERVER_PUB" >"$OUT/cells/$tag.ena-server.0" || true
-  ena_snap "$LOADER_PUB" >"$OUT/cells/$tag.ena-loader.0" || true
-  local cs0 cl0 cs1 cl1
-  cs0=$(cpu_snap "$SERVER_PUB" || echo 0 0)
-  cl0=$(cpu_snap "$LOADER_PUB" || echo 0 0)
-
-  local tw_base
-  tw_base=$(rssh "$SERVER_PUB" "ss -Htan state time-wait '( sport = :8080 )' | wc -l" 2>/dev/null || echo 0)
-  (
-    sleep $((dur_s / 2 + 1))
-    rssh "$SERVER_PUB" "echo \$(ss -Htan state established '( sport = :8080 )' | wc -l) \$(ss -Htan state time-wait '( sport = :8080 )' | wc -l)"
-  ) >"$OUT/cells/$tag.conns" 2>/dev/null &
-  local sampler=$!
-
+  cell_begin "$tag" "$probe_tag"
   wrk_pass "$WRK_THREADS" "$WRK_CONNS" "$WRK_DURATION" "$OUT/cells/$tag.wrk.txt" "$url"
-  wait "$sampler" 2>/dev/null || true
-
-  cs1=$(cpu_snap "$SERVER_PUB" || echo 0 0)
-  cl1=$(cpu_snap "$LOADER_PUB" || echo 0 0)
-  ena_snap "$SERVER_PUB" >"$OUT/cells/$tag.ena-server.1" || true
-  ena_snap "$LOADER_PUB" >"$OUT/cells/$tag.ena-loader.1" || true
-  if [ -n "$probe_tag" ]; then
-    probe1=$(rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh probe $probe_tag" || true)
-    w1=$(sed -n 1p <<<"$probe1")
-    log1=$(sed -n 2p <<<"$probe1")
-  fi
+  cell_end "$tag" "$probe_tag" "$WRK_CONNS" 95
 
   wrk_pass 2 "$LOWC" 10s "$OUT/cells/$tag.lowc.wrk.txt" "$url"
 
   k6_pass "$tag" "$url"
-
-  # shellcheck disable=SC2086
-  local busy_server busy_loader
-  busy_server=$(cpu_pct $cs0 $cs1)
-  busy_loader=$(cpu_pct $cl0 $cl1)
-  flag "$tag" busy_server "$busy_server"
-  flag "$tag" busy_loader "$busy_loader"
-  [ "$busy_loader" -ge 95 ] && [ "$busy_server" -lt 90 ] && flag "$tag" generator_bound 1
-  [ "$busy_server" -lt 90 ] && [ "$busy_loader" -lt 95 ] && flag "$tag" server_unsaturated 1
-
-  if [ -n "$probe_tag" ]; then
-    [ "$w0" != "$w1" ] && flag "$tag" worker_churn 1
-    [ $((${log1:-0} - ${log0:-0})) -gt 65536 ] && flag "$tag" log_growth $((${log1:-0} - ${log0:-0}))
-  fi
-
-  local est tw
-  read -r est tw <"$OUT/cells/$tag.conns" 2>/dev/null || true
-  if [ -n "${tw:-}" ] && [ $((tw - tw_base)) -gt "$WRK_CONNS" ]; then
-    flag "$tag" keepalive_broken "est=$est tw=$tw tw_base=$tw_base"
-  fi
-
-  local ena
-  ena=$(
-    ena_delta "$OUT/cells/$tag.ena-server.0" "$OUT/cells/$tag.ena-server.1" 2>/dev/null
-    ena_delta "$OUT/cells/$tag.ena-loader.0" "$OUT/cells/$tag.ena-loader.1" 2>/dev/null
-  ) || true
-  if [ -n "$ena" ]; then
-    echo "WARN: $tag moved ENA allowance counters:"
-    echo "$ena"
-    flag "$tag" ena_throttled "$(echo "$ena" | tr '\n' ';')"
-  fi
 
   local txt
   txt=$(cat "$OUT/cells/$tag.wrk.txt" 2>/dev/null || true)
