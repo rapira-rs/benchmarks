@@ -3,6 +3,7 @@ set -euo pipefail
 
 WRK_TAG=${WRK_TAG:-4.2.0}
 K6_VERSION=${K6_VERSION:-2.2.0}
+NGHTTP2_VERSION=${NGHTTP2_VERSION:-1.70.0}
 
 echo "==> packages"
 sudo dnf -y install gcc make git openssl-devel zlib-devel ethtool curl tar
@@ -20,6 +21,22 @@ if ! command -v k6 >/dev/null; then
   sudo dnf -y install "https://github.com/grafana/k6/releases/download/v$K6_VERSION/k6-v$K6_VERSION-linux-amd64.rpm"
 fi
 
+# Fedora ships an older h2load without latency percentiles.
+if ! h2load --version 2>/dev/null | grep -qF "nghttp2/$NGHTTP2_VERSION"; then
+  echo "==> build h2load $NGHTTP2_VERSION"
+  sudo dnf -y install gcc-c++ libev-devel c-ares-devel
+  src=$HOME/nghttp2-$NGHTTP2_VERSION
+  rm -rf "$src"
+  curl -fsSL "https://github.com/nghttp2/nghttp2/releases/download/v$NGHTTP2_VERSION/nghttp2-$NGHTTP2_VERSION.tar.gz" |
+    tar -xzf - -C "$HOME"
+  (cd "$src" &&
+    ./configure --enable-app --disable-shared &&
+    make -j"$(nproc)" -C lib &&
+    make -j"$(nproc)" -C third-party &&
+    make -j"$(nproc)" -C src h2load)
+  sudo install -m 0755 "$src/src/h2load" /usr/local/bin/h2load
+fi
+
 echo "==> system knobs"
 sudo tee /etc/sysctl.d/90-rapira-bench.conf >/dev/null <<'EOF'
 net.ipv4.ip_local_port_range = 1024 65000
@@ -30,4 +47,4 @@ fedora soft nofile 1048576
 fedora hard nofile 1048576
 EOF
 
-echo "==> loader provisioned: wrk $(wrk --version 2>&1 | head -1 || true), $(k6 version | head -1)"
+echo "==> loader provisioned: wrk $(wrk --version 2>&1 | head -1 || true), $(k6 version | head -1), $(h2load --version 2>&1 | head -1)"

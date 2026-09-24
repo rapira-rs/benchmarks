@@ -27,12 +27,13 @@ Provisioning installs these tools and packages:
 | Server | Rust is absent | Minimal Rust toolchain from `rustup` |
 | Server | `LEGS=all` or `LEGS=frameworks` | `nginx`, `php-fpm`, `composer`, `unzip`, `php-mbstring`, `php-xml`, `php-pdo`, `php-process`, and `php-sodium` |
 | Server | `LEGS=all` or `LEGS=frameworks` | FrankenPHP binary and Composer application dependencies |
-| Loader | All runs | `gcc`, `make`, `git`, `openssl-devel`, `zlib-devel`, `ethtool`, `curl`, `tar`, `wrk`, and `k6` |
+| Server | `LEGS=all` or `LEGS=grpc` | `composer`, `unzip`, PECL `protobuf` 5.36.2 built from source, RoadRunner 2025.1.15 in `/opt/bench/fleet/rr`, the RoadRunner PHP worker packages under `/opt/bench/fleet/roadrunner-grpc`, and the `rapira-ceiling` binary built from the `rapira_grpc` example when the checked-out ref has it |
+| Loader | All runs | `gcc`, `gcc-c++`, `make`, `git`, `openssl-devel`, `zlib-devel`, `libev-devel`, `c-ares-devel`, `ethtool`, `curl`, `tar`, `wrk`, `k6`, and `h2load` built from nghttp2 1.70.0 |
 | Server | `make perf` and tool is absent | `inferno` from Cargo; the script also tries to install `php-embedded-debuginfo` |
 
 The Fedora 44 EC2 image must supply Bash, `dnf`, `sudo`, OpenSSH server, cloud-init, systemd, RPM tools, core utilities, `awk`, `sed`, `grep`, procps tools, and iproute tools. Provisioning uses these base operating system tools but does not install them.
 
-The loader installer selects wrk 4.2.0 and k6 2.2.0 when the tools are absent. It reuses installed binaries. Record the output of `wrk --version` and `k6 version` with each comparison.
+The loader installer selects wrk 4.2.0 and k6 2.2.0 when the tools are absent. It reuses installed wrk and k6 binaries. It builds h2load 1.70.0 when h2load is absent or has a different version. Record the output of `wrk --version`, `k6 version`, and `h2load --version` with each comparison.
 
 ## Standard flow
 
@@ -85,6 +86,7 @@ make bench_frameworks SERVERS='rapira-pr-worker rapira-pr-nginx-worker'
 
 - `BASE_REF` selects the base Git ref. It defaults to `main`.
 - `REF` selects the other Git ref. It accepts a branch, tag, commit, or `pr/N`.
+- `LEGS` selects the server software that provisioning installs. It accepts `rapira`, `frameworks`, `grpc`, or `all`. It defaults to `rapira`.
 - `ROUNDS` defaults to 3.
 - `PROCESSES` defaults to the server CPU count.
 - `WRK_DURATION` defaults to 15 seconds.

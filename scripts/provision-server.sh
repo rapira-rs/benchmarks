@@ -10,6 +10,8 @@ FRANKEN_VERSION=${FRANKEN_VERSION:-1.12.4}
 SYMFONY_SKELETON=${SYMFONY_SKELETON:-^7.3}
 LARAVEL_VERSION=${LARAVEL_VERSION:-^12.0}
 OCTANE_VERSION=${OCTANE_VERSION:-^2.12}
+PROTOBUF_VERSION=${PROTOBUF_VERSION:-5.36.2}
+RR_VERSION=${RR_VERSION:-2025.1.15}
 
 BENCH=/opt/bench
 CORE=$HOME/core
@@ -90,10 +92,14 @@ base_sha=$(resolve_ref "$BASE_REF")
 pr_sha=$(resolve_ref "$REF")
 build_one base "$base_sha"
 build_one pr "$pr_sha"
+echo "==> build rapira-ceiling at $pr_sha"
+# build_one does not check out a ref whose marker matches.
+git -C "$CORE" checkout -q "$pr_sha"
+build_ceiling "$CORE" "$rustflags"
 
 echo "==> metadata"
 python3 - "$base_sha" "$pr_sha" "$BASE_REF" "$REF" "$rustflags" <<'PY'
-import hashlib, json, platform, subprocess, sys
+import hashlib, json, os, platform, subprocess, sys
 
 def sha256(path):
     with open(path, "rb") as f:
@@ -114,6 +120,8 @@ meta = {
     "php": subprocess.run(["php", "-v"], capture_output=True, text=True).stdout.splitlines()[0],
     "php_embedded": subprocess.run(["rpm", "-q", "php-embedded"], capture_output=True, text=True).stdout.strip(),
 }
+if os.path.exists("/opt/bench/bin/rapira-ceiling"):
+    meta["ceiling_sha256"] = sha256("/opt/bench/bin/rapira-ceiling")
 with open("/opt/bench/meta.json", "w") as f:
     json.dump(meta, f, indent=1)
 PY
@@ -194,6 +202,39 @@ EOF
   {
     (cd "$APPS/symfony" && composer show 2>/dev/null | awk '{print "symfony:", $1, $2}')
     (cd "$APPS/laravel" && composer show 2>/dev/null | awk '{print "laravel:", $1, $2}')
+  } >>$BENCH/fleet/versions.txt
+fi
+
+if [ "$LEGS" = grpc ] || [ "$LEGS" = all ]; then
+  echo "==> grpc legs"
+
+  if ! php -r "exit(phpversion('protobuf') === '$PROTOBUF_VERSION' ? 0 : 1);"; then
+    echo "==> build ext-protobuf $PROTOBUF_VERSION"
+    src=$HOME/protobuf-$PROTOBUF_VERSION
+    rm -rf "$src"
+    curl -fsSL "https://pecl.php.net/get/protobuf-$PROTOBUF_VERSION.tgz" | tar -xzf - -C "$HOME" "protobuf-$PROTOBUF_VERSION"
+    (cd "$src" && phpize && ./configure && make -j"$(nproc)" && sudo make install)
+    echo 'extension=protobuf.so' | sudo tee /etc/php.d/40-protobuf.ini >/dev/null
+    php -r "exit(phpversion('protobuf') === '$PROTOBUF_VERSION' ? 0 : 1);" ||
+      { echo "ERROR: ext-protobuf $PROTOBUF_VERSION is not loaded after the build"; exit 1; }
+  fi
+
+  if ! "$BENCH/fleet/rr" --version 2>/dev/null | grep -qF "rr version $RR_VERSION"; then
+    echo "==> RoadRunner $RR_VERSION"
+    curl -fsSL "https://github.com/roadrunner-server/roadrunner/releases/download/v$RR_VERSION/roadrunner-$RR_VERSION-linux-amd64.tar.gz" |
+      tar -xzf - -C "$HOME" "roadrunner-$RR_VERSION-linux-amd64/rr"
+    install -m 0755 "$HOME/roadrunner-$RR_VERSION-linux-amd64/rr" "$BENCH/fleet/rr"
+  fi
+
+  RRG=$BENCH/fleet/roadrunner-grpc
+  install -d "$RRG"
+  install -m 0644 "$HOME"/bench-rig/fleet/roadrunner/composer.json "$HOME"/bench-rig/fleet/roadrunner/composer.lock "$RRG/"
+  (cd "$RRG" && COMPOSER_NO_INTERACTION=1 composer install --no-dev --no-progress --quiet)
+
+  {
+    echo "protobuf $PROTOBUF_VERSION"
+    echo "roadrunner $RR_VERSION"
+    (cd "$RRG" && composer show 2>/dev/null | awk '{print "roadrunner-grpc:", $1, $2}')
   } >>$BENCH/fleet/versions.txt
 fi
 
