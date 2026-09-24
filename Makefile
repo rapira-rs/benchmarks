@@ -18,11 +18,13 @@ REF ?=
 LEGS ?= rapira
 PLAIN ?= 0
 AMI ?=
+BUF_VERSION ?= v1.73.0
+BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 
 TF := terraform -chdir=terraform
 AWSC := aws --profile $(PROFILE) --region $(REGION)
 
-.PHONY: up provision status bench bench_fleet bench_frameworks bench_static perf sync extend report down nuke preflight
+.PHONY: up provision status bench bench_fleet bench_frameworks bench_static perf sync extend report down nuke preflight grpc_fixtures
 
 preflight:
 	@$(AWSC) sts get-caller-identity >/dev/null 2>&1 || \
@@ -110,3 +112,9 @@ down: preflight
 nuke: preflight
 	@PROFILE=$(PROFILE) REGION=$(REGION) scripts/nuke.sh
 	@rm -f .ssh-known-hosts .ssh-cm-*
+
+# Local only: needs Go and network access to the buf remote plugins.
+grpc_fixtures:
+	$(BUF) build grpc --as-file-descriptor-set -o grpc/bench.binpb
+	$(BUF) generate grpc --template grpc/buf.gen.yaml
+	python3 scripts/grpc-fixtures.py
