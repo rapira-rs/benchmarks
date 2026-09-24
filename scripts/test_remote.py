@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Check proxy evidence collection before benchmark load."""
 
+import json
 import os
+import re
 import shutil
 import subprocess
 import tempfile
@@ -133,6 +135,331 @@ write_run_meta() { :; }
             self.assertIn(f"server bench-rig/scripts/fleet-leg.sh start rapira-nginx 2 {tag} /opt/bench/fleet/apps/{framework}/bench/worker-rapira.php", trace)
             self.assertIn(f"server bench-rig/scripts/fleet-leg.sh stop rapira-nginx {tag}", trace)
             self.assertIn(f"measure {tag} http://10.0.0.1:8080/?name=you {tag}", trace)
+
+
+# h2load 1.70.0 from rapira-bench-loader:local against the gRPC echo ceiling:
+# -t2 -c4 -m1 -D 2 with grpc/echo.grpc. Each response is 91 bytes, so data is
+# exactly succeeded x 91.
+H2LOAD_SAMPLE = """\
+starting benchmark...
+spawning thread #0: 2 total client(s). Timing-based test with 0s of warm-up time and 2s of main duration for measurements.
+spawning thread #1: 2 total client(s). Timing-based test with 0s of warm-up time and 2s of main duration for measurements.
+Warm-up started for thread #1.
+Warm-up started for thread #0.
+progress: 50% of clients started
+progress: 100% of clients started
+Warm-up phase is over for thread #1.
+Main benchmark duration is started for thread #1.
+Warm-up phase is over for thread #0.
+Main benchmark duration is started for thread #0.
+Application protocol: h2c
+Main benchmark duration is over for thread #1. Stopping all clients.
+Stopped all clients for thread #1
+Main benchmark duration is over for thread #0. Stopping all clients.
+Stopped all clients for thread #0
+
+finished in 2.00s, 308330.00 req/s, 36.18MB/s
+requests: 616660 total, 616664 started, 616660 done, 616660 succeeded, 0 failed, 0 errored, 0 timeout
+status codes: 616660 2xx, 0 3xx, 0 4xx, 0 5xx
+traffic: 72.36MB (75876095) total, 2.94MB (3083764) headers (space savings 95.57%), 53.52MB (56116060) data
+                 min         max         median      p95         p99         mean        sd         +/- sd
+request     :        7us       461us        10us        15us        20us        11us         3us    93.62%
+connect     :       78us        97us        88us        97us        97us        88us         7us    50.00%
+TTFB        :      258us       292us       275us       292us       292us       275us        16us    50.00%
+req/s       :   63730.60    86812.79    78887.39    86812.79    86812.79    77079.54    11473.74    75.00%
+"""
+
+# Each row edits one number in one h2load file. The other file keeps the clean
+# sample.
+H2LOAD_CASES = [
+    {
+        "name": "clean",
+        "file": "saturated",
+        "text": H2LOAD_SAMPLE,
+        "void": None,
+    },
+    {
+        "name": "missing output",
+        "file": "saturated",
+        "text": "",
+        "void": "no h2load output (loader unreachable or h2load failed)",
+    },
+    {
+        "name": "failed",
+        "file": "saturated",
+        "text": H2LOAD_SAMPLE.replace(" 0 failed,", " 1 failed,"),
+        "void": "h2load errors: requests: 616660 total, 616664 started, 616660 done, 616660 succeeded, 1 failed, 0 errored, 0 timeout",
+    },
+    {
+        "name": "errored",
+        "file": "lowc",
+        "text": H2LOAD_SAMPLE.replace(" 0 errored,", " 2 errored,"),
+        "void": "h2load errors: requests: 616660 total, 616664 started, 616660 done, 616660 succeeded, 0 failed, 2 errored, 0 timeout",
+    },
+    {
+        "name": "timeout",
+        "file": "saturated",
+        "text": H2LOAD_SAMPLE.replace(" 0 timeout", " 3 timeout"),
+        "void": "h2load errors: requests: 616660 total, 616664 started, 616660 done, 616660 succeeded, 0 failed, 0 errored, 3 timeout",
+    },
+    {
+        "name": "3xx",
+        "file": "lowc",
+        "text": H2LOAD_SAMPLE.replace(" 0 3xx,", " 1 3xx,"),
+        "void": "non-2xx responses: status codes: 616660 2xx, 1 3xx, 0 4xx, 0 5xx",
+    },
+    {
+        "name": "4xx",
+        "file": "saturated",
+        "text": H2LOAD_SAMPLE.replace(" 0 4xx,", " 1 4xx,"),
+        "void": "non-2xx responses: status codes: 616660 2xx, 0 3xx, 1 4xx, 0 5xx",
+    },
+    {
+        "name": "5xx",
+        "file": "lowc",
+        "text": H2LOAD_SAMPLE.replace(" 0 5xx", " 1 5xx"),
+        "void": "non-2xx responses: status codes: 616660 2xx, 0 3xx, 0 4xx, 1 5xx",
+    },
+    {
+        "name": "short data",
+        "file": "saturated",
+        "text": H2LOAD_SAMPLE.replace("(56116060) data", "(56115969) data"),
+        "void": "short responses: data=56115969 succeeded=616660 expect_len=91",
+    },
+    {
+        "name": "boundary surplus",
+        "file": "lowc",
+        "text": H2LOAD_SAMPLE.replace("(56116060) data", "(56116151) data"),
+        "void": None,
+    },
+]
+
+# The h2load passes are the warm-up, the saturated pass, the lowc warm-up and
+# the lowc pass, from WRK_THREADS=2, GRPC_CONNS=8, dur_s=1 and PROCESSES=2.
+LOAD_CASES = [
+    {
+        "name": "connect-h2c has no open loop",
+        "proto": "connect-h2c",
+        "wire": "h2c",
+        "curl": "curl -sf -m2 --http2-prior-knowledge",
+        "h2load": ["-t2 -c8 -m1 -D 5", "-t2 -c8 -m1 -D 1", "-t2 -c2 -m1 -D 2", "-t2 -c2 -m1 -D 10"],
+        "k6": None,
+        "wrk": None,
+    },
+    {
+        "name": "grpc open loop",
+        "proto": "grpc",
+        "wire": "h2c",
+        "curl": "curl -sf -m2 --http2-prior-knowledge",
+        "h2load": ["-t2 -c8 -m1 -D 5", "-t2 -c8 -m1 -D 1", "-t2 -c2 -m1 -D 2", "-t2 -c2 -m1 -D 10"],
+        "k6": ["-e PROTO=grpc -e RATE=100", "bench-rig/k6/grpc.js"],
+        "wrk": None,
+    },
+    {
+        "name": "http-h1 adds the wrk pass",
+        "proto": "http-h1",
+        "wire": "h1",
+        "curl": "curl -sf -m2",
+        "h2load": ["-t2 -c8 -m1 -D 5 --h1", "-t2 -c8 -m1 -D 1 --h1", "-t2 -c2 -m1 -D 2 --h1", "-t2 -c2 -m1 -D 10 --h1"],
+        "k6": ["-e PROTO=http-h1", "bench-rig/k6/grpc.js"],
+        "wrk": ["-c8"],
+    },
+]
+
+SERVER_LOG_CASES = [
+    {
+        "name": "one WARN line",
+        "server_log": "2026-09-24T10:00:00Z WARN rapira: worker lost the call\n",
+        "void": ["server log: 1 warn or error lines"],
+        "file": True,
+    },
+    {
+        "name": "empty grep",
+        "server_log": "",
+        "void": [],
+        "file": False,
+    },
+]
+
+LOWC_DOUBLED_CASES = [
+    {
+        "name": "one child holds two connections",
+        "conns": "11 1\n12 2\n",
+        "lowc_doubled": ["1"],
+    },
+    {
+        "name": "each child holds one connection",
+        "conns": "11 1\n12 1\n",
+        "lowc_doubled": [],
+    },
+]
+
+SERVER_READ_CASES = [
+    {
+        "name": "probe tag set",
+        "probe": "r1-x",
+        "expect_len": ["91"],
+        "pss_kb": ["4096"],
+        "leg_sh": ["conns", "mem", "probe"],
+        "log_grep": 1,
+    },
+    {
+        "name": "no probe tag",
+        "probe": "",
+        "expect_len": ["91"],
+        "pss_kb": [],
+        "leg_sh": [],
+        "log_grep": 0,
+    },
+]
+
+# All rows share one layout, so each row also shows that the files of the other
+# workload are not hashed.
+RUN_META_LAYOUT = ["php/grpc/a.php", "php/grpc/gen/b.php", "k6/grpc.js", "grpc/c.bin", "php/hello/x.php", "k6/hello.js"]
+
+RUN_META_CASES = [
+    {
+        "name": "grpc",
+        "workload": "grpc",
+        "files": ["grpc/c.bin", "k6/grpc.js", "php/grpc/a.php", "php/grpc/gen/b.php"],
+    },
+    {
+        "name": "hello",
+        "workload": "hello",
+        "files": ["k6/hello.js", "php/hello/x.php"],
+    },
+]
+
+
+class GrpcCellTests(unittest.TestCase):
+    def measure(self, proto="grpc", wire="h2c", probe="r1-x", probe_ok=True,
+                saturated=H2LOAD_SAMPLE, lowc=H2LOAD_SAMPLE, conns="", server_log=""):
+        temp = tempfile.TemporaryDirectory()
+        self.addCleanup(temp.cleanup)
+        root = Path(temp.name)
+        (root / "out/cells").mkdir(parents=True)
+        (root / "grpc").mkdir()
+        (root / "grpc/expect.grpc").write_bytes(b"x" * 91)
+        result = subprocess.run(
+            ["bash", "-c", r'''
+set -euo pipefail
+. "$LIB"
+SERVER_PUB=server LOADER_PUB=loader WRK_THREADS=2 GRPC_CONNS=8 PROCESSES=2 dur_s=1
+WRK_DURATION=1s WRK_TIMEOUT=5s OPEN_RATE=100 K6_VUS=4 WORKLOAD=grpc
+sleep() { :; }
+rssh() {
+  local host=$1
+  shift
+  printf '%s %s\n' "$host" "$*" >>"$TRACE"
+  case "$*" in
+  *'| cmp -s -'*) [ "$PROBE_OK" = 1 ] ;;
+  *h2load*' -D 10 '*) printf '%s' "$LOWC" ;;
+  *h2load*) printf '%s' "$SATURATED" ;;
+  *'leg.sh mem'*) echo 4096 ;;
+  *'leg.sh conns'*) printf '%s' "$CONNS" ;;
+  *'grep -E'*)
+    printf '%s' "$SERVER_LOG"
+    [ -n "$SERVER_LOG" ]
+    ;;
+  esac
+}
+measure_grpc_cell r1-x "$PROTO" "$WIRE" http://server:8080/bench.v1.EchoService/Echo "-H 'a: b'" echo.grpc grpc/expect.grpc "$PROBE" || exit $?
+'''],
+            cwd=root,
+            env={
+                **os.environ, "LIB": str(LIB), "OUT": str(root / "out"), "TRACE": str(root / "trace"),
+                "PROTO": proto, "WIRE": wire, "PROBE": probe, "PROBE_OK": "1" if probe_ok else "0",
+                "SATURATED": saturated, "LOWC": lowc, "CONNS": conns, "SERVER_LOG": server_log,
+            },
+            capture_output=True,
+            text=True,
+        )
+        cells = root / "out/cells"
+        meta = [line.partition("=") for line in (cells / "r1-x.meta").read_text().splitlines()]
+        trace = (root / "trace").read_text().splitlines()
+        return result, cells, meta, trace
+
+    def values(self, meta, key):
+        return [v for k, _, v in meta if k == key]
+
+    def test_probe_failure_voids_before_load(self):
+        result, _, meta, trace = self.measure(probe_ok=False)
+        self.assertEqual(1, result.returncode, result.stdout + result.stderr)
+        self.assertEqual(["probe: unexpected response"], self.values(meta, "void"))
+        self.assertEqual([], [line for line in trace if "h2load" in line])
+
+    def test_h2load_void_rules(self):
+        for row in H2LOAD_CASES:
+            texts = {"saturated": H2LOAD_SAMPLE, "lowc": H2LOAD_SAMPLE, row["file"]: row["text"]}
+            result, _, meta, _ = self.measure(**texts)
+            self.assertEqual(0, result.returncode, row["name"] + result.stdout + result.stderr)
+            self.assertEqual([row["void"]] if row["void"] else [], self.values(meta, "void"), row["name"])
+
+    def test_passes_per_protocol(self):
+        for row in LOAD_CASES:
+            result, _, _, trace = self.measure(proto=row["proto"], wire=row["wire"])
+            self.assertEqual(0, result.returncode, row["name"] + result.stdout + result.stderr)
+            probe = [line for line in trace if "| cmp -s -" in line]
+            self.assertEqual(1, len(probe), row["name"])
+            self.assertIn(row["curl"] + " -H 'a: b'", probe[0], row["name"])
+            passes = [re.search(r"h2load (-t\S+ -c\S+ -m1 -D \d+(?: --h1)?)", line) for line in trace if "h2load" in line]
+            self.assertEqual(row["h2load"], [m and m.group(1) for m in passes], row["name"])
+            k6 = [line for line in trace if " k6 run " in line]
+            wrk = [line for line in trace if " wrk -t" in line]
+            self.assertEqual(0 if row["k6"] is None else 1, len(k6), row["name"])
+            self.assertEqual(0 if row["wrk"] is None else 1, len(wrk), row["name"])
+            for part in row["k6"] or []:
+                self.assertIn(part, k6[0], row["name"])
+            for part in row["wrk"] or []:
+                self.assertIn(part, wrk[0], row["name"])
+
+    def test_server_log_lines_void(self):
+        for row in SERVER_LOG_CASES:
+            result, cells, meta, _ = self.measure(server_log=row["server_log"])
+            self.assertEqual(0, result.returncode, row["name"] + result.stdout + result.stderr)
+            self.assertEqual(row["void"], self.values(meta, "void"), row["name"])
+            self.assertEqual(row["file"], (cells / "r1-x.server-log.txt").exists(), row["name"])
+
+    def test_lowc_doubled(self):
+        for row in LOWC_DOUBLED_CASES:
+            result, _, meta, _ = self.measure(conns=row["conns"])
+            self.assertEqual(0, result.returncode, row["name"] + result.stdout + result.stderr)
+            self.assertEqual(row["lowc_doubled"], self.values(meta, "lowc_doubled"), row["name"])
+
+    def test_server_reads_follow_the_probe_tag(self):
+        for row in SERVER_READ_CASES:
+            result, _, meta, trace = self.measure(probe=row["probe"])
+            self.assertEqual(0, result.returncode, row["name"] + result.stdout + result.stderr)
+            self.assertEqual(row["expect_len"], self.values(meta, "expect_len"), row["name"])
+            self.assertEqual(row["pss_kb"], self.values(meta, "pss_kb"), row["name"])
+            leg_sh = sorted({m.group(1) for m in (re.search(r"leg\.sh (\w+)", line) for line in trace) if m})
+            self.assertEqual(row["leg_sh"], leg_sh, row["name"])
+            self.assertEqual(row["log_grep"], len([line for line in trace if "grep -E" in line]), row["name"])
+
+    def test_run_meta_hashes_workload_files(self):
+        for row in RUN_META_CASES:
+            temp = tempfile.TemporaryDirectory()
+            self.addCleanup(temp.cleanup)
+            root = Path(temp.name)
+            for name in RUN_META_LAYOUT:
+                (root / name).parent.mkdir(parents=True, exist_ok=True)
+                (root / name).write_text(name)
+            (root / "out").mkdir()
+            (root / "out/server-meta.json").write_text("{}")
+            result = subprocess.run(
+                ["bash", "-c", '. "$LIB"; write_run_meta'],
+                cwd=root,
+                env={
+                    **os.environ, "LIB": str(LIB), "OUT": "out", "INSTANCE_TYPE": "test", "LOADER_TYPE": "test",
+                    "AMI_ID": "ami", "PROCESSES": "2", "WRK_CONNS": "8", "WRK_THREADS": "2", "WRK_DURATION": "1s",
+                    "LOWC": "32", "K6_VUS": "4", "WORKLOAD": row["workload"],
+                },
+                capture_output=True,
+                text=True,
+            )
+            self.assertEqual(0, result.returncode, row["name"] + result.stdout + result.stderr)
+            meta = json.loads((root / "out/run-meta.json").read_text())
+            self.assertEqual(row["files"], sorted(meta["workload_files"]), row["name"])
 
 
 if __name__ == "__main__":

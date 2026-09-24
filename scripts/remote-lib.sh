@@ -177,17 +177,60 @@ wrk_pass() {
   rssh "$LOADER_PUB" "ulimit -n 65536; wrk -t$1 -c$2 -d$3 --timeout $WRK_TIMEOUT --latency '$5'" >"$4" 2>&1 || true
 }
 
+# k6_pass <tag> <url> [script] [extra] runs k6/<script>.js (default $WORKLOAD)
+# with the extra k6 run flags.
 k6_pass() {
   local raw=$OUT/cells/$1.k6.raw
   rssh "$LOADER_PUB" "ulimit -n 65536; rm -f /tmp/k6.json; \
     k6 run -e TARGET='$2' -e VUS=$K6_VUS -e DURATION=$WRK_DURATION -e CHECKS=${CHECKS:-1} \
-    --summary-trend-stats 'avg,min,med,max,p(90),p(95),p(99)' \
-    --summary-export /tmp/k6.json bench-rig/k6/$WORKLOAD.js; \
+    --summary-trend-stats 'avg,min,med,max,p(90),p(95),p(99),p(99.9)' \
+    --summary-export /tmp/k6.json ${4:-} bench-rig/k6/${3:-$WORKLOAD}.js; \
     echo '===K6-EXPORT==='; cat /tmp/k6.json 2>/dev/null" >"$raw" 2>&1 || true
   awk '/^===K6-EXPORT===$/ { f = 1; next } !f' "$raw" >"$OUT/cells/$1.k6.log"
   awk '/^===K6-EXPORT===$/ { f = 1; next } f' "$raw" >"$OUT/cells/$1.k6.summary.json"
   [ -s "$OUT/cells/$1.k6.summary.json" ] || rm -f "$OUT/cells/$1.k6.summary.json"
   rm -f "$raw"
+}
+
+# h2load_pass <threads> <conns> <duration_s> <outfile> <url> <wire> <hdrs> [body]
+# sends one request at a time on each connection. body is a file under grpc/;
+# without it h2load sends GET.
+h2load_pass() {
+  local h1=
+  [ "$6" = h1 ] && h1=' --h1'
+  rssh "$LOADER_PUB" "ulimit -n 65536; h2load -t$1 -c$2 -m1 -D $3$h1 $7${8:+ -d bench-rig/grpc/$8} '$5'" >"$4" 2>&1 || true
+}
+
+check_wrk() {
+  local tag=$1 txt
+  txt=$(cat "$2" 2>/dev/null || true)
+  if [[ $txt != *"Requests/sec"* ]]; then
+    flag "$tag" void "no wrk output (loader unreachable or wrk failed)"
+  elif [[ $txt == *"Non-2xx"* ]]; then
+    flag "$tag" void "non-2xx responses: $(grep 'Non-2xx' <<<"$txt")"
+  elif [[ $txt == *"Socket errors"* ]]; then
+    flag "$tag" void "$(grep 'Socket errors' <<<"$txt")"
+  fi
+}
+
+# check_h2load <tag> <file> <expect_len> voids the cell on the first error in
+# one h2load output. A gRPC error is HTTP 200 without a DATA frame, so it
+# decreases data below succeeded x expect_len. A stream that stops at the end
+# of -D can add data without a success, so more data is not an error.
+check_h2load() {
+  local reason
+  reason=$(awk -v len="$3" '
+    /^finished in / { done = 1 }
+    /^requests:/ { requests = $0; succeeded = $8; errors = $10 + $12 + $14 }
+    /^status codes:/ { codes = $0; non2xx = $5 + $7 + $9 }
+    /^traffic:/ { data = $(NF - 1); gsub(/[()]/, "", data) }
+    END {
+      if (!done) print "no h2load output (loader unreachable or h2load failed)"
+      else if (errors) print "h2load errors: " requests
+      else if (non2xx) print "non-2xx responses: " codes
+      else if (data + 0 < succeeded * len) print "short responses: data=" data " succeeded=" succeeded " expect_len=" len
+    }' "$2")
+  [ -z "$reason" ] || flag "$1" void "$reason"
 }
 
 # Takes the snapshots before a saturated pass and sets the CELL_* variables for cell_end.
@@ -286,15 +329,67 @@ measure_cell() {
 
   k6_pass "$tag" "$url"
 
-  local txt
-  txt=$(cat "$OUT/cells/$tag.wrk.txt" 2>/dev/null || true)
-  if [[ $txt != *"Requests/sec"* ]]; then
-    flag "$tag" void "no wrk output (loader unreachable or wrk failed)"
-  elif [[ $txt == *"Non-2xx"* ]]; then
-    flag "$tag" void "non-2xx responses: $(grep 'Non-2xx' <<<"$txt")"
-  elif [[ $txt == *"Socket errors"* ]]; then
-    flag "$tag" void "$(grep 'Socket errors' <<<"$txt")"
+  check_wrk "$tag" "$OUT/cells/$tag.wrk.txt"
+  return 0
+}
+
+# measure_grpc_cell <tag> <proto> <wire> <url> <hdrs> <body> <expect> <probe_tag>
+# measures one cell with h2load closed-loop passes and a k6 open loop. expect is
+# a path from the repo root. The loader has the same file under bench-rig/.
+measure_grpc_cell() {
+  local tag=$1 proto=$2 wire=$3 url=$4 hdrs=$5 body=$6 expect=$7 probe_tag=$8
+  local request=("$url" "$wire" "$hdrs" "$body")
+  local expect_len warm doubled log=$OUT/cells/$tag.server-log.txt prior=
+
+  expect_len=$(wc -c <"$expect")
+  flag "$tag" expect_len "$expect_len"
+
+  [ "$wire" = h2c ] && prior=' --http2-prior-knowledge'
+  if ! rssh "$LOADER_PUB" "curl -sf -m2$prior $hdrs${body:+ --data-binary @bench-rig/grpc/$body} '$url' | cmp -s - bench-rig/$expect"; then
+    flag "$tag" void "probe: unexpected response"
+    return 1
   fi
+
+  h2load_pass "$WRK_THREADS" "$GRPC_CONNS" 5 /dev/null "${request[@]}"
+
+  cell_begin "$tag" "$probe_tag"
+  h2load_pass "$WRK_THREADS" "$GRPC_CONNS" "$dur_s" "$OUT/cells/$tag.h2load.txt" "${request[@]}"
+  # h2load binds each client to one thread. The busiest thread can saturate
+  # before the total loader CPU gets to 95%.
+  cell_end "$tag" "$probe_tag" "$GRPC_CONNS" 85
+
+  if [ "$proto" = http-h1 ]; then
+    wrk_pass "$WRK_THREADS" "$GRPC_CONNS" "$WRK_DURATION" "$OUT/cells/$tag.wrk.txt" "$url"
+    check_wrk "$tag" "$OUT/cells/$tag.wrk.txt"
+  fi
+
+  if [ -n "$probe_tag" ]; then
+    flag "$tag" pss_kb "$(rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh mem $probe_tag")"
+  fi
+
+  h2load_pass 2 "$PROCESSES" 2 /dev/null "${request[@]}" &
+  warm=$!
+  sleep 1
+  if [ -n "$probe_tag" ]; then
+    doubled=$(rssh "$SERVER_PUB" "bench-rig/scripts/leg.sh conns $probe_tag" | awk '$2 >= 2 { n++ } END { print n + 0 }')
+    [ "$doubled" -eq 0 ] || flag "$tag" lowc_doubled "$doubled"
+  fi
+  wait "$warm"
+  h2load_pass 2 "$PROCESSES" 10 "$OUT/cells/$tag.lowc.h2load.txt" "${request[@]}"
+
+  [ "$proto" = connect-h2c ] || k6_pass "$tag" "$url" grpc "-e PROTO=$proto -e RATE=$OPEN_RATE"
+
+  if [ -n "$probe_tag" ]; then
+    rssh "$SERVER_PUB" "grep -E 'WARN|ERROR' /opt/bench/log/$probe_tag.server.log" >"$log" || true
+    if [ -s "$log" ]; then
+      flag "$tag" void "server log: $(wc -l <"$log") warn or error lines"
+    else
+      rm -f "$log"
+    fi
+  fi
+
+  check_h2load "$tag" "$OUT/cells/$tag.h2load.txt" "$expect_len"
+  check_h2load "$tag" "$OUT/cells/$tag.lowc.h2load.txt" "$expect_len"
   return 0
 }
 
@@ -308,7 +403,8 @@ import hashlib, json, sys
 from pathlib import Path
 out, itype, ltype, ami, procs, conns, threads, dur, lowc, vus, checks, workload = sys.argv[1:13]
 meta = json.load(open(f"{out}/server-meta.json"))
-files = sorted(Path(f"php/{workload}").glob("*.php")) + [Path(f"k6/{workload}.js")]
+tree = sorted(Path(f"php/{workload}").rglob("*")) + sorted(Path(workload).rglob("*"))
+files = [p for p in tree if p.is_file()] + [Path(f"k6/{workload}.js")]
 meta.update({
     "instance_type": itype,
     "loader_instance_type": ltype,
