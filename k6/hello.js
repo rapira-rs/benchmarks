@@ -1,8 +1,8 @@
 // k6 hello workload. On a small loader k6 is generator-bound far below
 // rapira's ceiling; read its numbers as a latency probe, not throughput.
 //
-// Workload contract (every k6/<workload>.js follows it, paired with the PHP
-// handlers in php/<workload>/):
+// Workload contract of the HTTP workloads (hello), paired with the PHP
+// handlers in php/<workload>/. k6/grpc.js states its own contract.
 // - env: TARGET (full URL), VUS, DURATION, CHECKS (0 disables per-request
 //   checks and discards bodies).
 // - keep a threshold on http_req_failed so failures are visible.

@@ -2,6 +2,54 @@
 
 Dated records and the decisions the code cannot show. Methodology lives in INSTRUCTIONS.md, operations in README.md. Numbers from different rigs or instance sizes never mix into one table.
 
+## gRPC baseline (rapira PHP dispatcher vs RoadRunner), 2026-09-24
+
+Rig: c7a.8xlarge server + c7a.4xlarge loader, eu-central-1a, AMI ami-066f414c6023b2bf9, plain release build of rapira at feature/grpc-connectrpc `e421bbc` (pr_sha `924399d` is that commit plus a since-removed example that the run did not use), PHP 8.5.10 NTS with opcache and PECL protobuf 5.36.2, RoadRunner 2025.1.15 with php opcache.enable_cli=1 and 32 workers, h2load nghttp2/1.70.0, k6 2.2.0, wrk 4.2.0, 32 workers on every leg, 512 connections and 15 s on every saturated pass, lowc at 32 connections for 10 s, k6 open loop at 20000 req/s with 256 VUs (1 s ramp then 15 s), medians of 3 interleaved rounds. Run dir: `results/20260924T191959Z-c7a.8xlarge-grpc`.
+
+Closed loop (h2load, c=512, medians; the hello row also under wrk):
+
+| leg | request | req/s (median) | spread | Pss MiB |
+| --- | --- | --- | --- | --- |
+| rapira-http-h1 (wrk) | GET /?name=you | 939,155 | 1.0% | 230.6 |
+| rapira-http-h1 | GET /?name=you (h2load --h1) | 919,936 | 1.3% | 230.6 |
+| rapira-connect-h1 | Connect proto over HTTP/1.1 | 815,299 | 0.3% | 205.7 |
+| rapira-connectjson-h1 | Connect JSON over HTTP/1.1 | 766,225 | 4.9% | 223.6 |
+| rapira-grpcweb-h1 | gRPC-Web over HTTP/1.1 | 827,481 | 1.0% | 209.3 |
+| rapira-connect-h2c | Connect proto over h2c | 815,498 | 1.9% | 249.6 |
+| rapira-grpc | gRPC over h2c | 810,216 | 0.6% | 248.0 |
+| rr-grpc | gRPC over h2c | 137,787 | 0.9% | 542.2 |
+
+Low concurrency (h2load, c=32, medians of p50 / p99 / avg):
+
+| leg | p50 | p99 | avg |
+| --- | --- | --- | --- |
+| rapira-http-h1 | 0.16ms | 0.25ms | 0.16ms |
+| rapira-connect-h1 | 0.19ms | 0.29ms | 0.19ms |
+| rapira-connectjson-h1 | 0.18ms | 0.29ms | 0.18ms |
+| rapira-grpcweb-h1 | 0.18ms | 0.28ms | 0.18ms |
+| rapira-connect-h2c | 0.15ms | 0.25ms | 0.16ms |
+| rapira-grpc | 0.16ms | 0.26ms | 0.16ms |
+| rr-grpc | 0.30ms | 1.22ms | 0.34ms |
+
+Open loop (k6, target 20000 req/s, achieved req/s is the average over the 16 s run including the 1 s ramp; `rapira-connect-h2c` carries no k6 pass):
+
+| leg | req/s (achieved) | p50 | p99 | p99.9 | failed checks |
+| --- | --- | --- | --- | --- | --- |
+| rapira-http-h1 | 19,371 | 0.13ms | 0.23ms | 0.92ms | 0 |
+| rapira-connect-h1 | 19,369 | 0.13ms | 0.43ms | 1.98ms | 0 |
+| rapira-connectjson-h1 | 19,370 | 0.13ms | 0.26ms | 0.96ms | 0 |
+| rapira-grpcweb-h1 | 19,371 | 0.13ms | 0.33ms | 1.10ms | 0 |
+| rapira-grpc | 19,370 | 0.16ms | 0.49ms | 1.12ms | 0 |
+| rr-grpc | 19,370 | 0.24ms | 1.16ms | 2.90ms | 0 |
+
+- Flags: every rapira row carries `server_unsaturated` (server CPU 75 to 83%, loader 62 to 74%) and `lowc_doubled` (5 to 10 of 32 workers held two connections during the lowc warm-up); rr-grpc carries `server_unsaturated` (server 69%, loader 27%). No `generator_bound`, `ena_throttled`, `worker_churn`, or `log_growth` on any cell; no voided or invalid cell.
+- The connection sweep (5 s cells, rapira-grpc and rapira-http-h1): rapira-grpc 575k at c=256, 812k at 512, 1,047k at 1024 with `generator_bound`; hello h2load --h1 712k, 920k, 1,257k with `generator_bound` at 1024. One c7a.4xlarge loader binds before the server reaches 90% CPU on these rows, so the c=512 rows are not a server maximum, and the c=1024 values are floors. Run dirs: `results/20260924T191554Z-c7a.8xlarge-grpc` (256), `results/20260924T191335Z-c7a.8xlarge-grpc` (512), and `results/20260924T191704Z-c7a.8xlarge-grpc` (1024).
+- The thread check on rapira-grpc at c=512, 5 s cells: h2load -t8 gives 684k req/s (`results/20260924T191813Z-c7a.8xlarge-grpc`) and -t16 gives 812k (`results/20260924T191335Z-c7a.8xlarge-grpc`), so the loader thread count also limits the c=512 rows.
+- The forced-error check: a dispatcher that answers `fail()` on every 500th call was voided by the byte rule alone (`short responses: data=151664695 succeeded=1669983 expect_len=91`, `results/20260924T191846Z-c7a.8xlarge-grpc`); the probe and the log rule did not fire.
+- RoadRunner runs with `logs.level: error` and its `grpc` and `server` channels at `panic`, because both log one ERROR line per queued call that h2load cancels at the end of a pass (560 lines at c=512 in the container check).
+- The open-loop rate ramps from 0 to 20000 req/s over 1 s because k6 starts its schedule before its VUs are active; the first smoke run dropped 77 to 147 iterations at the start with a constant rate.
+- What the tables do not show: the Rust transport ceiling of the plan was removed on 2026-09-24 as not a fair row; the suite benches the rapira binary only.
+
 ## AWS baseline, 2026-08-30
 
 Rig: c7a.8xlarge server + c7a.4xlarge loader, eu-central-1a, plain release builds (no frame pointers), 32 workers, wrk c=8000 d=15s, medians of 3 interleaved rounds. Run dirs: `results/20260830T140609Z-c7a.8xlarge-ab` and `results/20260830T142132Z-c7a.8xlarge-fleet`, provenance in each run-meta.json.

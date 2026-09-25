@@ -18,11 +18,13 @@ REF ?=
 LEGS ?= rapira
 PLAIN ?= 0
 AMI ?=
+BUF_VERSION ?= v1.73.0
+BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 
 TF := terraform -chdir=terraform
 AWSC := aws --profile $(PROFILE) --region $(REGION)
 
-.PHONY: up provision status bench bench_fleet bench_frameworks bench_static perf sync extend report down nuke preflight
+.PHONY: up provision status bench bench_fleet bench_frameworks bench_static bench_grpc perf sync extend report down nuke preflight grpc_fixtures
 
 preflight:
 	@$(AWSC) sts get-caller-identity >/dev/null 2>&1 || \
@@ -79,6 +81,9 @@ bench_frameworks:
 bench_static:
 	@scripts/bench-static.sh
 
+bench_grpc:
+	@scripts/bench-grpc.sh
+
 # LEG selects the binary (base or pr); REF stays the git-ref knob of up/provision.
 perf:
 	@scripts/perf.sh
@@ -96,7 +101,7 @@ extend:
 	echo "TTL set to $(TTL) minutes on both boxes"
 
 report:
-	@d=$$(ls -d results/*-ab results/*-fleet results/*-frameworks results/*-static 2>/dev/null | sort | tail -1); \
+	@d=$$(ls -d results/*-ab results/*-fleet results/*-frameworks results/*-static results/*-grpc 2>/dev/null | sort | tail -1); \
 	test -n "$$d" || { echo "ERROR: no benchmark run in results/"; exit 1; }; \
 	python3 scripts/report.py "$$d"
 
@@ -110,3 +115,9 @@ down: preflight
 nuke: preflight
 	@PROFILE=$(PROFILE) REGION=$(REGION) scripts/nuke.sh
 	@rm -f .ssh-known-hosts .ssh-cm-*
+
+# Local only: needs Go and network access to the buf remote plugins.
+grpc_fixtures:
+	$(BUF) build grpc --as-file-descriptor-set -o grpc/bench.binpb
+	$(BUF) generate grpc --template grpc/buf.gen.yaml
+	python3 scripts/grpc-fixtures.py

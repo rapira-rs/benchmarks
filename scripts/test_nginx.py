@@ -10,6 +10,7 @@ import shutil
 import socket
 import subprocess
 import time
+import tomllib
 import unittest
 from pathlib import Path
 
@@ -29,6 +30,7 @@ BACKEND = r'''#!/usr/bin/env python3
 import os
 import signal
 import sys
+import tomllib
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
@@ -38,10 +40,29 @@ def option(name):
     return sys.argv[index + 1]
 
 
-host, port = option("--listen").rsplit(":", 1)
+flags = os.environ.get("RAPIRA_FAKE_CLI") == "flags"
+if sys.argv[1:] == ["--help"]:
+    if flags:
+        print("Usage: rapira serve --mode <MODE> --processes <N> --listen <ADDR> <SCRIPT>")
+    else:
+        print("Usage: rapira serve <CONFIG>")
+    raise SystemExit(0)
+
+if flags:
+    listen = option("--listen")
+    processes = int(option("--processes"))
+    script = os.path.abspath(sys.argv[-1])
+    if "--config" in sys.argv:
+        with open(option("--config"), "rb") as config:
+            tomllib.load(config)
+else:
+    with open(sys.argv[-1], "rb") as config:
+        http = tomllib.load(config)["http"]
+    listen = http["listen"]
+    processes = http["pool"]["processes"]
+    script = http["pool"]["entrypoint"]
+host, port = listen.rsplit(":", 1)
 host = host or "0.0.0.0"
-processes = int(option("--processes"))
-script = os.path.abspath(sys.argv[-1])
 started = "/opt/bench/run/fake-backend-started"
 
 
@@ -143,6 +164,7 @@ class NginxLifecycleTests(unittest.TestCase):
             BENCH / "run",
             RIG / "scripts",
             RIG / "fleet/nginx",
+            RIG / "fleet/static",
             RIG / "php/hello",
             WORK,
         ):
@@ -153,6 +175,10 @@ class NginxLifecycleTests(unittest.TestCase):
         shutil.copy2(
             REPO / "fleet/nginx/rapira.conf.tpl",
             RIG / "fleet/nginx/rapira.conf.tpl",
+        )
+        shutil.copy2(
+            REPO / "fleet/rapira-static.toml",
+            RIG / "fleet/rapira-static.toml",
         )
         shutil.copy2("/usr/bin/python3", BENCH / "bin/rapira-pr")
         (BENCH / "bin/rapira-pr").chmod(0o755)
@@ -167,6 +193,17 @@ class NginxLifecycleTests(unittest.TestCase):
     def fleet(self, *arguments, timeout=20):
         return subprocess.run(
             [str(RIG / "scripts/fleet-leg.sh"), *map(str, arguments)],
+            cwd=WORK,
+            env=self.env,
+            check=False,
+            capture_output=True,
+            text=True,
+            timeout=timeout,
+        )
+
+    def leg(self, *arguments, timeout=20):
+        return subprocess.run(
+            [str(RIG / "scripts/leg.sh"), *map(str, arguments)],
             cwd=WORK,
             env=self.env,
             check=False,
@@ -393,6 +430,71 @@ class NginxLifecycleTests(unittest.TestCase):
         self.assert_port(8081, False)
         self.assertFalse((BENCH / "run/runtime.pid").exists())
         self.assertFalse((BENCH / "run/runtime.nginx.pid").exists())
+
+    def test_old_cli_launch_keeps_the_flags_and_renders_the_fragment(self):
+        self.env["RAPIRA_FAKE_CLI"] = "flags"
+        self.assert_success(
+            self.leg(
+                "start", "pr", "worker", 1, "old", "hello", "fleet/rapira-static.toml"
+            )
+        )
+
+        with open(BENCH / "run/old.toml", "rb") as rendered:
+            self.assertEqual(
+                {
+                    "http": {
+                        "middleware": ["static"],
+                        "static": {"root": str(RIG / "fleet/static")},
+                    }
+                },
+                tomllib.load(rendered),
+            )
+        connection = http.client.HTTPConnection("127.0.0.1", 8080, timeout=2)
+        self.addCleanup(connection.close)
+        response, _ = self.request(connection, "/?name=you")
+        self.assertEqual(
+            str(RIG / "php/hello/worker.php"), response["script"]
+        )
+
+        connection.close()
+        self.assert_success(self.leg("stop", "old", "pr"))
+        self.assert_port(8080, False)
+
+    def test_new_cli_launch_renders_a_rapira_toml(self):
+        self.assert_success(
+            self.leg(
+                "start", "pr", "worker", 2, "new", "hello", "fleet/rapira-static.toml"
+            )
+        )
+
+        with open(BENCH / "run/new.toml", "rb") as rendered:
+            self.assertEqual(
+                {
+                    "http": {
+                        "listen": ":8080",
+                        "middleware": ["static"],
+                        "static": {"root": str(RIG / "fleet/static")},
+                        "pool": {
+                            "entrypoint": str(RIG / "php/hello/worker.php"),
+                            "mode": "worker",
+                            "processes": 2,
+                        },
+                    }
+                },
+                tomllib.load(rendered),
+            )
+        backend = int((BENCH / "run/new.pid").read_text().strip())
+        self.wait_for_children(backend, 2)
+        connection = http.client.HTTPConnection("127.0.0.1", 8080, timeout=2)
+        self.addCleanup(connection.close)
+        response, _ = self.request(connection, "/?name=you")
+        self.assertEqual(
+            str(RIG / "php/hello/worker.php"), response["script"]
+        )
+
+        connection.close()
+        self.assert_success(self.leg("stop", "new", "pr"))
+        self.assert_port(8080, False)
 
 
 if __name__ == "__main__":

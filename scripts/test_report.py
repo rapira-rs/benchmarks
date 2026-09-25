@@ -16,6 +16,236 @@ LOWC = """Latency 1.00ms 0.10ms 2.00ms
 Requests/sec: 50.00
 """
 
+# A real h2load 1.70.0 run against a gRPC Echo server: 616660 succeeded x 91
+# bytes of expected reply = 56116060 data bytes.
+H2LOAD = """\
+starting benchmark...
+spawning thread #0: 2 total client(s). Timing-based test with 0s of warm-up time and 2s of main duration for measurements.
+spawning thread #1: 2 total client(s). Timing-based test with 0s of warm-up time and 2s of main duration for measurements.
+Warm-up started for thread #1.
+Warm-up started for thread #0.
+progress: 50% of clients started
+progress: 100% of clients started
+Warm-up phase is over for thread #1.
+Main benchmark duration is started for thread #1.
+Warm-up phase is over for thread #0.
+Main benchmark duration is started for thread #0.
+Application protocol: h2c
+Main benchmark duration is over for thread #1. Stopping all clients.
+Stopped all clients for thread #1
+Main benchmark duration is over for thread #0. Stopping all clients.
+Stopped all clients for thread #0
+
+finished in 2.00s, 308330.00 req/s, 36.18MB/s
+requests: 616660 total, 616664 started, 616660 done, 616660 succeeded, 0 failed, 0 errored, 0 timeout
+status codes: 616660 2xx, 0 3xx, 0 4xx, 0 5xx
+traffic: 72.36MB (75876095) total, 2.94MB (3083764) headers (space savings 95.57%), 53.52MB (56116060) data
+                 min         max         median      p95         p99         mean        sd         +/- sd
+request     :        7us       461us        10us        15us        20us        11us         3us    93.62%
+connect     :       78us        97us        88us        97us        97us        88us         7us    50.00%
+TTFB        :      258us       292us       275us       292us       292us       275us        16us    50.00%
+req/s       :   63730.60    86812.79    78887.39    86812.79    86812.79    77079.54    11473.74    75.00%
+"""
+# The lowc pass has a slower request row, so the tables show which file they read.
+LOWC_H2LOAD = H2LOAD.replace(
+    "request     :        7us       461us        10us        15us        20us        11us         3us    93.62%",
+    "request     :       41us      2.02ms       120us       480us      1.25ms       150us        60us    92.00%",
+)
+# h2load 1.68 prints "time for request:" and has no median column.
+H2LOAD_1_68 = H2LOAD[: H2LOAD.index("                 min")] + """\
+                     min         max         mean         sd        +/- sd
+time for request:        7us       461us        11us         3us    93.62%
+time for connect:       78us        97us        88us         7us    50.00%
+time to 1st byte:      258us       292us       275us        16us    50.00%
+req/s           :   63730.60    86812.79    77079.54    11473.74    75.00%
+"""
+
+
+def k6_metrics(proto, *, rate=19998.0, med=0.30, p99=1.20, p999=4.00, dropped=0, fails=0):
+    """The --summary-export metrics of k6/grpc.js for one protocol, 15 s run."""
+    count = int(rate * 15)
+    passes = 2 * count - fails
+    trend = {"avg": 0.40, "min": 0.10, "med": med, "max": 12.00, "p(90)": 0.60, "p(95)": 0.80, "p(99)": p99, "p(99.9)": p999}
+    metrics = {
+        "iterations": {"count": count, "rate": rate},
+        "dropped_iterations": {"count": dropped, "rate": dropped / 15},
+        "checks": {"value": passes / (passes + fails), "passes": passes, "fails": fails},
+    }
+    if proto == "grpc":
+        metrics["grpc_req_duration"] = trend
+    else:
+        metrics["http_req_duration"] = trend
+        metrics["http_reqs"] = {"count": count, "rate": rate}
+        metrics["http_req_failed"] = {"value": 0, "passes": 0, "fails": count}
+    return metrics
+
+
+def table_rows(stdout, title):
+    """The split rows of the table whose header starts with title, or None."""
+    for block in stdout.split("\n\n"):
+        lines = block.splitlines()
+        if lines and lines[0].startswith(title):
+            return [line.split() for line in lines[2:]]
+    return None
+
+
+def issue_lines(stdout):
+    return [line.strip() for line in stdout.splitlines() if line.startswith("  cell: ")]
+
+
+def status_lines(stdout):
+    return [line for line in stdout.splitlines() if line.startswith(("INCOMPLETE RUN", "BROKEN RUN"))]
+
+
+# Each row edits one number in one h2load file of a single proto grpc cell.
+H2LOAD_ERROR_CASES = [
+    {
+        "name": "failed",
+        "artifact": "h2load",
+        "text": H2LOAD.replace(" 0 failed,", " 1 failed,"),
+        "rc": 1,
+        "issues": ["cell: h2load request errors"],
+        "legs": False,
+        "lowc": True,
+    },
+    {
+        "name": "errored",
+        "artifact": "h2load",
+        "text": H2LOAD.replace(" 0 errored,", " 2 errored,"),
+        "rc": 1,
+        "issues": ["cell: h2load request errors"],
+        "legs": False,
+        "lowc": True,
+    },
+    {
+        "name": "timeout",
+        "artifact": "h2load",
+        "text": H2LOAD.replace(" 0 timeout", " 3 timeout"),
+        "rc": 1,
+        "issues": ["cell: h2load request errors"],
+        "legs": False,
+        "lowc": True,
+    },
+    {
+        "name": "3xx",
+        "artifact": "h2load",
+        "text": H2LOAD.replace(" 0 3xx,", " 1 3xx,"),
+        "rc": 1,
+        "issues": ["cell: h2load request errors"],
+        "legs": False,
+        "lowc": True,
+    },
+    {
+        "name": "4xx",
+        "artifact": "h2load",
+        "text": H2LOAD.replace(" 0 4xx,", " 1 4xx,"),
+        "rc": 1,
+        "issues": ["cell: h2load request errors"],
+        "legs": False,
+        "lowc": True,
+    },
+    {
+        "name": "5xx",
+        "artifact": "h2load",
+        "text": H2LOAD.replace(" 0 5xx", " 1 5xx"),
+        "rc": 1,
+        "issues": ["cell: h2load request errors"],
+        "legs": False,
+        "lowc": True,
+    },
+    {
+        "name": "short responses",
+        "artifact": "h2load",
+        "text": H2LOAD.replace("(56116060) data", "(56115969) data"),
+        "rc": 1,
+        "issues": ["cell: short responses"],
+        "legs": False,
+        "lowc": True,
+    },
+    {
+        "name": "lowc failed",
+        "artifact": "lowc_h2load",
+        "text": LOWC_H2LOAD.replace(" 0 failed,", " 1 failed,"),
+        "rc": 1,
+        "issues": ["cell: lowc_h2load request errors"],
+        "legs": True,
+        "lowc": False,
+    },
+    {
+        "name": "boundary surplus",
+        "artifact": "h2load",
+        "text": H2LOAD.replace("(56116060) data", "(56116151) data"),
+        "rc": 0,
+        "issues": [],
+        "legs": True,
+        "lowc": True,
+    },
+    {
+        "name": "truncated summary",
+        "artifact": "h2load",
+        "text": H2LOAD[: H2LOAD.index("request     :")],
+        "rc": 1,
+        "issues": ["cell: unparseable h2load output"],
+        "legs": False,
+        "lowc": True,
+    },
+]
+
+OPEN_LOOP_CASES = [
+    {
+        "name": "failed checks",
+        "k6": k6_metrics("grpc", fails=2),
+        "issues": [],
+        "status": ["BROKEN RUN: a mode lost every cell of one ref, or k6 checks failed."],
+        "open_loop": [["rapira-grpc", "19998", "0.30ms", "1.20ms", "4.00ms", "2", "1"]],
+    },
+    {
+        "name": "dropped iterations",
+        "k6": k6_metrics("grpc", dropped=5),
+        "issues": ["cell: k6 dropped iterations"],
+        "status": ["INCOMPLETE RUN: 1 cells have missing or invalid artifacts."],
+        "open_loop": None,
+    },
+]
+
+ARTIFACT_CASES = [
+    {
+        "name": "h2load",
+        "proto": "grpc",
+        "omit": ("wrk", "h2load"),
+        "rc": 1,
+        "issues": ["cell: missing h2load output"],
+    },
+    {
+        "name": "lowc_h2load",
+        "proto": "grpc",
+        "omit": ("wrk", "lowc_h2load"),
+        "rc": 1,
+        "issues": ["cell: missing lowc_h2load output"],
+    },
+    {
+        "name": "k6 for grpc",
+        "proto": "grpc",
+        "omit": ("wrk", "k6"),
+        "rc": 1,
+        "issues": ["cell: missing k6 output"],
+    },
+    {
+        "name": "wrk for http-h1",
+        "proto": "http-h1",
+        "omit": ("wrk",),
+        "rc": 1,
+        "issues": ["cell: missing wrk output"],
+    },
+    {
+        "name": "no k6 for connect-h2c",
+        "proto": "connect-h2c",
+        "omit": ("wrk", "k6"),
+        "rc": 0,
+        "issues": [],
+    },
+]
+
 
 class ReportTests(unittest.TestCase):
     def setUp(self):
@@ -68,6 +298,43 @@ class ReportTests(unittest.TestCase):
             metrics["checks"] = {"fails": checks}
         paths["k6"].write_text(json.dumps({"metrics": metrics}))
         return paths
+
+    def write_grpc_cell(
+        self,
+        tag="cell",
+        *,
+        run=None,
+        leg="rapira-grpc",
+        proto="grpc",
+        h2load=H2LOAD,
+        lowc_h2load=LOWC_H2LOAD,
+        k6=None,
+        wrk_rate=100,
+        pss_kb=None,
+        expect_len=91,
+        omit=(),
+    ):
+        run = run or self.run_dir
+        meta = f"leg={leg}\nproto={proto}\nconns=16\nexpect_len={expect_len}\n"
+        if pss_kb is not None:
+            meta += f"pss_kb={pss_kb}\n"
+        (run / "cells" / f"{tag}.meta").write_text(meta)
+
+        texts = {
+            "h2load": h2load,
+            "lowc_h2load": lowc_h2load,
+            "k6": json.dumps({"metrics": k6 or k6_metrics(proto)}),
+            "wrk": f"Requests/sec: {wrk_rate:.2f}\n",
+        }
+        paths = {
+            "h2load": run / "cells" / f"{tag}.h2load.txt",
+            "lowc_h2load": run / "cells" / f"{tag}.lowc.h2load.txt",
+            "k6": run / "cells" / f"{tag}.k6.summary.json",
+            "wrk": run / "cells" / f"{tag}.wrk.txt",
+        }
+        for artifact, path in paths.items():
+            if artifact not in omit:
+                path.write_text(texts[artifact])
 
     def report(self, run=None):
         return subprocess.run(
@@ -283,6 +550,148 @@ class ReportTests(unittest.TestCase):
                     if missing is not None:
                         self.assertIn(missing, result.stdout)
                         self.assertIn("Do not publish these tables.", result.stdout)
+
+    def test_complete_grpc_run_renders_three_tables(self):
+        self.write_expected("r1-rapira-grpc", "r2-rapira-grpc", "r1-rapira-connect-h2c", "r1-rapira-http-h1")
+        self.write_grpc_cell(
+            "r1-rapira-grpc",
+            pss_kb=4096,
+            k6=k6_metrics("grpc", rate=19998.0, med=0.30, p99=1.20, p999=4.00),
+            omit=("wrk",),
+        )
+        self.write_grpc_cell(
+            "r2-rapira-grpc",
+            pss_kb=6144,
+            h2load=H2LOAD.replace("308330.00 req/s", "290000.00 req/s"),
+            k6=k6_metrics("grpc", rate=19990.0, med=0.40, p99=1.40, p999=6.00),
+            omit=("wrk",),
+        )
+        self.write_grpc_cell(
+            "r1-rapira-connect-h2c",
+            leg="rapira-connect-h2c",
+            proto="connect-h2c",
+            h2load=H2LOAD.replace("308330.00 req/s", "250000.00 req/s"),
+            omit=("wrk", "k6"),
+        )
+        self.write_grpc_cell(
+            "r1-rapira-http-h1",
+            leg="rapira-http-h1",
+            proto="http-h1",
+            pss_kb=2048,
+            h2load=H2LOAD.replace("308330.00 req/s", "120000.00 req/s"),
+            wrk_rate=180000,
+            k6=k6_metrics("http-h1", rate=20000.0, med=0.25, p99=0.90, p999=2.50),
+        )
+
+        result = self.report()
+
+        self.assertEqual(0, result.returncode, result.stdout)
+        # rapira-grpc: median(308330, 290000) = 299165, spread 18330 / 299165
+        # = 6.1%, Pss median(4096, 6144) kB / 1024 = 5.0 MiB.
+        self.assertEqual(
+            [
+                ["rapira-grpc", "grpc", "299165", "2", "6.1%", "5.0", "-"],
+                ["rapira-connect-h2c", "connect-h2c", "250000", "1", "0.0%", "n/a", "-"],
+                ["rapira-http-h1", "(wrk)", "http-h1", "180000", "1", "0.0%", "2.0", "-"],
+                ["rapira-http-h1", "http-h1", "120000", "1", "0.0%", "2.0", "-"],
+            ],
+            table_rows(result.stdout, "grpc legs"),
+        )
+        # The lowc request row: median 120us, p99 1.25ms, mean 150us.
+        self.assertEqual(
+            [
+                ["rapira-connect-h2c", "0.12ms", "1.25ms", "0.15ms", "1"],
+                ["rapira-grpc", "0.12ms", "1.25ms", "0.15ms", "2"],
+                ["rapira-http-h1", "0.12ms", "1.25ms", "0.15ms", "1"],
+            ],
+            table_rows(result.stdout, "grpc lowc latency (c=processes)"),
+        )
+        # rapira-grpc: median(19998, 19990) = 19994, med median(0.30, 0.40)
+        # = 0.35, p99 median(1.20, 1.40) = 1.30, p99.9 median(4, 6) = 5.
+        self.assertEqual(
+            [
+                ["rapira-grpc", "19994", "0.35ms", "1.30ms", "5.00ms", "0", "2"],
+                ["rapira-http-h1", "20000", "0.25ms", "0.90ms", "2.50ms", "0", "1"],
+            ],
+            table_rows(result.stdout, "grpc open loop"),
+        )
+        self.assertNotIn("lowc latency (c=low)", result.stdout)
+        self.assertNotIn("k6 probe", result.stdout)
+        self.assertIsNone(table_rows(result.stdout, "leg "))
+
+    def test_h2load_1_68_format_is_incomplete(self):
+        self.write_expected("cell")
+        self.write_grpc_cell(h2load=H2LOAD_1_68, omit=("wrk",))
+
+        result = self.report()
+
+        self.assertEqual(1, result.returncode, result.stdout)
+        self.assertEqual(["cell: unparseable h2load output"], issue_lines(result.stdout))
+        self.assertEqual(["INCOMPLETE RUN: 1 cells have missing or invalid artifacts."], status_lines(result.stdout))
+
+    def test_h2load_error_classes(self):
+        for row in H2LOAD_ERROR_CASES:
+            run = self.new_run(row["name"])
+            self.write_expected("cell", run=run)
+            self.write_grpc_cell(run=run, omit=("wrk",), **{row["artifact"]: row["text"]})
+
+            result = self.report(run)
+
+            self.assertEqual(row["rc"], result.returncode, row["name"] + result.stdout)
+            self.assertEqual(row["issues"], issue_lines(result.stdout), row["name"])
+            self.assertEqual(row["legs"], "grpc legs" in result.stdout, row["name"])
+            self.assertEqual(row["lowc"], "grpc lowc latency" in result.stdout, row["name"])
+
+    def test_open_loop_failures(self):
+        for row in OPEN_LOOP_CASES:
+            run = self.new_run(row["name"])
+            self.write_expected("cell", run=run)
+            self.write_grpc_cell(run=run, k6=row["k6"], omit=("wrk",))
+
+            result = self.report(run)
+
+            self.assertEqual(1, result.returncode, row["name"] + result.stdout)
+            self.assertEqual(row["issues"], issue_lines(result.stdout), row["name"])
+            self.assertEqual(row["status"], status_lines(result.stdout), row["name"])
+            self.assertEqual(row["open_loop"], table_rows(result.stdout, "grpc open loop"), row["name"])
+
+    def test_grpc_artifacts_per_proto(self):
+        for row in ARTIFACT_CASES:
+            run = self.new_run(row["name"])
+            self.write_expected("cell", run=run)
+            self.write_grpc_cell(run=run, leg=f"rapira-{row['proto']}", proto=row["proto"], omit=row["omit"])
+
+            result = self.report(run)
+
+            self.assertEqual(row["rc"], result.returncode, row["name"] + result.stdout)
+            self.assertEqual(row["issues"], issue_lines(result.stdout), row["name"])
+
+    def test_http_cell_next_to_grpc_cell_keeps_its_tables(self):
+        http_only = self.new_run("http-only")
+        self.write_expected("cell", run=http_only)
+        self.write_cell(run=http_only)
+        self.write_expected("cell", "grpc-cell")
+        self.write_cell()
+        self.write_grpc_cell("grpc-cell", omit=("wrk",))
+
+        expected = self.report(http_only)
+        result = self.report()
+
+        self.assertEqual(0, expected.returncode, expected.stdout)
+        self.assertEqual(0, result.returncode, result.stdout)
+        self.assertTrue(result.stdout.startswith(expected.stdout), result.stdout)
+        self.assertEqual(
+            [["rapira-grpc", "grpc", "308330", "1", "0.0%", "n/a", "-"]],
+            table_rows(result.stdout, "grpc legs"),
+        )
+        self.assertEqual(
+            [["rapira-grpc", "0.12ms", "1.25ms", "0.15ms", "1"]],
+            table_rows(result.stdout, "grpc lowc latency (c=processes)"),
+        )
+        self.assertEqual(
+            [["rapira-grpc", "19998", "0.30ms", "1.20ms", "4.00ms", "0", "1"]],
+            table_rows(result.stdout, "grpc open loop"),
+        )
 
 
 if __name__ == "__main__":
