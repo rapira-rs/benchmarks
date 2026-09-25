@@ -298,6 +298,23 @@ class RunSuiteTest(unittest.TestCase):
                 self.assertEqual([label(cmd) for _, cmd in boxes.calls][-2:], ["stop", "log"])
                 self.assertEqual(run["status"], "complete" if case["status"] == "ok" else "incomplete")
 
+    def test_ok_cell_record(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            boxes = FakeBoxes(replies({}))
+            path, _ = bench(boxes, Path(tmp), [WORKER])
+            cell = json.loads(path.read_text())["cells"][0]
+            # 2 x 8750000 requests with no status errors over 70 s: 17500000 / 70 = 250000 successful req/s.
+            # Both loaders print the same percentiles, so each maximum is that value as a float.
+            # The fake counters step 50 of 100 on the server and 90 of 100 on the loaders: 50% and 90% busy.
+            self.assertEqual(cell["successful_rps"], 250000.0)
+            self.assertEqual(cell["errors"], {key: 0 for key in ERROR_KEYS})
+            self.assertEqual(cell["latency_us"], {"p50": 690.0, "p90": 1100.0, "p99": 1260.0, "p999": 1350.0, "max": 2800.0})
+            self.assertEqual(cell["cpu"], {"server_busy": 50, "loader_busy": 90})
+            self.assertEqual(
+                [(entry["loader"], entry["tool"], entry["requests"], entry["busy_cpu"]) for entry in cell["loaders"]],
+                [("loader-1", "wrk2", 8750000, 90), ("loader-2", "wrk2", 8750000, 90)],
+            )
+
     def test_grpc_cell_counts_the_measured_window(self):
         with tempfile.TemporaryDirectory() as tmp:
             boxes = FakeBoxes(replies({("server", START): "config=/opt/bench/run/r1-grpc-rapira.toml\npid=100\n"}))

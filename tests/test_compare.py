@@ -116,6 +116,15 @@ class TestCompare(unittest.TestCase):
         self.assertEqual(status, 0)
         self.assertEqual(text.splitlines()[3:], [DELTA_LINE])
 
+    def test_zero_base_prints_a_dash(self):
+        # A target that dies before the RSS read gives 0 KiB; a delta from 0 has no percent.
+        a = run_doc(A_ID, [ok_cell("hello-rapira-worker", 1, 250000.0, 1250, 0)])
+        b = run_doc(B_ID, [ok_cell("hello-rapira-worker", 1, 250000.0, 1250, 215040)])
+        text, status = compare(a, b)
+        self.assertEqual(status, 0)
+        line = text.splitlines()[3]
+        self.assertTrue(line.endswith("rss 0.0 -> 210.0 -"), line)
+
     def test_target_in_one_run_only(self):
         a = run_doc(A_ID, [
             ok_cell("hello-rapira-worker", 1, 250000.0, 1250, 204800),

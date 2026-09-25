@@ -19,13 +19,14 @@ GRPC_URL = "http://10.0.1.5:8080/bench.v1.EchoService/Echo"
 BODY_FILE = str(ROOT / "apps" / "grpc" / "echo.grpc")
 
 # The RESULT line of the rig contract without tool and late_ms, as the wrk2 reporter prints it.
+# 17499989 requests in 70.000867 s is 249996.746 req/s with 3 decimals.
 REPORTER_RESULT = {
     "duration_us": 70000867,
     "requests": 17499989,
     "bytes": 2204998614,
     "errors": {"connect": 0, "read": 0, "write": 0, "status": 0, "timeout": 0, "dropped": 0},
     "latency_us": {"mean": 689.5, "p50": 689, "p90": 1111, "p95": 1175, "p99": 1264, "p999": 1351, "max": 2822},
-    "requests_per_sec": 249996.6,
+    "requests_per_sec": 249996.746,
 }
 HUMAN_LINES = ["Running 70s test @ http://10.0.1.5:8080/?name=you", "  8 threads and 5000 connections"]
 TOOL_OUTPUT = "\n".join(HUMAN_LINES + ["RESULT " + json.dumps(REPORTER_RESULT)]) + "\n"
@@ -264,7 +265,6 @@ DONE_HARNESS = textwrap.dedent("""\
 DONE_CASES = [
     {
         # 39989 requests in 20.000867 s is 1999.3633 req/s, printed with 3 decimals.
-        # A fixed sample, independent of REPORTER_RESULT (a 70s stage fixture for LOAD_CASES).
         "name": "contract sample",
         "stats": {"duration": 20000867, "requests": 39989, "bytes": 5038614, "connect": 0, "read": 0, "write": 0,
                   "status": 0, "timeout": 0, "mean": 689.5, "p50": 689, "p90": 1111, "p95": 1175, "p99": 1264,

@@ -61,9 +61,12 @@ HELLO = ok_cell("hello-rapira-worker", 1, achieved=249996.6, held=True, p50=689,
 # 249996.6 prints as 249997; 1264 us is 1.26 ms, 689 us is 0.69 ms; 204800 KiB is 200.0 MiB.
 HELLO_ROW = ["hello-rapira-worker", "249997", "yes", "1.26ms", "0.69ms", "200.0", "1", "-"]
 
+# width is the longest target name of the rows plus 2: hello-rapira-worker has 19 characters,
+# hello-rapira-classic 20, and yii3-rapira-dispatcher 22.
 CASES = [
     {
         "name": "single round",
+        "width": 21,
         "run": run_doc([HELLO]),
         "rows": [HELLO_ROW],
         "voided": [],
@@ -71,7 +74,9 @@ CASES = [
         "status": 0,
     },
     {
+        # 1048576 KiB is 1024.0 MiB, 2500 us is 2.50ms, 400 us is 0.40ms.
         "name": "rows keep the cell order",
+        "width": 21,
         "run": run_doc([
             ok_cell("grpc-rapira", 1, achieved=99990.0, held=True, p50=400, p99=2500, rss_kb=1048576),
             HELLO,
@@ -82,7 +87,9 @@ CASES = [
         "status": 0,
     },
     {
+        # 228571.4 prints as 228571, 250000 us is 250.00ms, 9000 us is 9.00ms, 307200 KiB is 300.0 MiB.
         "name": "a row that did not hold",
+        "width": 22,
         "run": run_doc([ok_cell("hello-rapira-classic", 1, achieved=228571.4, held=False, p50=9000, p99=250000, rss_kb=307200, flags={"generator_bound": True})]),
         "rows": [["hello-rapira-classic", "228571", "no", "250.00ms", "9.00ms", "300.0", "1", "generator_bound"]],
         "voided": [],
@@ -91,6 +98,7 @@ CASES = [
     },
     {
         "name": "three rounds with a void",
+        "width": 24,
         "run": run_doc(
             [
                 ok_cell("yii3-rapira-dispatcher", 1, achieved=250000.0, held=True, p50=900, p99=5000, rss_kb=204800, flags={"worker_churn": True}),
@@ -109,6 +117,7 @@ CASES = [
     },
     {
         "name": "value flags",
+        "width": 21,
         "run": run_doc([ok_cell(
             "hello-rapira-worker", 1, achieved=249996.6, held=True, p50=689, p99=1264, rss_kb=204800,
             flags={"log_growth": 70000, "ena_throttled": {"pps_allowance_exceeded": 946}},
@@ -120,6 +129,7 @@ CASES = [
     },
     {
         "name": "incomplete run with a missing cell",
+        "width": 21,
         "run": run_doc([HELLO], "incomplete", ["r1-grpc-rapira: missing"]),
         "rows": [HELLO_ROW],
         "voided": [],
@@ -150,6 +160,10 @@ class TestReport(unittest.TestCase):
         for case in CASES:
             with self.subTest(name=case["name"]):
                 text, status = render(case["run"])
+                self.assertEqual(
+                    text.splitlines()[0],
+                    f"{'target':<{case['width']}} {'req/s':>8} {'held':>4} {'p99':>9} {'p50':>9} {'RSS MiB':>8} {'n':>3}  flags",
+                )
                 table, voided, footer = parse(text)
                 self.assertEqual(table, case["rows"])
                 self.assertEqual(voided, case["voided"])

@@ -37,6 +37,7 @@ SERIES_CASES = [
         # RSS (210944 + 209920) / 2 = 210432 KiB = 205.5 MiB, req/s (240000 + 250100) / 2 = 245050, held only
         # when every cell held, the flags are the union. Run c: the hello cell is incomplete, so nulls.
         # grpc, run b: the cell is void. yii3 has a cell only in run c. The targets come in name order.
+        # grpc: 1048576 / 1024 = 1024 MiB, 1150976 / 1024 = 1124 MiB, 2500 us = 2.5 ms, 9000 us = 9 ms. yii3: 524288 / 1024 = 512 MiB, 4000 us = 4 ms.
         "name": "medians over rounds, void and incomplete cells, target in one run",
         "runs": [RUN_A, RUN_B, RUN_C],
         "expected": {
@@ -72,6 +73,7 @@ SERIES_CASES = [
         },
     },
     {
+        # hello: 204800 / 1024 = 200 MiB, 1200 us = 1.2 ms; grpc as above.
         "name": "one run",
         "runs": [RUN_A],
         "expected": {
