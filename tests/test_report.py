@@ -160,6 +160,49 @@ CASES = [
         "footer": [],
         "status": 0,
     },
+    {
+        "name": "mixed rounds near the floor",
+        "run": run_doc([
+            ok_cell("floor-rapira-worker", "floor", 1, held=None, held_p99=None, peak=9500.0, unloaded_p50=1000,
+                    fail_reason="achieved 9500 req/s under 95% of 10000"),
+            ok_cell("floor-rapira-worker", "floor", 2, held=None, held_p99=None, peak=9600.0, unloaded_p50=1000,
+                    fail_reason="achieved 9600 req/s under 95% of 10000"),
+            ok_cell("floor-rapira-worker", "floor", 3, held=10000, held_p99=500, peak=12000.0, unloaded_p50=1000,
+                    fail_reason="achieved 12000 req/s under 95% of 20000"),
+        ]),
+        # Held rate median over all 3 rounds, a None held counted as 0: median(0, 0, 10000) = 0, so held
+        # and p99_held print "-". Peak median(9500, 9600, 12000) = 9600, spread 100 * (12000 - 9500) / 9600 = 26.0%.
+        "rows": [[
+            "floor-rapira-worker", "-", "9600", "-", "1.00ms", "3", "26.0%", "-",
+            "achieved 9500 req/s under 95% of 10000; achieved 9600 req/s under 95% of 10000; "
+            "achieved 12000 req/s under 95% of 20000",
+        ]],
+        "voided": [],
+        "footer": [],
+        "status": 0,
+    },
+    {
+        "name": "two of three rounds held the floor",
+        "run": run_doc([
+            ok_cell("floor-rapira-worker", "floor", 1, held=None, held_p99=None, peak=8000.0, unloaded_p50=900,
+                    fail_reason="achieved 8000 req/s under 95% of 10000"),
+            ok_cell("floor-rapira-worker", "floor", 2, held=10000, held_p99=400, peak=10000.0, unloaded_p50=1000,
+                    fail_reason="achieved 10000 req/s under 95% of 20000"),
+            ok_cell("floor-rapira-worker", "floor", 3, held=10000, held_p99=500, peak=12000.0, unloaded_p50=1100,
+                    fail_reason="achieved 12000 req/s under 95% of 20000"),
+        ]),
+        # Held rate median over all 3 rounds, a None held counted as 0: median(0, 10000, 10000) = 10000, so
+        # held prints 10000 and p99_held is the median of the p99 of the rounds that held: median(400, 500) = 450.
+        # Peak median(8000, 10000, 12000) = 10000, spread 100 * (12000 - 8000) / 10000 = 40.0%.
+        "rows": [[
+            "floor-rapira-worker", "10000", "10000", "0.45ms", "1.00ms", "3", "40.0%", "-",
+            "achieved 8000 req/s under 95% of 10000; achieved 10000 req/s under 95% of 20000; "
+            "achieved 12000 req/s under 95% of 20000",
+        ]],
+        "voided": [],
+        "footer": [],
+        "status": 0,
+    },
 ]
 
 
