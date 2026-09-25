@@ -83,9 +83,13 @@ def load_suite(path: Path, targets: dict[str, Target], loader_count: int) -> Sui
         raise SuiteError(f"{where}: stage_s {doc['stage_s']} is under {MIN_STAGE_S}")
     if doc["connections"] % loader_count != 0:
         raise SuiteError(f"{where}: connections {doc['connections']} is not a multiple of {loader_count} loaders")
+    seen = set()
     for name in doc["targets"]:
         if name not in targets:
             raise SuiteError(f"{where}: unknown target {name}")
+        if name in seen:
+            raise SuiteError(f"{where}: target {name} is listed twice")
+        seen.add(name)
     chosen = tuple(targets[name] for name in doc["targets"])
     floors = dict(doc["floors"])
     for target in chosen:

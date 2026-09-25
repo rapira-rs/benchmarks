@@ -117,6 +117,7 @@ targets = {targets}
 
 SUITE_ERROR_CASES = [
     {"name": "unknown target", "fields": {"targets": '["hello-a", "hello-z"]'}, "loaders": 4, "message": "unknown target hello-z"},
+    {"name": "target listed twice", "fields": {"targets": '["hello-a", "hello-a"]'}, "loaders": 4, "message": "target hello-a is listed twice"},
     {"name": "zero rounds", "fields": {"rounds": 0}, "loaders": 4, "message": "rounds 0 is under 1"},
     {"name": "stage one second under the minimum", "fields": {"stage_s": 11}, "loaders": 4, "message": "stage_s 11 is under 12"},
     {"name": "connections not a multiple of the loaders", "fields": {"connections": 258}, "loaders": 4, "message": "connections 258 is not a multiple of 4 loaders"},
