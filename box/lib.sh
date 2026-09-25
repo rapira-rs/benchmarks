@@ -97,15 +97,15 @@ pss_kb() {
   done | awk '/^Pss:/ { kb += $2 } END { print kb + 0 }'
 }
 
-# fail TAG MESSAGE prints the error and the last log lines of TAG, kills the processes of TAG,
+# fail TAG MESSAGE prints the last log lines of TAG and then the error, kills the processes of TAG,
 # removes its pid files, and exits 1.
 fail() {
   local tag=$1 file
   shift
-  echo "ERROR: $tag: $*" >&2
   for file in "$BENCH/log/$tag".*.log; do
     [ -f "$file" ] && tail -5 "$file" >&2
   done
+  echo "ERROR: $tag: $*" >&2
   # shellcheck disable=SC2046
   kill -KILL $(pids_of "$tag") 2>/dev/null || true
   rm -f "$BENCH/run/$tag".*.pid
@@ -140,11 +140,12 @@ wait_listener() {
   [ "$exe" = "$(readlink -f "$bin")" ] || fail "$tag" "pid $pid runs $exe, expected $bin"
 }
 
-# wait_answer TAG waits up to 30 s until 127.0.0.1:$PORT returns an HTTP/1.1 response.
+# wait_answer TAG waits up to 30 s until 127.0.0.1:$PORT returns a 2xx response.
 wait_answer() {
   local tag=$1
-  for _ in $(seq 1 60); do
-    curl -s -o /dev/null -m 1 "http://127.0.0.1:$PORT/" && return 0
+  local deadline=$((SECONDS + 30))
+  while [ "$SECONDS" -lt "$deadline" ]; do
+    curl -sf -o /dev/null -m 1 "http://127.0.0.1:$PORT/" && return 0
     sleep 0.5
   done
   fail "$tag" "no answer on :$PORT"
@@ -154,7 +155,8 @@ wait_answer() {
 # expected bytes. A gRPC error is HTTP 200 with an empty body, so only the reply bytes prove a worker.
 wait_grpc_answer() {
   local tag=$1
-  for _ in $(seq 1 60); do
+  local deadline=$((SECONDS + 30))
+  while [ "$SECONDS" -lt "$deadline" ]; do
     "$RIG/box/probe.sh" "http://127.0.0.1:$PORT/bench.v1.EchoService/Echo" apps/grpc/expect.grpc grpc POST apps/grpc/echo.grpc >/dev/null 2>&1 && return 0
     sleep 0.5
   done
