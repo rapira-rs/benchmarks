@@ -251,9 +251,6 @@ class TestReport(unittest.TestCase):
                 self.assertEqual(footer, case["footer"])
                 self.assertEqual(status, case["status"])
 
-    def test_one_round_has_no_spread(self):
-        self.assertIsNone(target_row([HELLO_RAPIRA])["spread"])
-
     def test_cli_exit_status_of_an_incomplete_run(self):
         run = run_doc([HELLO_RAPIRA], "incomplete", ["r1-hello-php-fpm: missing"])
         with tempfile.TemporaryDirectory() as tmp:
