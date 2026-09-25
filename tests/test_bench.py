@@ -6,7 +6,7 @@ from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
-from rig.bench import WARMUP_S, binary_dir, load_cmd, plan_run, run_suite
+from rig.bench import WARMUP_S, binary_dir, load_cmd, plan_run, run_suite, sample_jobs
 from rig.merge import ERROR_KEYS
 from rig.registry import Suite, SuiteError, Target
 from rig.rig import Rig
@@ -37,7 +37,8 @@ LOG = BOX + "target.sh log"
 PROBE = BOX + "probe.sh"
 LOAD = BOX + "load.sh"
 SNAPSHOT = BOX + "snapshot.sh"
-SAMPLE = "sleep "
+MEM = BOX + "target.sh mem"
+WAIT = "python3 -c "
 FACTS = "echo kernel="
 
 # One stage per loader: 20 s at the floor 10000 split over 4 loaders is 2500 req/s,
@@ -91,7 +92,8 @@ def replies(overrides):
         ("server", PIDS): "101 102\n4096\n",
         ("server", STOP): "",
         ("server", LOG): "",
-        ("server", SAMPLE): "cpu 1 2\nconns 256 3\n204800\n",
+        ("*", WAIT): "",
+        ("server", MEM): "204800\n",
         # Server 50% busy in every stage.
         ("server", SNAPSHOT): counter(50, 100, "conns 256 0\n"),
         # Loaders 90% busy in every stage.
@@ -106,7 +108,10 @@ def replies(overrides):
 
 
 class FakeBoxes:
-    """Replies by (host name, command prefix); "*" matches any host. A list reply is used in order."""
+    """Replies by (host name, command prefix); "*" matches any host. A list reply is used in order.
+
+    A command of parts joined by " && " gets the replies of its parts, concatenated.
+    """
 
     def __init__(self, table):
         self.table = table
@@ -115,6 +120,9 @@ class FakeBoxes:
 
     def reply(self, host, cmd):
         self.calls.append((host.name, cmd))
+        return "".join(self.part(host, part) for part in cmd.split(" && "))
+
+    def part(self, host, cmd):
         for name in (host.name, "*"):
             for (key_host, prefix), value in self.table.items():
                 if key_host == name and cmd.startswith(prefix):
@@ -146,13 +154,14 @@ def label(cmd):
     if cmd.startswith(LOAD):
         return "warmup" if shlex.split(cmd)[7] == str(WARMUP_S) else "load"
     for prefix, name in ((START, "start"), (PIDS, "pids"), (STOP, "stop"), (LOG, "log"), (PROBE, "probe"),
-                         (SNAPSHOT, "snapshot"), (SAMPLE, "sample"), (FACTS, "facts")):
+                         (WAIT, "snapshot"), (FACTS, "facts")):
         if cmd.startswith(prefix):
             return name
     return cmd
 
 
-STAGE = ["snapshot"] * 5 + ["load"] * 4 + ["sample"] + ["snapshot"] * 5
+# One batch: the load of 4 loaders, then the begin, mid, and end snapshots of the 5 boxes.
+STAGE = ["load"] * 4 + ["snapshot"] * 15
 
 CELL_CASES = [
     {
@@ -225,6 +234,18 @@ CELL_CASES = [
 ]
 
 
+INTERRUPT_CASES = [
+    {
+        "name": "interrupt during the load of the first stage",
+        "overrides": {("loader-2", LOAD): [load_reply(), KeyboardInterrupt()]},
+    },
+    {
+        "name": "interrupt during target.sh stop",
+        "overrides": {("server", STOP): KeyboardInterrupt()},
+    },
+]
+
+
 def bench(boxes, out, targets, connections=256):
     with mock.patch("rig.bench.ensure_ttl") as ttl:
         path = run_suite(
@@ -283,15 +304,16 @@ class RunSuiteTest(unittest.TestCase):
             ttl.assert_called_once_with([SERVER, *LOADERS], 520)
 
     def test_interrupt_stops_the_target_and_writes_an_incomplete_run(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            boxes = FakeBoxes(replies({("loader-2", LOAD): [load_reply(), KeyboardInterrupt()]}))
-            with self.assertRaises(KeyboardInterrupt):
-                bench(boxes, Path(tmp), [WORKER, FPM])
-            run = json.loads((Path(tmp) / "run1" / "run.json").read_text())
-            self.assertEqual(run["status"], "incomplete")
-            self.assertEqual(run["plan"], ["r1-hello-rapira-worker", "r1-hello-php-fpm"])
-            self.assertEqual([(c["key"], c["status"]) for c in run["cells"]], [("r1-hello-rapira-worker", "incomplete")])
-            self.assertIn(("server", "bash bench-rig/box/target.sh stop r1-hello-rapira-worker rapira"), boxes.calls)
+        for case in INTERRUPT_CASES:
+            with self.subTest(name=case["name"]), tempfile.TemporaryDirectory() as tmp:
+                boxes = FakeBoxes(replies(case["overrides"]))
+                with self.assertRaises(KeyboardInterrupt):
+                    bench(boxes, Path(tmp), [WORKER, FPM])
+                run = json.loads((Path(tmp) / "run1" / "run.json").read_text())
+                self.assertEqual(run["status"], "incomplete")
+                self.assertEqual(run["plan"], ["r1-hello-rapira-worker", "r1-hello-php-fpm"])
+                self.assertEqual([(c["key"], c["status"]) for c in run["cells"]], [("r1-hello-rapira-worker", "incomplete")])
+                self.assertIn(("server", "bash bench-rig/box/target.sh stop r1-hello-rapira-worker rapira"), boxes.calls)
 
 
 GRPCWEB = Target(
@@ -332,6 +354,39 @@ LOAD_CMD_CASES = [
         "expected": ["bash", "bench-rig/box/load.sh", "k6", "100.000", "40100", "201", "20", GRPC_URL],
     },
 ]
+
+
+WAIT_ARGV = ["python3", "-c", "import sys, time; time.sleep(max(0.0, float(sys.argv[1]) - time.time()))"]
+MEM_CMD = "bash bench-rig/box/target.sh mem r1-hello-rapira-worker rapira"
+
+SAMPLE_JOBS_CASES = [
+    {
+        "name": "server samples pass the port, loader samples pass no port",
+        "epoch": 100.0,
+        "stage_s": 20,
+        "expected": {
+            "server": [
+                [*WAIT_ARGV, "100.000", "&&", "bash", "bench-rig/box/snapshot.sh", "8080"],
+                [*WAIT_ARGV, "110.000", "&&", "bash", "bench-rig/box/snapshot.sh", "8080", "&&", *shlex.split(MEM_CMD)],
+                [*WAIT_ARGV, "120.500", "&&", "bash", "bench-rig/box/snapshot.sh", "8080"],
+            ],
+            "loader-1": [
+                [*WAIT_ARGV, "100.000", "&&", "bash", "bench-rig/box/snapshot.sh"],
+                [*WAIT_ARGV, "110.000", "&&", "bash", "bench-rig/box/snapshot.sh"],
+                [*WAIT_ARGV, "120.500", "&&", "bash", "bench-rig/box/snapshot.sh"],
+            ],
+        },
+    },
+]
+
+
+class SampleJobsTest(unittest.TestCase):
+    def test_sample_jobs(self):
+        for case in SAMPLE_JOBS_CASES:
+            with self.subTest(name=case["name"]):
+                jobs = sample_jobs(RIG, case["epoch"], case["stage_s"], MEM_CMD)
+                for name, expected in case["expected"].items():
+                    self.assertEqual([shlex.split(cmd) for _, host, cmd in jobs if host.name == name], expected)
 
 
 class LoadCmdTest(unittest.TestCase):

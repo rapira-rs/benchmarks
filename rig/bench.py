@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Protocol
 
 from rig import ssh
-from rig.flags import Snapshot, cell_flags, cpu_pct, ena_delta, keepalive_flag, parse_snapshot, stage_flags, stage_void
+from rig.flags import cell_flags, cpu_pct, ena_delta, keepalive_flag, parse_snapshot, stage_flags, stage_void
 from rig.ladder import MAX_STAGES, PASS_TOLERANCE, RATIO, cell_numbers, evaluate_stage, stage_rates
 from rig.merge import merge, parse_result
 from rig.registry import Suite, SuiteError, Target, cell_key, plan_cells
@@ -29,6 +29,8 @@ K6_LATENCY_BUDGET_S = 0.005
 # ssh slack over the lead time and the stage duration of one load call.
 LOAD_SLACK_S = 60
 SNAPSHOT_TIMEOUT_S = 30
+# Sleep until the wall clock time in argv[1].
+WAIT_PY = "import sys, time; time.sleep(max(0.0, float(sys.argv[1]) - time.time()))"
 SUITES_DIR = Path("suites")
 FACTS_CMD = (
     "echo kernel=$(uname -r); "
@@ -174,17 +176,24 @@ def target_record(target: Target) -> dict:
     return {**asdict(target), "start": list(target.start), "headers": dict(target.headers)}
 
 
-def snapshots(boxes: Boxes, rig: Rig, cell_dir: Path, label: str) -> dict[str, Snapshot]:
-    """Snapshots of every box. The server snapshot counts the connections on PORT."""
-    jobs = [(rig.server, box_cmd("snapshot.sh", PORT))] + [(loader, box_cmd("snapshot.sh")) for loader in rig.loaders]
-    taken = {}
-    with (cell_dir / "snapshots.txt").open("a") as log:
-        for (host, _), out in zip(jobs, boxes.run_many(jobs, timeout=SNAPSHOT_TIMEOUT_S)):
-            if isinstance(out, SshError):
-                raise out
-            log.write(f"# {label} {host.name}\n{out}")
-            taken[host.name] = parse_snapshot(out)
-    return taken
+def at_time(at: float, cmd: str) -> str:
+    """cmd after a wait until the wall clock time at."""
+    return f"python3 -c {shlex.quote(WAIT_PY)} {at:.3f} && {cmd}"
+
+
+def sample_jobs(rig: Rig, epoch: float, stage_s: int, mem: str) -> list[tuple[str, Host, str]]:
+    """Snapshot jobs of every box at the stage start, the stage middle, and 0.5 s after the stage end.
+
+    The server snapshots count the connections on PORT. The middle server job also runs mem.
+    """
+    jobs = []
+    for mark, at in (("begin", epoch), ("mid", epoch + stage_s / 2), ("end", epoch + stage_s + 0.5)):
+        server_cmd = box_cmd("snapshot.sh", PORT)
+        if mark == "mid":
+            server_cmd += f" && {mem}"
+        jobs.append((mark, rig.server, at_time(at, server_cmd)))
+        jobs += [(mark, loader, at_time(at, box_cmd("snapshot.sh"))) for loader in rig.loaders]
+    return jobs
 
 
 def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, target: Target, cell: dict, cell_dir: Path, index: int, rate: int) -> dict:
@@ -192,13 +201,23 @@ def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, target: Target, 
     server = rig.server
     url = f"http://{server.private_ip}:{PORT}{target.url}"
     per_loader = rate // len(rig.loaders)
-    before = snapshots(boxes, rig, cell_dir, f"stage {index} before")
     epoch = time.time() + LEAD_S
-    jobs = [(loader, load_cmd(target, url, epoch, per_loader, plan, suite.stage_s)) for loader in rig.loaders]
-    # One server sample in the middle of the stage: the connection states and the memory of the target.
-    jobs.append((server, f"sleep {LEAD_S + suite.stage_s // 2}; {box_cmd('snapshot.sh', PORT)}; {box_cmd('target.sh', 'mem', cell['key'], target.server)}"))
-    results = boxes.run_many(jobs, timeout=LEAD_S + suite.stage_s + LOAD_SLACK_S)
-    after = snapshots(boxes, rig, cell_dir, f"stage {index} after")
+    loads = [(loader, load_cmd(target, url, epoch, per_loader, plan, suite.stage_s)) for loader in rig.loaders]
+    # The middle server sample also reads the memory of the target.
+    samples = sample_jobs(rig, epoch, suite.stage_s, box_cmd("target.sh", "mem", cell["key"], target.server))
+    results = boxes.run_many(loads + [(host, cmd) for _, host, cmd in samples], timeout=LEAD_S + suite.stage_s + LOAD_SLACK_S)
+
+    taken = {}
+    with (cell_dir / "snapshots.txt").open("a") as log:
+        for (mark, host, _), out in zip(samples, results[len(loads):]):
+            if isinstance(out, SshError):
+                raise out
+            log.write(f"# stage {index} {mark} {host.name}\n{out}")
+            taken[mark, host.name] = out
+    before = {host.name: parse_snapshot(taken["begin", host.name]) for host in rig.hosts}
+    after = {host.name: parse_snapshot(taken["end", host.name]) for host in rig.hosts}
+    sample_lines = taken["mid", server.name].strip().splitlines()
+    middle = parse_snapshot("\n".join(sample_lines[:-1]))
 
     records = {}
     for loader, out in zip(rig.loaders, results):
@@ -216,11 +235,6 @@ def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, target: Target, 
     throttled = stage_void(loader_ena)
     if throttled:
         raise CellVoid(f"stage {index}: {throttled}")
-    sample = results[-1]
-    if isinstance(sample, SshError):
-        raise sample
-    sample_lines = sample.strip().splitlines()
-    middle = parse_snapshot("\n".join(sample_lines[:-1]))
 
     passed, reason = evaluate_stage(rate, merged)
     server_busy = cpu_pct(before[server.name], after[server.name])
@@ -362,10 +376,6 @@ def run_cell(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, target: Target, c
         void(cell, str(exc))
     except SshError as exc:
         void(cell, f"ssh: {str(exc).splitlines()[0]}")
-    except BaseException:
-        cell["status"] = "incomplete"
-        cell["reason"] = "interrupted"
-        raise
     finally:
         stop_target(boxes, rig, target, cell, cell_dir)
     if cell["status"] == "ok":
@@ -440,6 +450,11 @@ def run_suite(rig: Rig, suite: Suite, boxes: Boxes, out_dir: Path, *, processes:
             }
             try:
                 run_cell(boxes, rig, suite, plan, target, cell, run_dir / "raw" / key, rapira)
+            except BaseException:
+                if cell["status"] == "ok":
+                    cell["status"] = "incomplete"
+                    cell["reason"] = "interrupted"
+                raise
             finally:
                 run_file.add_cell(cell)
     finally:
