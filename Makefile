@@ -118,6 +118,6 @@ nuke: preflight
 
 # Local only: needs Go and network access to the buf remote plugins.
 grpc_fixtures:
-	$(BUF) build grpc --as-file-descriptor-set -o grpc/bench.binpb
-	$(BUF) generate grpc --template grpc/buf.gen.yaml
-	python3 scripts/grpc-fixtures.py
+	$(BUF) build apps/grpc --as-file-descriptor-set -o apps/grpc/bench.binpb
+	$(BUF) generate apps/grpc --template apps/grpc/buf.gen.yaml
+	python3 apps/grpc/fixtures.py
