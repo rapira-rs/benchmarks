@@ -23,7 +23,7 @@ start() {
   for file in "$BENCH/run/$tag".*; do
     case "$file" in
     *.pid) ;;
-    *) echo "config=$file" ;;
+    *) if [ -f "$file" ]; then echo "config=$file"; fi ;;
     esac
   done
 }

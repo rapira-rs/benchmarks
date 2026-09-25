@@ -108,6 +108,8 @@ fail() {
   echo "ERROR: $tag: $*" >&2
   # shellcheck disable=SC2046
   kill -KILL $(pids_of "$tag") 2>/dev/null || true
+  # A killed FrankenPHP holds the port for a few milliseconds after the signal.
+  wait_port_free 10 || true
   rm -f "$BENCH/run/$tag".*.pid
   exit 1
 }
