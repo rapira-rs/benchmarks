@@ -1,9 +1,7 @@
 :root {
   --bg: #ffffff;
   --fg: #1f2328;
-  --muted: #59636e;
   --grid: #d0d7de;
-  --fail: #fbe9e7;
   --error: #b42318;
 }
 
@@ -11,9 +9,7 @@
   :root {
     --bg: #0d1117;
     --fg: #e6edf3;
-    --muted: #9198a1;
     --grid: #30363d;
-    --fail: #3d1d1a;
     --error: #ff7b72;
   }
 }

@@ -100,7 +100,7 @@ A void excludes the cell from every number and makes the run incomplete. The dri
 - A loader starts a stage more than 1000 ms late.
 - The ENA allowance counters of a loader change during a stage. The network shaped that loader, so the stage does not measure the server.
 - A rapira target logs a WARN or ERROR line during the cell. Rapira runs at log level `warn`. The raw directory keeps the lines. Other servers get only the `log_growth` flag.
-- An ssh command to a box fails during the cell.
+- An ssh command to a box fails during the cell. The warm-up and the probe after the failing stage are the exceptions. A failed warm-up is discarded, and a failed probe sets the `died` flag.
 - The driver cannot stop the target or read its log.
 
 An interrupted run stops the current target and writes the run file with the status `incomplete`. The interrupted cell has the status `incomplete`, and the cells that did not run are listed as missing.

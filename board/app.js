@@ -107,7 +107,6 @@ function drawTarget(parent, series, target) {
         data: target.p99_ms[rate],
         borderColor: PALETTE[i % PALETTE.length],
         backgroundColor: PALETTE[i % PALETTE.length],
-        spanGaps: false,
       })),
     },
     options: {
@@ -127,10 +126,7 @@ function drawTarget(parent, series, target) {
               return series.versions[i] ? series.labels[i] + " " + series.versions[i] : series.labels[i];
             },
             label: (item) => item.dataset.label + " req/s: " + item.parsed.y.toFixed(2) + " ms",
-            afterLabel: (item) => {
-              const flags = target.flags[item.dataIndex];
-              return flags && flags.length ? flags.join(", ") : "";
-            },
+            afterLabel: (item) => target.flags[item.dataIndex].join(", "),
           },
         },
       },

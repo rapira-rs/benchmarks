@@ -22,13 +22,14 @@ FRAME_POINTERS ?= 0
 RUN ?=
 A ?=
 B ?=
+PAGES ?= runs/pages
 BUF_VERSION ?= v1.73.0
 BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 
 TF := terraform -chdir=terraform
 AWSC := aws --region $(REGION)
 
-.PHONY: preflight up provision status bench report compare extend sync lock down nuke test grpc_fixtures
+.PHONY: preflight up provision status bench report compare extend sync lock down nuke test grpc_fixtures board
 
 preflight:
 	@$(AWSC) sts get-caller-identity >/dev/null 2>&1 || \
@@ -119,8 +120,6 @@ grpc_fixtures:
 
 # Serve the board and a local pages dir for a manual check. Fill the dir first:
 # python3 -m rig publish --pages-dir runs/pages runs/<id>/run.json
-PAGES ?= runs/pages
-.PHONY: board
 board:
 	@test -f $(PAGES)/data/index.json || { echo "ERROR: no $(PAGES)/data/index.json; run: python3 -m rig publish --pages-dir $(PAGES) runs/<id>/run.json"; exit 1; }
 	cp board/index.html board/app.js board/style.css board/chart.umd.js $(PAGES)/

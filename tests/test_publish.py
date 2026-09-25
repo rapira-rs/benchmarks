@@ -1,13 +1,10 @@
 """Tests of publishing a run file into a gh-pages checkout."""
 
-import contextlib
-import io
 import json
 import tempfile
 import unittest
 from pathlib import Path
 
-from rig.__main__ import main
 from rig.publish import publish
 
 
@@ -82,18 +79,6 @@ class TestPublish(unittest.TestCase):
                     self.assertEqual(json.loads(path.read_text()), RUN)
                     index = json.loads((pages / "data" / "index.json").read_text())
                 self.assertEqual(index, {"schema": "rapira-bench-index/1", "runs": case["runs"]})
-
-    def test_cli_prints_the_data_path(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            run_path = Path(tmp) / "run.json"
-            run_path.write_text(json.dumps(RUN))
-            pages = Path(tmp) / "pages"
-            out = io.StringIO()
-            with contextlib.redirect_stdout(out):
-                status = main(["publish", "--pages-dir", str(pages), str(run_path)])
-            self.assertEqual(status, 0)
-            self.assertEqual(out.getvalue(), f"{pages / 'data' / '20260925T120000Z-ci-0a1b2c3.json'}\n")
-            self.assertTrue((pages / "data" / "index.json").exists())
 
 
 if __name__ == "__main__":

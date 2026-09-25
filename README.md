@@ -85,6 +85,7 @@ The driver refuses a suite before it creates a run directory when one of these c
 - `TF_BACKEND=s3` keeps the Terraform state in S3. The default `local` keeps the state in `terraform/`.
 - `FRAME_POINTERS=1` builds rapira with frame pointers for a perf session. It applies to server builds only.
 - `RUN` selects the run directory of `make report`. `A` and `B` select the two run directories of `make compare`.
+- `PAGES` selects the pages directory of `make board`. It defaults to `runs/pages`.
 - `AUTO_EXTEND=0` stops a run when the remaining instance lifetime is too short.
 
 ## Other targets
@@ -95,6 +96,7 @@ The driver refuses a suite before it creates a run directory when one of these c
 - `make sync` builds the local `../core` working tree on the server. The next `make bench` uses that binary. The rig must come from `make up REF=<ref>`, because a nightly rig has no Rust toolchain.
 - `make report` prints the tables of the newest run. `make report RUN=runs/<id>` prints another run.
 - `make compare A=runs/<a> B=runs/<b>` prints the deltas between two runs.
+- `make board` copies the board files into `PAGES` and serves the directory on 127.0.0.1:8000. Fill the directory first with `python3 -m rig publish --pages-dir runs/pages runs/<id>/run.json`.
 - `make lock` creates the Symfony and Laravel `composer.lock` files. It needs PHP 8.5 and Composer on the operator machine.
 - `make test` runs the unit tests.
 - `make nuke` removes the tagged AWS resources when the Terraform state is not usable.
@@ -112,6 +114,8 @@ Each run writes `runs/<id>/`. The run id is `<UTC timestamp>-<suite>-<rapira sha
 `make compare` refuses two runs with a different server type, loader type, loader count, worker count, or stage duration. Give `--force` to `python3 -m rig compare` to compare them anyway.
 
 `python3 -m rig publish --pages-dir <dir> runs/<id>/run.json` adds a run to a checkout of the `gh-pages` branch: it writes `data/<id>.json` and updates `data/index.json`.
+
+`python3 -m rig bench --suite <name> --smoke` marks the run as a smoke run. The board does not show it, and the CI commit check ignores it.
 
 Use only runs from the same rig shape for a direct comparison. Read [METHOD.md](METHOD.md) before you publish a number.
 
