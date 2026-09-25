@@ -2,6 +2,7 @@
 INSTRUCTIONS.md
 results/
 **/vendor/**
+docs
 
 # Terraform working files; the tfstate and the key carry secrets, the tfvars
 # carries the operator IP.
