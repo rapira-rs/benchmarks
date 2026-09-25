@@ -87,29 +87,16 @@ ZERO = {"mean": 0.0, "p50": 0.0, "p90": 0.0, "p95": 0.0, "p99": 0.0, "p999": 0.0
 MERGE_CASES = [
     {
         # requests: 39989 + 40011 + 39800 + 40200 = 160000, and 160000 / 20 = 8000 req/s over the 20 s window.
-        # bytes: 5038614 + 5041386 + 5014800 + 5065200 = 20160000.
         # successful: 160000 - 7 status errors = 159993.
-        # mean: (39989 * 689.5 + 40011 * 701 + 39800 * 650.25 + 40200 * 720) / 160000 = 110444076.5 / 160000.
         # Each percentile is the maximum of the four loaders.
         "name": "four loaders",
         "records": {"loader-1": LOADER_1, "loader-2": LOADER_2, "loader-3": LOADER_3, "loader-4": LOADER_4},
         "window_s": 20,
         "expected": Merged(
-            requests=160000,
-            successful=159993,
-            bytes=20160000,
             errors={"connect": 1, "read": 2, "write": 0, "status": 7, "timeout": 0, "dropped": 0},
             achieved_rps=8000.0,
             successful_rps=159993 / 20,
-            latency_us={
-                "mean": 110444076.5 / 160000,
-                "p50": 700.0,
-                "p90": 1120.0,
-                "p95": 1190.0,
-                "p99": 1301.0,
-                "p999": 1500.0,
-                "max": 4100.0,
-            },
+            latency_us={"p50": 700.0, "p90": 1120.0, "p99": 1301.0, "p999": 1500.0, "max": 4100.0},
         ),
     },
     {
@@ -117,13 +104,10 @@ MERGE_CASES = [
         "records": {"loader-1": record("loader-1", 0, 0, ZERO), "loader-2": record("loader-2", 0, 0, ZERO)},
         "window_s": 20,
         "expected": Merged(
-            requests=0,
-            successful=0,
-            bytes=0,
             errors=NO_ERRORS,
             achieved_rps=0.0,
             successful_rps=0.0,
-            latency_us=ZERO,
+            latency_us={"p50": 0.0, "p90": 0.0, "p99": 0.0, "p999": 0.0, "max": 0.0},
         ),
     },
 ]

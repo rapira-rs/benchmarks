@@ -24,7 +24,7 @@ def percentile(sorted_values, pct):
     pct is exact (int or Fraction) so the rank is exact too. A float pct such as 99.9 can put
     the rank a fraction above an integer boundary, and ceil then rounds up to the wrong rank.
     """
-    rank = max(1, math.ceil(Fraction(pct) * len(sorted_values) / 100))
+    rank = math.ceil(Fraction(pct) * len(sorted_values) / 100)
     return sorted_values[rank - 1]
 
 

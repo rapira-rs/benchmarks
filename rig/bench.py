@@ -46,7 +46,6 @@ TOOLS_CMD = (
 )
 # The measured fields of a cell. A cell that is not ok has null values here.
 NUMBER_KEYS = ("rate", "achieved_rps", "successful_rps", "errors", "latency_us", "rss_kb", "held", "cpu")
-LATENCY_KEYS = ("p50", "p90", "p99", "p999", "max")
 
 
 class Boxes(Protocol):
@@ -251,7 +250,7 @@ def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, target: Target, 
         "achieved_rps": merged.achieved_rps,
         "successful_rps": merged.successful_rps,
         "errors": dict(merged.errors),
-        "latency_us": {key: merged.latency_us[key] for key in LATENCY_KEYS},
+        "latency_us": dict(merged.latency_us),
         "rss_kb": rss_kb,
         "held": held,
         "cpu": {"server_busy": server_busy, "loader_busy": max(loader_busy.values())},

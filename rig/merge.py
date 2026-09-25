@@ -1,4 +1,4 @@
-"""Parse the RESULT line of a load process and merge the loader records of one stage."""
+"""Parse the RESULT line of a load process and merge the loader records of one stage into the numbers of a cell."""
 
 import json
 from dataclasses import dataclass
@@ -6,6 +6,8 @@ from dataclasses import dataclass
 LATE_LIMIT_MS = 1000
 ERROR_KEYS = ("connect", "read", "write", "status", "timeout", "dropped")
 PERCENTILE_KEYS = ("p50", "p90", "p95", "p99", "p999", "max")
+# The percentiles of the cell record. The loader record keeps all of PERCENTILE_KEYS and the mean as evidence.
+MERGED_KEYS = ("p50", "p90", "p99", "p999", "max")
 _RESULT_PREFIX = "RESULT "
 
 
@@ -32,9 +34,6 @@ class LoaderRecord:
 
 @dataclass(frozen=True)
 class Merged:
-    requests: int
-    successful: int
-    bytes: int
     errors: dict[str, int]
     achieved_rps: float
     successful_rps: float
@@ -63,7 +62,10 @@ def parse_result(text: str, loader: str) -> LoaderRecord | None:
 
 
 def merge(records: dict[str, LoaderRecord | None], window_s: int) -> Merged:
-    """Merge the loader records. window_s is the seconds that the requests counts of the records cover."""
+    """Merge the loader records into the error sums, the rates, and the maximum of each percentile of MERGED_KEYS.
+
+    window_s is the seconds that the requests counts of the records cover.
+    """
     present = []
     for loader, record in records.items():
         if record is None:
@@ -74,17 +76,9 @@ def merge(records: dict[str, LoaderRecord | None], window_s: int) -> Merged:
     requests = sum(r.requests for r in present)
     errors = {key: sum(r.errors[key] for r in present) for key in ERROR_KEYS}
     successful = requests - errors["status"]
-    # A stage where no loader completed a request has no latency to weight.
-    mean = sum(r.latency_us["mean"] * r.requests for r in present) / requests if requests else 0.0
-    latency = {"mean": mean}
-    for key in PERCENTILE_KEYS:
-        latency[key] = max(r.latency_us[key] for r in present)
     return Merged(
-        requests=requests,
-        successful=successful,
-        bytes=sum(r.bytes for r in present),
         errors=errors,
         achieved_rps=requests / window_s,
         successful_rps=successful / window_s,
-        latency_us=latency,
+        latency_us={key: max(r.latency_us[key] for r in present) for key in MERGED_KEYS},
     )
