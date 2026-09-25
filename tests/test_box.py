@@ -205,6 +205,83 @@ LIFECYCLE_CASES = [
         # The real gRPC dispatcher needs the protobuf runtime that provisioning installs.
         "stub_only": True,
     },
+    {
+        "name": "nginx-rapira worker",
+        "server": "nginx-rapira",
+        "binary": "pr",
+        "args": ["worker", "@RIG@/apps/hello/worker.php"],
+        "configs": {"nginx.conf": ["worker_processes 2;", "listen 8080 backlog=65535;"], "toml": ['listen = "127.0.0.1:8081"', 'mode = "worker"']},
+        "probe": HELLO,
+        # PROCS nginx workers and PROCS rapira workers.
+        "workers": 2 * PROCS,
+        "stub_only": False,
+    },
+    {
+        "name": "frankenphp worker",
+        "server": "frankenphp",
+        "binary": None,
+        "args": ["worker", "@RIG@/apps/hello/frankenphp.php", "@RIG@/apps/hello"],
+        # num_threads is PROCS plus one in the worker shape.
+        "configs": {"Caddyfile": ["num_threads 3", "num 2", "file_server off", "match *", ":8080 {"]},
+        "probe": HELLO,
+        # FrankenPHP runs its threads in one process, so it has no worker processes.
+        "workers": 0,
+        "stub_only": False,
+    },
+    {
+        "name": "frankenphp worker with env lines",
+        "server": "frankenphp",
+        "binary": None,
+        "args": ["worker", "@RIG@/apps/hello/frankenphp.php", "@RIG@/apps/hello", "APP_DEBUG=false", "MAX_REQUESTS=100000000"],
+        "configs": {"Caddyfile": ["\t\t\tenv APP_DEBUG false\n", "\t\t\tenv MAX_REQUESTS 100000000\n"]},
+        "probe": HELLO,
+        "workers": 0,
+        "stub_only": False,
+    },
+    {
+        "name": "frankenphp classic",
+        "server": "frankenphp",
+        "binary": None,
+        "args": ["classic", "@RIG@/apps/hello/classic.php", "@RIG@/apps/hello"],
+        # num_threads is PROCS in the classic shape.
+        "configs": {"Caddyfile": ["num_threads 2", "try_files {path} classic.php"]},
+        "probe": HELLO,
+        "workers": 0,
+        "stub_only": False,
+    },
+    {
+        "name": "frankenphp stock serves the static asset",
+        "server": "frankenphp",
+        "binary": None,
+        "args": ["stock", "@RIG@/apps/hello/frankenphp.php", "@RIG@/apps/static"],
+        # The entry is outside the static docroot, so the start script serves a run copy of it.
+        "configs": {"Caddyfile": ["num_threads 3", "index index.php", f"root * {BENCH}/run/{TAG}.docroot"]},
+        "probe": {"path": "/tiny.css", "expect": "apps/static/tiny.expect"},
+        "workers": 0,
+        "stub_only": False,
+    },
+    {
+        "name": "php-fpm hello",
+        "server": "php-fpm",
+        "binary": None,
+        "args": ["@RIG@/apps/hello", "fpm.php"],
+        "configs": {"nginx.conf": ["worker_processes 2;", f"root {RIG}/apps/hello;", "$document_root/fpm.php;"], "fpm.conf": ["pm.max_children = 2"]},
+        "probe": HELLO,
+        # PROCS nginx workers and PROCS php-fpm pool workers.
+        "workers": 2 * PROCS,
+        "stub_only": False,
+    },
+    {
+        "name": "roadrunner grpc",
+        "server": "roadrunner",
+        "binary": None,
+        "args": ["grpc"],
+        "configs": {"rr.yaml": ['listen: "tcp://0.0.0.0:8080"', "num_workers: 2", f'command: "php {RIG}/apps/grpc/php/rr-worker.php"']},
+        "probe": None,
+        # rr starts PROCS PHP workers.
+        "workers": PROCS,
+        "stub_only": False,
+    },
 ]
 
 FAIL_CASES = [
@@ -245,6 +322,71 @@ FAIL_CASES = [
         "hold_after_start": None,
         "edit": None,
         "error": "unknown rapira mode fast",
+        "stub_started": False,
+        "stub_only": False,
+    },
+    {
+        "name": "nginx-rapira backend port busy",
+        "server": "nginx-rapira",
+        "binary": "pr",
+        "args": ["worker", "@RIG@/apps/hello/worker.php"],
+        "env": {},
+        "hold_before": 8081,
+        "hold_after_start": None,
+        "edit": None,
+        "error": ":8081 is busy",
+        "stub_started": False,
+        "stub_only": False,
+    },
+    {
+        "name": "nginx-rapira invalid nginx config",
+        "server": "nginx-rapira",
+        "binary": "pr",
+        "args": ["worker", "@RIG@/apps/hello/worker.php"],
+        "env": {},
+        "hold_before": None,
+        "hold_after_start": None,
+        "edit": ("servers/nginx/rapira.conf.tpl", "events {}\nhttp { invalid_directive; }\n"),
+        "error": "the nginx configuration is invalid",
+        "stub_started": False,
+        "stub_only": False,
+    },
+    {
+        "name": "nginx-rapira nginx cannot listen",
+        "server": "nginx-rapira",
+        "binary": "pr",
+        "args": ["worker", "@RIG@/apps/hello/worker.php"],
+        "env": {},
+        "hold_before": None,
+        "hold_after_start": 8080,
+        "edit": None,
+        "error": "exited before it listened on :8080",
+        "stub_started": True,
+        "stub_only": True,
+    },
+    {
+        "name": "frankenphp thread count differs",
+        "server": "frankenphp",
+        "binary": None,
+        "args": ["worker", "@RIG@/apps/hello/frankenphp.php", "@RIG@/apps/hello"],
+        "env": {},
+        "hold_before": None,
+        "hold_after_start": None,
+        "edit": ("servers/frankenphp/worker.Caddyfile.tpl", (REPO / "servers/frankenphp/worker.Caddyfile.tpl").read_text().replace("num_threads @@THREADS@@", "num_threads 7")),
+        "error": "the log does not confirm num_threads 3",
+        "stub_started": False,
+        "stub_only": False,
+    },
+    {
+        "name": "frankenphp classic entry outside the document root",
+        "server": "frankenphp",
+        "binary": None,
+        "args": ["classic", "@RIG@/apps/hello/classic.php", "@RIG@/apps/static"],
+        "env": {},
+        "hold_before": None,
+        "hold_after_start": None,
+        "edit": None,
+        "error": f"the classic entry {RIG}/apps/hello/classic.php is not in {RIG}/apps/static",
         "stub_started": False,
         "stub_only": False,
     },
@@ -306,6 +448,10 @@ class BoxLifecycleTests(unittest.TestCase):
             else:
                 (BENCH / "rapira" / binary / "bin").mkdir(parents=True)
                 shutil.copy2(os.path.realpath("/usr/bin/python3"), BENCH / "rapira" / binary / "bin/rapira")
+        shutil.copy2(os.path.realpath("/usr/bin/python3"), BENCH / "bin/rr")
+        (BENCH / "bin/frankenphp").symlink_to("/usr/local/bin/frankenphp")
+        (BENCH / "apps/roadrunner-grpc/vendor").mkdir(parents=True)
+        (BENCH / "apps/roadrunner-grpc/vendor/autoload.php").write_text("<?php\n")
 
     def force_cleanup(self):
         subprocess.run(["pkill", "-KILL", "-u", str(os.getuid()), "-f", "opt/bench|php-fpm|nginx"], check=False)
