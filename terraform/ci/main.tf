@@ -51,7 +51,7 @@ data "aws_iam_policy_document" "trust" {
 resource "aws_iam_role" "ci" {
   name               = "rapira-bench-ci"
   assume_role_policy = data.aws_iam_policy_document.trust.json
-  # The bench job runs up to 90 minutes and destroys the rig at the end.
+  # The bench job runs up to 110 minutes and destroys the rig at the end.
   max_session_duration = 7200
 }
 

@@ -171,21 +171,21 @@ With `TF_BACKEND=s3`, the rig stack keeps its state in the bucket. `terraform/s3
 
 ## CI
 
-After each successful Nightly run on the rapira main branch, the core repository starts `.github/workflows/bench.yml` in this repository. The bench job finds the commit of the current `nightly` release and stops when the board already has that commit. Then it creates the rig with the S3 backend, provisions it with the nightly asset, runs `suites/ci.toml`, and uploads `run.json` and `raw/` as artifacts for 90 days. `make down` and `make nuke` run at the end of each bench job that passes the commit check, also after a failure. A capacity error retries once in `eu-central-1b`. The publish job runs only when the run is complete. It adds the run to the `gh-pages` branch and copies `board/` there.
+After each successful Nightly run on the rapira main branch, the core repository starts `.github/workflows/bench.yml` in this repository. The bench job finds the commit of the current `nightly` release and stops when the board already has that commit. Then it creates the rig with the S3 backend, provisions it with the nightly asset, runs `suites/ci.toml`, and uploads `run.json` and `raw/` as artifacts for 90 days. `make down` runs at the end of each bench job that passes the commit check, also after a failure. `make nuke` runs only when `make down` failed. A capacity error retries once in `eu-central-1b`. The publish job runs only when the run is complete. It adds the run to the `gh-pages` branch and copies `board/` there.
 
-Only one bench run runs at a time. A new dispatch replaces a waiting one and never stops a running one. The bench job stops after 90 minutes.
+Only one bench run runs at a time. A new dispatch replaces a waiting one and never stops a running one. The bench job stops after 110 minutes. A local rig and the CI bench cannot run at the same time, because they use the same resource names and the same tag. Check the Bench runs of this repository before `make up` and before `make nuke`.
 
 Do these owner steps once, in this order:
 
-1. Examine the tracked files for account ids, IP addresses, and keys. Then make this repository public.
+1. Examine the tracked files and the git history for account ids, IP addresses, and keys. Then make this repository public.
 2. Create the `gh-pages` branch with the commands below.
-3. In the repository settings, open Pages, select "Deploy from a branch", and select the branch `gh-pages` with the folder `/`.
+3. In the repository settings, open Pages. Select "Deploy from a branch". Select the branch `gh-pages` with the folder `/`.
 4. Apply `terraform/ci` as the "CI bootstrap" section shows.
 5. Set the repository variables `AWS_ROLE_ARN` and `TF_STATE_BUCKET` with the commands below.
-6. Create a fine-grained token for the resource owner `rapira-rs` with access to the repository `rapira-rs/benchmarks` only and the permission "Actions: Read and write". If the organization approves tokens, approve the request.
+6. Create a fine-grained token for the resource owner `rapira-rs` with access to the repository `rapira-rs/benchmarks` only and the permission "Actions: Read and write". If the organization approves tokens, approve the request. The token has an expiry date. Create a new token before that date and repeat step 7.
 7. Store the token as the secret `BENCH_DISPATCH_TOKEN` in `rapira-rs/rapira`.
 8. Copy `docs/core-dispatch.yml` to `.github/workflows/bench-dispatch.yml` in `rapira-rs/rapira` through a pull request.
-9. Start the first run by hand with `gh workflow run bench.yml -R rapira-rs/benchmarks` and examine the result on the board.
+9. Start the first run by hand with `gh workflow run bench.yml -R rapira-rs/benchmarks`. Examine the result on the board.
 
 Commands for step 2:
 

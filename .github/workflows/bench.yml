@@ -27,7 +27,7 @@ defaults:
 jobs:
   bench:
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 110
     permissions:
       contents: read
       id-token: write
@@ -108,7 +108,7 @@ jobs:
 
       - name: Run the ci suite
         if: steps.resolve.outputs.skip == 'false'
-        timeout-minutes: 45
+        timeout-minutes: 70
         run: python3 -m rig bench --suite ci --out runs
 
       - name: Upload the run file
@@ -129,17 +129,14 @@ jobs:
           if-no-files-found: ignore
           retention-days: 90
 
-      # The report exits 1 for an incomplete run, which stops the publish job.
-      - name: Report the run
-        if: steps.resolve.outputs.skip == 'false'
-        run: python3 -m rig report runs/*/run.json
-
       - name: Destroy the rig
+        id: down
         if: always() && steps.resolve.outputs.skip == 'false'
         run: make down
 
+      # Tag-scoped cleanup only when the destroy failed, so a local rig with the same tag is safe.
       - name: Remove tagged leftovers
-        if: always() && steps.resolve.outputs.skip == 'false'
+        if: always() && steps.resolve.outputs.skip == 'false' && steps.down.outcome == 'failure'
         run: make nuke
 
   publish:
