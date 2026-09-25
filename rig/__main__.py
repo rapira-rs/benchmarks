@@ -3,9 +3,12 @@
 import argparse
 import json
 import sys
+import time
+from dataclasses import replace
 from pathlib import Path
 
 from rig import ssh
+from rig.bench import BENCH_DIR, SshBoxes, app_hashes, run_suite, server_versions
 from rig.compare import compare
 from rig.publish import publish
 from rig.registry import load_suite, load_targets, suite_needs
@@ -20,6 +23,38 @@ SYNC_TTL_S = 1800
 
 def load_json(path: str) -> dict:
     return json.loads(Path(path).read_text())
+
+
+def cmd_bench(args: argparse.Namespace) -> int:
+    rig = from_terraform(TF_DIR)
+    suite = load_suite(SUITES_DIR / f"{args.suite}.toml", load_targets(TARGETS_FILE), len(rig.loaders))
+    if args.rounds:
+        suite = replace(suite, rounds=args.rounds)
+    if args.smoke:
+        suite = replace(suite, smoke=True)
+    for host in rig.hosts:
+        ssh.wait_ssh(host)
+    ssh.stage_tree(rig.hosts)
+    boxes = SshBoxes()
+    processes = args.processes or int(boxes.run(rig.server, "nproc"))
+    loader_threads = int(boxes.run(rig.loaders[0], "nproc"))
+    meta = json.loads(boxes.run(rig.server, f"cat {BENCH_DIR}/meta.json"))
+    # The base build is part of the identity of a run with base targets.
+    rapira = {**meta["rapira"], "base": meta["base"]}
+    run_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{suite.name}-{rapira['sha'][:7]}"
+    path = Path(args.out) / run_id / "run.json"
+    try:
+        run_suite(
+            rig, suite, boxes, Path(args.out), processes=processes, run_id=run_id, rapira=rapira,
+            servers=server_versions(boxes, rig.server), apps=app_hashes(Path(".")), loader_threads=loader_threads,
+        )
+    except KeyboardInterrupt:
+        print(f"ERROR: interrupted; the run file is {path}", file=sys.stderr)
+        return 130
+    text, status = render(json.loads(path.read_text()))
+    print(text, end="")
+    print(f"==> {path}")
+    return status
 
 
 def cmd_report(args: argparse.Namespace) -> int:
@@ -83,6 +118,14 @@ def cmd_ttl(args: argparse.Namespace) -> int:
 def parser() -> argparse.ArgumentParser:
     top = argparse.ArgumentParser(prog="python3 -m rig")
     sub = top.add_subparsers(dest="command", required=True)
+
+    p = sub.add_parser("bench", help="run a suite on the rig")
+    p.add_argument("--suite", required=True)
+    p.add_argument("--rounds", type=int)
+    p.add_argument("--processes", type=int)
+    p.add_argument("--smoke", action="store_true")
+    p.add_argument("--out", default="runs")
+    p.set_defaults(func=cmd_bench)
 
     p = sub.add_parser("report", help="print the tables of one run file")
     p.add_argument("run")
