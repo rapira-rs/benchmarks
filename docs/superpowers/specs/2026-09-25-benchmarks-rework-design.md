@@ -110,7 +110,7 @@ The full suite adds the nginx-rapira worker rows, the FrankenPHP stock `php_serv
 
 ### 4.3 FrankenPHP rows
 
-The FrankenPHP worker row uses the production shape from the FrankenPHP docs: `php_server` with `file_server off`, the worker file with `match *`, so no request stats the docroot. The classic row uses `php_server` with `file_server off` and `try_files {path} index.php`. Both pin `num_threads` to the worker count plus one, `admin off`, `auto_https off`, no `encode`, no access log. The stock `php_server` worker row exists in the full suite so the cost of the default shape is visible next to the tuned row. Autoscaling, compression, HTTP/2, HTTP/3, and TLS rows are out: they change the wire and would be unfair to servers measured over HTTP/1.1.
+The FrankenPHP worker row uses the production shape from the FrankenPHP docs: `php_server` with `file_server off`, the worker file with `match *`, so no request stats the docroot. The classic row uses `php_server` with `file_server off` and `try_files {path} index.php`. The worker row pins `num_threads` to the worker count plus one, because FrankenPHP needs more threads than workers. The classic row pins `num_threads` to `PROCESSES`, the pool size of php-fpm. Both set `admin off`, `auto_https off`, no `encode`, no access log. The stock `php_server` worker row exists in the full suite so the cost of the default shape is visible next to the tuned row. Autoscaling, compression, HTTP/2, HTTP/3, and TLS rows are out: they change the wire and would be unfair to servers measured over HTTP/1.1.
 
 ### 4.4 Cell identity
 
@@ -136,7 +136,7 @@ Verified wrk2 facts that shape the ladder:
 - wrk2 speaks HTTP/1.1 only. gRPC targets use k6.
 - At 200k req/s over loopback one wrk2 process used about 44% of one core. The sizing basis stays the network measurement on this rig, about 80k req/s per loader core, which gives a `c7a.xlarge` loader headroom for its quarter of every stage up to the hello ceiling.
 
-k6 runs the gRPC targets with the `constant-arrival-rate` executor, one stage per k6 process, `preAllocatedVUs` sized to the stage rate times the expected latency with margin, `handleSummary` writing one JSON per stage. The k6 script keeps the byte-exact response checks of today.
+k6 runs the gRPC targets with the `ramping-arrival-rate` executor: one k6 process per stage, a one second ramp from 0 to the stage rate and then the rate for the rest of the stage, because the first call of every VU opens its connection and a constant rate from the start drops iterations in that window. `preAllocatedVUs` is sized to the stage rate times the expected latency with margin, and `handleSummary` writes one JSON per stage. A 20 s stage achieves about 97.5% of the rate, inside the pass rule. The k6 script keeps the byte-exact response checks of today.
 
 ### 5.2 Stages
 
@@ -207,7 +207,7 @@ Top level:
 
 - `schema`, `id`, `suite` (name, file SHA-256), `smoke` (bool), `started`, `finished`.
 - `rig`: server and loader instance types, loader count, AZ, AMI, kernel, placement group.
-- `rapira`: `ref`, `sha`, `version`, `build` (`nightly` or `server`), `asset`, `binary_sha256`, `rustflags`.
+- `rapira`: `ref`, `sha`, `version`, `build` (`nightly` or `server`), `asset`, `binary_sha256`, `rustflags`, `dir` (the install directory on the server), and `base` (the same record for the base build, or null).
 - `servers`: one version line per competitor server (FrankenPHP, php-fpm and its PHP, nginx, RoadRunner) and the shared php.ini text.
 - `apps`: SHA-256 of every app file and the composer.lock files.
 - `loaders`: per loader the instance id, private IP, wrk2 commit, k6 version.
@@ -215,7 +215,8 @@ Top level:
 - `processes`: the worker count.
 - `plan`: the ordered list of cell keys.
 - `cells`: the list of cells.
-- `status`: `complete` or `incomplete`, with the reasons.
+- `status`: `complete` or `incomplete`.
+- `reasons`: the list of reasons when the status is incomplete.
 - `reporter`: the version of the report tool that last rendered the run.
 
 A cell:
@@ -250,7 +251,7 @@ All numbers are JSON numbers.
 
 ## 7. Board
 
-The `gh-pages` branch holds `data/<run-id>.json`, `index.json` (a manifest with id, date, suite, rapira sha and version, status), and the board files. The board is static HTML and JavaScript under `board/` in the main branch, copied to `gh-pages` by the publish job, with Chart.js vendored as one pinned file.
+The `gh-pages` branch holds `data/<run-id>.json`, `data/index.json` (a manifest with id, date, suite, rapira sha and version, status), and the board files. The board is static HTML and JavaScript under `board/` in the main branch, copied to `gh-pages` by the publish job, with Chart.js vendored as one pinned file.
 
 Views:
 
@@ -270,7 +271,7 @@ A workflow in the core repository runs on the completion of its Nightly workflow
 
 `.github/workflows/bench.yml` in this repository:
 
-1. Resolve the SHA of the current `nightly` release. Stop when that SHA is already in the board manifest.
+1. Resolve the SHA of the current `nightly` release. Stop when that SHA is already in `data/index.json` on `gh-pages`.
 2. Assume the OIDC role.
 3. `terraform apply` with the S3 backend.
 4. Provision, run `suites/ci.toml`, collect `run.json` and `raw/`.
@@ -281,7 +282,7 @@ A concurrency group serializes bench runs and does not cancel a running one. A d
 
 ### 8.3 Publish job
 
-A second job in `bench.yml`, after the bench job, checks out `gh-pages`, writes `data/<run-id>.json`, appends to `index.json`, copies `board/`, commits with the run id, and pushes. The board is served by GitHub Pages from `gh-pages`.
+A second job in `bench.yml`, after the bench job, checks out `gh-pages`, writes `data/<run-id>.json`, appends to `data/index.json`, copies `board/`, commits with the run id, and pushes. The board is served by GitHub Pages from `gh-pages`.
 
 ### 8.4 Repository visibility
 
@@ -317,7 +318,7 @@ runs/                  local run output, ignored
 - `tests/test_ladder.py`: the stage list generation, the pass rule, the stop rule, and held and peak selection, as flat case tables with names.
 - `tests/test_merge.py`: merging loader records into a stage, including a loader with missing output, a loader with errors, and the maximum-over-loaders percentiles.
 - `tests/test_flags.py`: every flag rule with values at, below, and above its threshold.
-- `tests/test_run_file.py`: the writer produces the schema, typed numbers, and the status rules.
+- `tests/test_runfile.py`: the writer produces the schema, typed numbers, and the status rules.
 - `tests/test_report.py` and `tests/test_compare.py`: table tests on synthetic run files.
 - `tests/test_box.py`: the container test for the start and stop scripts, kept from `test_nginx.py`.
 
