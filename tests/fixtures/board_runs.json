@@ -1,68 +1,47 @@
 [
  {
+  "schema": "rapira-bench-run/2",
   "id": "20260926T010000Z-ci-aaaaaaa",
   "started": "2026-09-26T01:00:00Z",
   "smoke": false,
-  "rapira": {"sha": "aaaaaaa0000000000000000000000000000000a1", "version": "0.8.1-nightly.aaaaaaa"},
+  "rapira": {"sha": "aaaaaaa0000000000000000000000000000000a1", "version": "0.8.1-nightly.aaaaaaa", "pr": {"number": 101, "url": "https://github.com/rapira-rs/rapira/pull/101", "title": "Faster hello"}},
   "cells": [
-   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker", "app": "hello"}, "status": "ok", "flags": {}, "stages": [
-    {"rate": 10000, "pass": true, "latency_us": {"p50": 300, "p90": 500, "p99": 800, "p999": 1500, "max": 4000}},
-    {"rate": 20000, "pass": true, "latency_us": {"p50": 350, "p90": 700, "p99": 1200, "p999": 2500, "max": 6000}},
-    {"rate": 40000, "pass": false, "latency_us": {"p50": 450000, "p90": 800000, "p99": 900000, "p999": 950000, "max": 1000000}, "fail_reason": "achieved 31000 req/s under 95% of 40000"}
-   ]},
-   {"key": "r1-symfony-rapira-worker", "target": {"name": "symfony-rapira-worker", "app": "symfony"}, "status": "ok", "flags": {}, "stages": [
-    {"rate": 10000, "pass": true, "latency_us": {"p50": 900, "p90": 1400, "p99": 2000, "p999": 3500, "max": 8000}},
-    {"rate": 20000, "pass": false, "latency_us": {"p50": 400000, "p90": 700000, "p99": 800000, "p999": 850000, "max": 900000}, "fail_reason": "achieved 14500 req/s under 95% of 20000"}
-   ]}
+   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker"}, "status": "ok", "flags": {}, "rate": 250000, "achieved_rps": 249800.5, "latency_us": {"p50": 300, "p90": 500, "p99": 1200, "p999": 1500, "max": 4000}, "rss_kb": 204800, "held": true},
+   {"key": "r1-grpc-rapira", "target": {"name": "grpc-rapira"}, "status": "ok", "flags": {}, "rate": 100000, "achieved_rps": 99990, "latency_us": {"p50": 400, "p90": 900, "p99": 2500, "p999": 5000, "max": 12000}, "rss_kb": 1048576, "held": true}
   ]
  },
  {
+  "schema": "rapira-bench-run/2",
   "id": "20260927T010000Z-ci-bbbbbbb",
   "started": "2026-09-27T01:00:00Z",
   "smoke": false,
-  "rapira": {"sha": "bbbbbbb0000000000000000000000000000000b2", "version": "0.8.1-nightly.bbbbbbb"},
+  "rapira": {"sha": "bbbbbbb0000000000000000000000000000000b2", "version": "v0.8.1-130-gbbbbbbb", "pr": null},
   "cells": [
-   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker", "app": "hello"}, "status": "ok", "flags": {"generator_bound": true}, "stages": [
-    {"rate": 10000, "pass": true, "latency_us": {"p50": 320, "p90": 550, "p99": 900, "p999": 1600, "max": 4200}},
-    {"rate": 20000, "pass": true, "latency_us": {"p50": 360, "p90": 750, "p99": 1300, "p999": 2600, "max": 6100}},
-    {"rate": 40000, "pass": true, "latency_us": {"p50": 500, "p90": 1200, "p99": 2500, "p999": 5000, "max": 12000}},
-    {"rate": 80000, "pass": false, "latency_us": {"p50": 500000, "p90": 850000, "p99": 950000, "p999": 990000, "max": 1050000}, "fail_reason": "achieved 62000 req/s under 95% of 80000"}
-   ]},
-   {"key": "r2-hello-rapira-worker", "target": {"name": "hello-rapira-worker", "app": "hello"}, "status": "ok", "flags": {}, "stages": [
-    {"rate": 10000, "pass": true, "latency_us": {"p50": 340, "p90": 600, "p99": 1100, "p999": 1900, "max": 4500}},
-    {"rate": 20000, "pass": true, "latency_us": {"p50": 380, "p90": 800, "p99": 1500, "p999": 2900, "max": 6500}},
-    {"rate": 40000, "pass": false, "latency_us": {"p50": 460000, "p90": 820000, "p99": 910000, "p999": 960000, "max": 1010000}, "fail_reason": "achieved 33000 req/s under 95% of 40000"}
-   ]},
-   {"key": "r1-symfony-rapira-worker", "target": {"name": "symfony-rapira-worker", "app": "symfony"}, "status": "void", "reason": "probe mismatch", "flags": {}, "stages": []}
+   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker"}, "status": "ok", "flags": {"generator_bound": true}, "rate": 250000, "achieved_rps": 240000, "latency_us": {"p50": 320, "p90": 550, "p99": 900, "p999": 1600, "max": 4200}, "rss_kb": 210944, "held": false},
+   {"key": "r2-hello-rapira-worker", "target": {"name": "hello-rapira-worker"}, "status": "ok", "flags": {}, "rate": 250000, "achieved_rps": 250100, "latency_us": {"p50": 340, "p90": 600, "p99": 1100, "p999": 1900, "max": 4500}, "rss_kb": 209920, "held": true},
+   {"key": "r1-grpc-rapira", "target": {"name": "grpc-rapira"}, "status": "void", "reason": "probe mismatch on loader-1", "flags": {}, "rate": null, "achieved_rps": null, "latency_us": null, "rss_kb": null, "held": null}
   ]
  },
  {
+  "schema": "rapira-bench-run/2",
   "id": "20260928T010000Z-ci-ccccccc",
   "started": "2026-09-28T01:00:00Z",
   "smoke": false,
-  "rapira": {"sha": "ccccccc0000000000000000000000000000000c3", "version": "0.8.1-nightly.ccccccc"},
+  "rapira": {"sha": "ccccccc0000000000000000000000000000000c3", "version": "0.8.1-nightly.ccccccc", "pr": {"number": 103, "url": "https://github.com/rapira-rs/rapira/pull/103", "title": "Fix the dispatcher drain"}},
   "cells": [
-   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker", "app": "hello"}, "status": "incomplete", "reason": "interrupted", "flags": {}, "stages": []},
-   {"key": "r1-symfony-rapira-worker", "target": {"name": "symfony-rapira-worker", "app": "symfony"}, "status": "ok", "flags": {"log_growth": 70000}, "stages": [
-    {"rate": 10000, "pass": true, "latency_us": {"p50": 950, "p90": 1500, "p99": 2100, "p999": 3600, "max": 8200}},
-    {"rate": 20000, "pass": true, "latency_us": {"p50": 1200, "p90": 2000, "p99": 3000, "p999": 5200, "max": 11000}},
-    {"rate": 40000, "pass": false, "latency_us": {"p50": 410000, "p90": 720000, "p99": 820000, "p999": 870000, "max": 920000}, "fail_reason": "achieved 29000 req/s under 95% of 40000"}
-   ]},
-   {"key": "r1-laravel-rapira-worker", "target": {"name": "laravel-rapira-worker", "app": "laravel"}, "status": "ok", "flags": {}, "stages": [
-    {"rate": 5000, "pass": true, "latency_us": {"p50": 1800, "p90": 2800, "p99": 4000, "p999": 7000, "max": 15000}},
-    {"rate": 10000, "pass": false, "latency_us": {"p50": 350000, "p90": 600000, "p99": 700000, "p999": 750000, "max": 800000}, "fail_reason": "achieved 7100 req/s under 95% of 10000"}
-   ]}
+   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker"}, "status": "incomplete", "reason": "interrupted", "flags": {}, "rate": null, "achieved_rps": null, "latency_us": null, "rss_kb": null, "held": null},
+   {"key": "r1-grpc-rapira", "target": {"name": "grpc-rapira"}, "status": "ok", "flags": {"server_unsaturated": true}, "rate": 100000, "achieved_rps": 85000, "latency_us": {"p50": 2000, "p90": 6000, "p99": 9000, "p999": 20000, "max": 50000}, "rss_kb": 1150976, "held": false},
+   {"key": "r1-yii3-rapira-dispatcher", "target": {"name": "yii3-rapira-dispatcher"}, "status": "ok", "flags": {}, "rate": 250000, "achieved_rps": 250000, "latency_us": {"p50": 1800, "p90": 2800, "p99": 4000, "p999": 7000, "max": 15000}, "rss_kb": 524288, "held": true}
   ]
  },
  {
+  "schema": "rapira-bench-run/2",
   "id": "20260928T020000Z-ci-sssssss",
   "started": "2026-09-28T02:00:00Z",
   "smoke": true,
-  "rapira": {"sha": "sssssss0000000000000000000000000000000s4", "version": "0.8.1-nightly.sssssss"},
+  "rapira": {"sha": "sssssss0000000000000000000000000000000s4", "version": "0.8.1-nightly.sssssss", "pr": null},
   "cells": [
-   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker", "app": "hello"}, "status": "ok", "flags": {}, "stages": [
-    {"rate": 10000, "pass": true, "latency_us": {"p50": 200, "p90": 350, "p99": 500, "p999": 900, "max": 2500}}
-   ]}
+   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker"}, "status": "ok", "flags": {}, "rate": 250000, "achieved_rps": 250000, "latency_us": {"p50": 200, "p90": 350, "p99": 500, "p999": 900, "max": 2500}, "rss_kb": 204800, "held": true}
   ]
  }
 ]

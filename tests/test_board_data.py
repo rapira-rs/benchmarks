@@ -23,6 +23,7 @@ CALL = (
 )
 
 RUN_A, RUN_B, RUN_C, RUN_S = json.loads(FIXTURE.read_text())
+COMMIT_B = "https://github.com/rapira-rs/rapira/commit/bbbbbbb0000000000000000000000000000000b2"
 
 
 def entry(run):
@@ -32,70 +33,54 @@ def entry(run):
 
 SERIES_CASES = [
     {
-        # hello, run b: two ok cells, so a value is the median of r1 and r2:
-        # (900 + 1100) / 2 = 1000 us at 10000 and (1300 + 1500) / 2 = 1400 us at 20000.
-        # Only r1 passed 40000. Run c: the hello cell is incomplete, so no points and no flags.
-        # symfony, run b: the cell is void. laravel has cells only in run c.
-        # A failing stage adds no rate. The apps come in name order.
-        "name": "median over rounds, void and incomplete cells, target in one run",
+        # hello, run b: two ok cells, so a value is the median of r1 and r2: p99 (900 + 1100) / 2 = 1000 us,
+        # RSS (210944 + 209920) / 2 = 210432 KiB = 205.5 MiB, req/s (240000 + 250100) / 2 = 245050, held only
+        # when every cell held, the flags are the union. Run c: the hello cell is incomplete, so nulls.
+        # grpc, run b: the cell is void. yii3 has a cell only in run c. The targets come in name order.
+        "name": "medians over rounds, void and incomplete cells, target in one run",
         "runs": [RUN_A, RUN_B, RUN_C],
         "expected": {
-            "labels": ["aaaaaaa", "bbbbbbb", "ccccccc"],
-            "versions": ["0.8.1-nightly.aaaaaaa", "0.8.1-nightly.bbbbbbb", "0.8.1-nightly.ccccccc"],
-            "apps": {
-                "hello": {
-                    "hello-rapira-worker": {
-                        "rates": [10000, 20000, 40000],
-                        "p99_ms": {
-                            "10000": [0.8, 1.0, None],
-                            "20000": [1.2, 1.4, None],
-                            "40000": [None, 2.5, None],
-                        },
-                        "flags": [[], ["generator_bound"], None],
-                    },
+            "labels": ["#101", "bbbbbbb", "#103"],
+            "links": ["https://github.com/rapira-rs/rapira/pull/101", COMMIT_B, "https://github.com/rapira-rs/rapira/pull/103"],
+            "titles": ["Faster hello", "", "Fix the dispatcher drain"],
+            "targets": {
+                "grpc-rapira": {
+                    "p99_ms": [2.5, None, 9.0],
+                    "rss_mib": [1024.0, None, 1124.0],
+                    "achieved": [99990, None, 85000],
+                    "rate": [100000, None, 100000],
+                    "held": [True, None, False],
+                    "flags": [[], None, ["server_unsaturated"]],
                 },
-                "laravel": {
-                    "laravel-rapira-worker": {
-                        "rates": [5000],
-                        "p99_ms": {"5000": [None, None, 4.0]},
-                        "flags": [None, None, []],
-                    },
+                "hello-rapira-worker": {
+                    "p99_ms": [1.2, 1.0, None],
+                    "rss_mib": [200.0, 205.5, None],
+                    "achieved": [249800.5, 245050, None],
+                    "rate": [250000, 250000, None],
+                    "held": [True, False, None],
+                    "flags": [[], ["generator_bound"], None],
                 },
-                "symfony": {
-                    "symfony-rapira-worker": {
-                        "rates": [10000, 20000],
-                        "p99_ms": {
-                            "10000": [2.0, None, 2.1],
-                            "20000": [None, None, 3.0],
-                        },
-                        "flags": [[], None, ["log_growth"]],
-                    },
+                "yii3-rapira-dispatcher": {
+                    "p99_ms": [None, None, 4.0],
+                    "rss_mib": [None, None, 512.0],
+                    "achieved": [None, None, 250000],
+                    "rate": [None, None, 250000],
+                    "held": [None, None, True],
+                    "flags": [None, None, []],
                 },
             },
         },
     },
     {
-        # The rates of hello and symfony stop at the last passing stage of run a.
         "name": "one run",
         "runs": [RUN_A],
         "expected": {
-            "labels": ["aaaaaaa"],
-            "versions": ["0.8.1-nightly.aaaaaaa"],
-            "apps": {
-                "hello": {
-                    "hello-rapira-worker": {
-                        "rates": [10000, 20000],
-                        "p99_ms": {"10000": [0.8], "20000": [1.2]},
-                        "flags": [[]],
-                    },
-                },
-                "symfony": {
-                    "symfony-rapira-worker": {
-                        "rates": [10000],
-                        "p99_ms": {"10000": [2.0]},
-                        "flags": [[]],
-                    },
-                },
+            "labels": ["#101"],
+            "links": ["https://github.com/rapira-rs/rapira/pull/101"],
+            "titles": ["Faster hello"],
+            "targets": {
+                "grpc-rapira": {"p99_ms": [2.5], "rss_mib": [1024.0], "achieved": [99990], "rate": [100000], "held": [True], "flags": [[]]},
+                "hello-rapira-worker": {"p99_ms": [1.2], "rss_mib": [200.0], "achieved": [249800.5], "rate": [250000], "held": [True], "flags": [[]]},
             },
         },
     },
@@ -114,13 +99,9 @@ VISIBLE_CASES = [
     },
 ]
 
-RATE_LABEL_CASES = [
-    {"name": "under 1000 is the number", "rate": 500, "expected": "500"},
-    {"name": "thousands", "rate": 5000, "expected": "5k"},
-    {"name": "tens of thousands", "rate": 10000, "expected": "10k"},
-    {"name": "hundreds of thousands", "rate": 640000, "expected": "640k"},
-    {"name": "millions with decimals", "rate": 1280000, "expected": "1.28M"},
-    {"name": "millions above 2M", "rate": 2560000, "expected": "2.56M"},
+LABEL_CASES = [
+    {"name": "run with a pull request", "run": RUN_A, "label": "#101", "link": "https://github.com/rapira-rs/rapira/pull/101"},
+    {"name": "run without a pull request", "run": RUN_B, "label": "bbbbbbb", "link": COMMIT_B},
 ]
 
 
@@ -143,8 +124,8 @@ class TargetSeriesTest(unittest.TestCase):
             with self.subTest(name=case["name"]):
                 series = call_js("targetSeries", case["runs"])
                 self.assertEqual(series, case["expected"])
-                # Dict equality ignores the key order, and the board draws the apps in key order.
-                self.assertEqual(list(series["apps"]), list(case["expected"]["apps"]))
+                # Dict equality ignores the key order, and the board draws the lines in key order.
+                self.assertEqual(list(series["targets"]), list(case["expected"]["targets"]))
 
 
 @unittest.skipUnless(NODE, "node is not installed")
@@ -156,11 +137,12 @@ class VisibleRunsTest(unittest.TestCase):
 
 
 @unittest.skipUnless(NODE, "node is not installed")
-class RateLabelTest(unittest.TestCase):
-    def test_rate_label(self):
-        for case in RATE_LABEL_CASES:
+class RunLabelTest(unittest.TestCase):
+    def test_label_and_link(self):
+        for case in LABEL_CASES:
             with self.subTest(name=case["name"]):
-                self.assertEqual(call_js("rateLabel", case["rate"]), case["expected"])
+                self.assertEqual(call_js("runLabel", case["run"]), case["label"])
+                self.assertEqual(call_js("runLink", case["run"]), case["link"])
 
 
 if __name__ == "__main__":
