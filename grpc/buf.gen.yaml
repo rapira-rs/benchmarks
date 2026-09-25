@@ -1,7 +1,0 @@
-# `make grpc_fixtures` uses this template. The out paths resolve against the directory where buf runs: the repository root.
-version: v2
-plugins:
-  - remote: buf.build/protocolbuffers/php:v36.2
-    out: php/grpc/gen
-  - remote: buf.build/community/roadrunner-server-php-grpc:v5.3.0
-    out: php/grpc/gen

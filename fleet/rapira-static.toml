@@ -1,7 +1,0 @@
-# A fragment of the [http] table for the rapira static hit and miss legs.
-# leg.sh pastes it into the rendered rapira.toml. @@RIG@@ is the staged rig
-# directory ($HOME/bench-rig). A miss falls through to the PHP worker.
-middleware = ["static"]
-
-[http.static]
-root = "@@RIG@@/fleet/static"

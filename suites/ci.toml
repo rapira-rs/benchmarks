@@ -1,0 +1,31 @@
+# The per-merge suite. CI runs it after every merge to the rapira main branch.
+name = "ci"
+rounds = 1
+stage_s = 20
+connections = 256
+smoke = false
+targets = [
+  "hello-rapira-worker",
+  "hello-rapira-dispatcher",
+  "hello-rapira-classic",
+  "hello-frankenphp-worker",
+  "hello-php-fpm",
+  "symfony-rapira-worker",
+  "symfony-rapira-classic",
+  "symfony-frankenphp-worker",
+  "symfony-frankenphp-classic",
+  "symfony-php-fpm",
+  "laravel-rapira-worker",
+  "laravel-frankenphp-worker",
+  "static-rapira-hit",
+  "static-frankenphp-hit",
+  "grpc-rapira",
+  "grpc-roadrunner",
+]
+
+[floors]
+hello = 10000
+symfony = 10000
+laravel = 5000
+static = 10000
+grpc = 10000

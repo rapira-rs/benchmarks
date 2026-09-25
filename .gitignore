@@ -2,7 +2,6 @@
 INSTRUCTIONS.md
 results/
 **/vendor/**
-docs
 
 # Terraform working files; the tfstate and the key carry secrets, the tfvars
 # carries the operator IP.
@@ -11,7 +10,16 @@ terraform/*.tfstate*
 terraform/*.tfvars
 terraform/rig-key.pem
 
-# ssh session files the drivers create.
+# ssh session files that rig/ssh.py creates.
 .ssh-known-hosts
 .ssh-cm-*
 __pycache__/
+
+# Local run output of `make bench`.
+runs/
+# Copied from backend.tf.s3 by `make up TF_BACKEND=s3`.
+terraform/backend.tf
+
+# The bootstrap stack keeps its state on the owner machine.
+terraform/ci/.terraform/
+terraform/ci/*.tfstate*

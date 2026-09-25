@@ -1,0 +1,5 @@
+# `make up TF_BACKEND=s3` copies this file to backend.tf. The bucket, key,
+# region, and use_lockfile settings come from TF_CLI_ARGS_init.
+terraform {
+  backend "s3" {}
+}

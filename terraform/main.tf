@@ -1,6 +1,5 @@
 provider "aws" {
-  profile = var.profile
-  region  = var.region
+  region = var.region
 
   # Every resource, root volumes included, carries this tag so `make nuke`
   # can find the rig without terraform state.
@@ -86,7 +85,7 @@ resource "aws_security_group" "rig" {
   }
 
   ingress {
-    description = "bench traffic between the two boxes"
+    description = "bench traffic between the rig boxes"
     from_port   = 0
     to_port     = 65535
     protocol    = "tcp"
@@ -101,15 +100,9 @@ resource "aws_security_group" "rig" {
   }
 }
 
-# One definition for both boxes; only the instance type differs per role.
-resource "aws_instance" "rig" {
-  for_each = {
-    server = var.server_instance_type
-    loader = var.loader_instance_type
-  }
-
+resource "aws_instance" "server" {
   ami                                  = local.ami_id
-  instance_type                        = each.value
+  instance_type                        = var.server_instance_type
   subnet_id                            = data.aws_subnet.az.id
   vpc_security_group_ids               = [aws_security_group.rig.id]
   key_name                             = aws_key_pair.rig.key_name
@@ -129,8 +122,8 @@ resource "aws_instance" "rig" {
   }
 
   tags = {
-    Name = "rapira-bench-${each.key}"
-    Role = each.key
+    Name = "rapira-bench-server"
+    Role = "server"
   }
 
   # Dependents are destroyed first, so this edge makes destroy terminate the
@@ -141,6 +134,40 @@ resource "aws_instance" "rig" {
   lifecycle {
     # Fedora rebuilds the AMI daily and ami is ForceNew; a re-apply must not
     # replace a provisioned rig.
+    ignore_changes = [ami]
+  }
+}
+
+resource "aws_instance" "loader" {
+  count = var.loader_count
+
+  ami                                  = local.ami_id
+  instance_type                        = var.loader_instance_type
+  subnet_id                            = data.aws_subnet.az.id
+  vpc_security_group_ids               = [aws_security_group.rig.id]
+  key_name                             = aws_key_pair.rig.key_name
+  placement_group                      = aws_placement_group.rig.name
+  associate_public_ip_address          = true
+  user_data                            = local.user_data
+  instance_initiated_shutdown_behavior = "terminate"
+
+  root_block_device {
+    volume_size = 40
+    volume_type = "gp3"
+  }
+
+  metadata_options {
+    http_tokens = "required"
+  }
+
+  tags = {
+    Name = "rapira-bench-loader-${count.index + 1}"
+    Role = "loader"
+  }
+
+  depends_on = [local_sensitive_file.key]
+
+  lifecycle {
     ignore_changes = [ami]
   }
 }

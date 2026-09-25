@@ -1,0 +1,24 @@
+# The A/B suite: the rapira pr binary against the base binary on hello and Symfony, three rounds.
+# Symfony has no dispatcher entry, so it runs the worker and classic modes only.
+# The pairs alternate which binary runs first, so neither binary always follows the other.
+name = "ab"
+rounds = 3
+stage_s = 20
+connections = 256
+smoke = false
+targets = [
+  "hello-rapira-worker",
+  "hello-rapira-worker-base",
+  "hello-rapira-classic-base",
+  "hello-rapira-classic",
+  "hello-rapira-dispatcher",
+  "hello-rapira-dispatcher-base",
+  "symfony-rapira-worker-base",
+  "symfony-rapira-worker",
+  "symfony-rapira-classic",
+  "symfony-rapira-classic-base",
+]
+
+[floors]
+hello = 10000
+symfony = 10000

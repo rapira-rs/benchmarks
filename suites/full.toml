@@ -1,0 +1,43 @@
+# The manual suite: the CI targets and the additional rows, three rounds.
+name = "full"
+rounds = 3
+stage_s = 20
+connections = 256
+smoke = false
+targets = [
+  "hello-rapira-worker",
+  "hello-rapira-dispatcher",
+  "hello-rapira-classic",
+  "hello-nginx-rapira-worker",
+  "hello-frankenphp-worker",
+  "hello-frankenphp-stock",
+  "hello-php-fpm",
+  "symfony-rapira-worker",
+  "symfony-rapira-classic",
+  "symfony-nginx-rapira-worker",
+  "symfony-frankenphp-worker",
+  "symfony-frankenphp-classic",
+  "symfony-frankenphp-stock",
+  "symfony-php-fpm",
+  "laravel-rapira-worker",
+  "laravel-frankenphp-worker",
+  "static-rapira-hit",
+  "static-rapira-app",
+  "static-rapira-miss",
+  "static-rapira-plain",
+  "static-frankenphp-hit",
+  "static-frankenphp-app",
+  "static-frankenphp-miss",
+  "grpc-rapira",
+  "grpc-roadrunner",
+  "grpc-rapira-grpcweb",
+  "grpc-rapira-connect",
+  "grpc-rapira-connectjson",
+]
+
+[floors]
+hello = 10000
+symfony = 10000
+laravel = 5000
+static = 10000
+grpc = 10000
