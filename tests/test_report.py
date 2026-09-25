@@ -8,7 +8,7 @@ import unittest
 from pathlib import Path
 
 from rig.__main__ import main
-from rig.report import render
+from rig.report import render, target_row
 
 FLOOR = 10000
 VOIDED_TITLE = "VOIDED cells (excluded from every number above):"
@@ -71,9 +71,9 @@ HELLO_RAPIRA = ok_cell(
     held=640000, held_p99=1264, peak=1180234.0, unloaded_p50=689,
     fail_reason="achieved 1180234 req/s under 95% of 1280000",
 )
-# 1264 us is 1.26 ms, 689 us is 0.69 ms. One round has a spread of 0.
+# 1264 us is 1.26 ms, 689 us is 0.69 ms. The spread needs more than one round, so one round prints "-".
 HELLO_RAPIRA_ROW = [
-    "hello-rapira-worker", "640000", "1180234", "1.26ms", "0.69ms", "1", "0.0%", "-",
+    "hello-rapira-worker", "640000", "1180234", "1.26ms", "0.69ms", "1", "-", "-",
     "achieved 1180234 req/s under 95% of 1280000",
 ]
 
@@ -96,9 +96,9 @@ CASES = [
                     fail_reason="dropped iterations: 3100"),
         ]),
         "rows": [
-            ["grpc-rapira", "80000", "150000", "2.50ms", "0.40ms", "1", "0.0%", "-", "dropped iterations: 3100"],
+            ["grpc-rapira", "80000", "150000", "2.50ms", "0.40ms", "1", "-", "-", "dropped iterations: 3100"],
             HELLO_RAPIRA_ROW,
-            ["hello-php-fpm", "40000", "60000", "3.00ms", "0.80ms", "1", "0.0%", "-", "achieved 60000 req/s under 95% of 80000"],
+            ["hello-php-fpm", "40000", "60000", "3.00ms", "0.80ms", "1", "-", "-", "achieved 60000 req/s under 95% of 80000"],
         ],
         "voided": [],
         "footer": [],
@@ -155,7 +155,7 @@ CASES = [
         "name": "fail reason of a first stage with status errors",
         "run": run_doc([ok_cell("hello-php-fpm", "hello", 1, held=None, held_p99=None, peak=9988.0, unloaded_p50=2400,
                                 fail_reason="status errors: 12")]),
-        "rows": [["hello-php-fpm", "-", "9988", "-", "2.40ms", "1", "0.0%", "-", "status errors: 12"]],
+        "rows": [["hello-php-fpm", "-", "9988", "-", "2.40ms", "1", "-", "-", "status errors: 12"]],
         "voided": [],
         "footer": [],
         "status": 0,
@@ -203,6 +203,24 @@ CASES = [
         "footer": [],
         "status": 0,
     },
+    {
+        "name": "two rounds held at two stage rates",
+        "run": run_doc([
+            ok_cell("hello-rapira-worker", "hello", 1, held=160000, held_p99=1000, peak=200000.0, unloaded_p50=600,
+                    fail_reason="achieved 200000 req/s under 95% of 320000"),
+            ok_cell("hello-rapira-worker", "hello", 2, held=320000, held_p99=2000, peak=360000.0, unloaded_p50=800,
+                    fail_reason="achieved 360000 req/s under 95% of 640000"),
+        ]),
+        # The held rate is a stage rate: median_low(160000, 320000) = 160000. p99_held median(1000, 2000) = 1500 us.
+        # Peak median(200000, 360000) = 280000, spread 100 * (360000 - 200000) / 280000 = 57.1%.
+        "rows": [[
+            "hello-rapira-worker", "160000", "280000", "1.50ms", "0.70ms", "2", "57.1%", "-",
+            "achieved 200000 req/s under 95% of 320000; achieved 360000 req/s under 95% of 640000",
+        ]],
+        "voided": [],
+        "footer": [],
+        "status": 0,
+    },
 ]
 
 
@@ -232,6 +250,9 @@ class TestReport(unittest.TestCase):
                 self.assertEqual(voided, case["voided"])
                 self.assertEqual(footer, case["footer"])
                 self.assertEqual(status, case["status"])
+
+    def test_one_round_has_no_spread(self):
+        self.assertIsNone(target_row([HELLO_RAPIRA])["spread"])
 
     def test_cli_exit_status_of_an_incomplete_run(self):
         run = run_doc([HELLO_RAPIRA], "incomplete", ["r1-hello-php-fpm: missing"])

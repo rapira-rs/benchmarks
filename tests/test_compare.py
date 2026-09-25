@@ -128,7 +128,7 @@ class TestCompare(unittest.TestCase):
         self.assertEqual(status, 0)
         # Names pad to the longest name, hello-rapira-worker (19 characters).
         self.assertEqual(text.splitlines()[3:], [
-            "hello-rapira-worker  held 640000 -> 640000  peak 1180234.5 -> 1120001.0  -5.1%  spread 0.0% / 0.0%",
+            "hello-rapira-worker  held 640000 -> 640000  peak 1180234.5 -> 1120001.0  -5.1%  spread - / -",
             "static-rapira-hit    only in a",
             "grpc-rapira          only in b",
         ])

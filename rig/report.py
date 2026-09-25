@@ -20,7 +20,7 @@ def flag_text(name, value):
 def target_row(cells: list[dict]) -> dict:
     """The medians, the spread, the flags, and the fail reasons of the ok cells of one target."""
     held = [c for c in cells if c["held"] is not None]
-    held_rate = statistics.median(c["held"]["rate"] if c["held"] is not None else 0 for c in cells)
+    held_rate = statistics.median_low(c["held"]["rate"] if c["held"] is not None else 0 for c in cells)
     peaks = [c["peak"] for c in cells if c["peak"] is not None]
     peak = statistics.median(peaks) if peaks else None
     fails = []
@@ -36,7 +36,7 @@ def target_row(cells: list[dict]) -> dict:
         "p99_held": median_of(c["stages"][c["held"]["stage"]]["latency_us"]["p99"] for c in held) if held_rate else None,
         "unloaded_p50": median_of(c["unloaded"]["p50"] for c in cells),
         "n": len(cells),
-        "spread": 100.0 * (max(peaks) - min(peaks)) / peak if peak else None,
+        "spread": 100.0 * (max(peaks) - min(peaks)) / peak if peak and len(peaks) > 1 else None,
         "flags": sorted({flag_text(k, v) for c in cells for k, v in c["flags"].items()}),
         "fails": fails,
     }

@@ -1,6 +1,6 @@
 """Deltas of held and peak between two run files."""
 
-from rig.report import rows
+from rig.report import pct, rows
 
 # Run fields that must match for a fair comparison, as (section, key). An empty section is the top level.
 IDENTITY = (
@@ -25,10 +25,6 @@ def identity_diffs(a: dict, b: dict) -> list[str]:
 
 def num(value, digits):
     return f"{value:.{digits}f}" if value is not None else "-"
-
-
-def spread(value):
-    return f"{value:.1f}%" if value is not None else "-"
 
 
 def compare(a: dict, b: dict, *, force: bool = False) -> tuple[str, int]:
@@ -57,6 +53,6 @@ def compare(a: dict, b: dict, *, force: bool = False) -> tuple[str, int]:
         lines.append(
             f"{name:<{w}}  held {num(ra['held'], 0)} -> {num(rb['held'], 0)}"
             f"  peak {num(ra['peak'], 1)} -> {num(rb['peak'], 1)}  {delta}"
-            f"  spread {spread(ra['spread'])} / {spread(rb['spread'])}"
+            f"  spread {pct(ra['spread'])} / {pct(rb['spread'])}"
         )
     return "\n".join(lines) + "\n", 0
