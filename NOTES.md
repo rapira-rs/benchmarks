@@ -8,6 +8,7 @@ Dated records and the decisions the code cannot show. Methodology lives in METHO
 - The numbers before this date come from closed-loop wrk and h2load passes and fixed-rate k6 passes from one c7a.4xlarge loader at a fixed connection count. The numbers after this date are the held rate, the peak successful rate, and the unloaded latency of the ladder. Do not compare numbers from before and after this date, and do not put them in one table.
 - Each run now writes `runs/<id>/run.json` with the schema `rapira-bench-run/1`. The directories under `results/` stay as the record of the old method.
 - FrankenPHP now runs the glibc release asset 1.12.7 with the production worker shape, and every PHP runtime uses the shared `servers/php.ini`. The FrankenPHP and php-fpm numbers before this date used other settings.
+- The `ci` suite has no gRPC targets until gRPC is in rapira main, because the nightly asset has no gRPC support. The `full` suite keeps them for `REF` runs of a gRPC branch.
 - The fixed pair of the decisions below no longer applies. The loader count and the instance types are knobs, and the Makefile quota check adds the vCPUs of the server and all loaders.
 
 ## gRPC baseline (rapira PHP dispatcher vs RoadRunner), 2026-09-24

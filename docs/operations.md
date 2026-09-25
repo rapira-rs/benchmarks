@@ -57,7 +57,7 @@ The Fedora 44 EC2 image supplies Bash, `dnf`, `sudo`, the OpenSSH server, cloud-
 
 `suites/targets.toml` defines every target. A target name is `<app>-<server>-<mode>`. A target that runs the base rapira binary has the suffix `-base`. A request variant has its own suffix, for example `grpc-rapira-connect`. A suite file lists its targets, the number of rounds, the stage duration, the total connection count, and the ladder floor of each app.
 
-- `ci` is the per-merge suite: 16 targets over hello, Symfony, Laravel, static files, and gRPC, one round.
+- `ci` is the per-merge suite: 14 targets over hello, Symfony, Laravel, and static files, one round. The gRPC targets join when gRPC is in rapira main, because the nightly asset has no gRPC support.
 - `full` adds the nginx-rapira worker rows, the FrankenPHP stock rows, the static miss and plain rows, the 27 KiB asset, and the gRPC-Web and Connect variants. It runs three rounds.
 - `ab` runs hello on the rapira worker, classic, and dispatcher modes and Symfony on the worker and classic modes, for the `pr` and the `base` binary. It runs three rounds. Provision it with `REF` and `BASE_REF`.
 

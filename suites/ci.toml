@@ -1,4 +1,5 @@
-# The per-merge suite. CI runs it after every merge to the rapira main branch.
+# The per-merge suite. CI runs it against the nightly asset after every merge to the rapira main branch.
+# The gRPC targets join when gRPC is in rapira main; the nightly asset has no gRPC support.
 name = "ci"
 rounds = 1
 stage_s = 20
@@ -19,8 +20,6 @@ targets = [
   "laravel-frankenphp-worker",
   "static-rapira-hit",
   "static-frankenphp-hit",
-  "grpc-rapira",
-  "grpc-roadrunner",
 ]
 
 [floors]
@@ -28,4 +27,3 @@ hello = 10000
 symfony = 10000
 laravel = 5000
 static = 10000
-grpc = 10000

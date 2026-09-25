@@ -143,7 +143,7 @@ Compare points only when the rig shape is the same. Numbers from before 2026-09-
 - The FrankenPHP worker row uses `php_server` with `file_server off` and the worker with `match *`. The stock row uses the default `php_server` shape. No row uses compression, HTTP/2, HTTP/3, or TLS.
 - Laravel worker rows use Octane on rapira and on FrankenPHP.
 - RoadRunner runs at log level `error` with its `grpc` and `server` channels at `panic`. A failed RoadRunner call therefore shows only through the k6 checks or `worker_churn`.
-- In CI both gRPC targets use the pure PHP protobuf runtime, because the nightly asset has no PHP headers for the PECL extension. A server build loads the PECL extension for both targets.
+- On a nightly rig both gRPC targets use the pure PHP protobuf runtime, because the nightly asset has no PHP headers for the PECL extension. The nightly asset also has no gRPC support in rapira, so the `ci` suite has no gRPC targets until gRPC is in rapira main. A server build loads the PECL extension for both targets.
 
 ## Connection distribution tests
 

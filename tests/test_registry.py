@@ -187,7 +187,7 @@ CI_TARGETS = (
 # The CI row set comes from spec section 4.2. Full adds 12 rows to the 16 CI rows.
 # AB runs hello in three modes and Symfony in two modes, each for pr and base: 10 rows.
 SHIPPED_SUITE_CASES = [
-    {"name": "ci", "file": "suites/ci.toml", "rounds": 1, "count": 16},
+    {"name": "ci", "file": "suites/ci.toml", "rounds": 1, "count": 14},
     {"name": "full", "file": "suites/full.toml", "rounds": 3, "count": 28},
     {"name": "ab", "file": "suites/ab.toml", "rounds": 3, "count": 10},
 ]
