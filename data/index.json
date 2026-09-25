@@ -9,6 +9,16 @@
    "rapira_version": "v0.8.1-121-g73b9d30",
    "status": "complete",
    "smoke": false
+  },
+  {
+   "id": "20260925T235027Z-ci-4f4d1b0",
+   "started": "2026-09-25T23:50:28Z",
+   "suite": "ci",
+   "rapira_sha": "4f4d1b03a562fd7162f6e16289234edddc5cfdc9",
+   "rapira_version": "0.8.1-nightly.4f4d1b0",
+   "status": "complete",
+   "smoke": false,
+   "pr": 131
   }
  ]
 }
