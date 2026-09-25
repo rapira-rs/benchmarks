@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
-# Provisions a loader box: wrk2 at a pinned commit, k6, the kernel knobs, and a clock check.
+# Provisions a loader box: wrk2 at a pinned commit, h2load from the nghttp2 package, the kernel knobs,
+# and a clock check.
 #
 # Results:
-#   /usr/local/bin/wrk2, /usr/bin/k6
-#   /opt/bench/loader.json   the instance id, the wrk2 commit and version line, and the k6 version line
+#   /usr/local/bin/wrk2, /usr/bin/h2load
+#   /opt/bench/loader.json   the instance id, the wrk2 commit and version line, and the h2load version line
 set -euo pipefail
 
 WRK2_COMMIT=${WRK2_COMMIT:-44a94c17d8e6a0bac8559b53da76848e430cb7a7}
-K6_VERSION=${K6_VERSION:-2.2.0}
 
 BENCH=/opt/bench
 BCSAVE=deps/luajit/src/jit/bcsave.lua
@@ -35,15 +35,6 @@ build_wrk2() {
   fi
   sudo install -m 0755 "$src/wrk" /usr/local/bin/wrk2
   echo "$WRK2_COMMIT" >"$BENCH/wrk2.commit"
-}
-
-install_k6() {
-  local current
-  current=$(k6 version 2>/dev/null || true)
-  case $current in
-  *"k6 v$K6_VERSION "*) ;;
-  *) sudo dnf -y install "https://github.com/grafana/k6/releases/download/v$K6_VERSION/k6-v$K6_VERSION-linux-amd64.rpm" ;;
-  esac
 }
 
 system_knobs() {
@@ -80,23 +71,23 @@ instance_id() {
 }
 
 write_record() {
-  local id wrk2_line k6_line
+  local id wrk2_line h2load_line
   id=$(instance_id)
   # wrk2 --version prints the version line and exits 1.
   wrk2_line=$(wrk2 --version 2>/dev/null | sed -n 1p || true)
-  k6_line=$(k6 version | sed -n 1p)
-  python3 - "$BENCH/loader.json" "$id" "$WRK2_COMMIT" "$wrk2_line" "$k6_line" <<'PY'
+  h2load_line=$(h2load --version | sed -n 1p)
+  python3 - "$BENCH/loader.json" "$id" "$WRK2_COMMIT" "$wrk2_line" "$h2load_line" <<'PY'
 import json, sys
 
-path, instance_id, commit, wrk2, k6 = sys.argv[1:6]
+path, instance_id, commit, wrk2, h2load = sys.argv[1:6]
 with open(path, "w") as f:
-    json.dump({"instance_id": instance_id, "wrk2_commit": commit, "wrk2_version": wrk2, "k6_version": k6}, f, indent=1)
+    json.dump({"instance_id": instance_id, "wrk2_commit": commit, "wrk2_version": wrk2, "h2load_version": h2load}, f, indent=1)
     f.write("\n")
 PY
 }
 
 echo "==> packages"
-sudo dnf -y install gcc make git openssl-devel zlib-devel binutils ethtool curl tar diffutils python3 chrony
+sudo dnf -y install gcc make git openssl-devel zlib-devel binutils ethtool curl tar diffutils python3 chrony nghttp2
 sudo install -d -o fedora -g fedora "$BENCH"
 echo "==> system knobs"
 system_knobs
@@ -104,7 +95,5 @@ echo "==> clock"
 check_clock
 echo "==> wrk2 $WRK2_COMMIT"
 build_wrk2
-echo "==> k6 $K6_VERSION"
-install_k6
 write_record
 echo "==> loader provisioned: $(tr -d '\n' <"$BENCH/loader.json")"

@@ -27,7 +27,7 @@ defaults:
 jobs:
   bench:
     runs-on: ubuntu-latest
-    timeout-minutes: 110
+    timeout-minutes: 60
     permissions:
       contents: read
       id-token: write
@@ -70,6 +70,13 @@ jobs:
           fi
           echo "skip=$skip" >> "$GITHUB_OUTPUT"
           echo "sha7=$sha7" >> "$GITHUB_OUTPUT"
+          # The merged pull request of the commit labels the run on the board. A commit without one gets the sha.
+          pr=$(gh api "repos/rapira-rs/rapira/commits/$sha/pulls" --jq '[.[] | select(.merged_at != null)][0]')
+          if [ -n "$pr" ] && [ "$pr" != null ]; then
+            echo "pr_number=$(jq -r .number <<<"$pr")" >> "$GITHUB_OUTPUT"
+            echo "pr_url=$(jq -r .html_url <<<"$pr")" >> "$GITHUB_OUTPUT"
+            echo "pr_title=$(jq -r .title <<<"$pr")" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Assume the CI role
         if: steps.resolve.outputs.skip == 'false'
@@ -78,7 +85,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-central-1
           mask-aws-account-id: true
-          # The credentials must last for the whole 110 minute job, the destroy included.
+          # The credentials must last for the whole 60 minute job, the destroy included.
           role-duration-seconds: 7200
 
       - name: Install terraform
@@ -109,8 +116,18 @@ jobs:
 
       - name: Run the ci suite
         if: steps.resolve.outputs.skip == 'false'
-        timeout-minutes: 70
-        run: python3 -m rig bench --suite ci --out runs
+        timeout-minutes: 30
+        env:
+          PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
+          PR_URL: ${{ steps.resolve.outputs.pr_url }}
+          PR_TITLE: ${{ steps.resolve.outputs.pr_title }}
+        run: |
+          set -euo pipefail
+          pr=()
+          if [ -n "$PR_NUMBER" ]; then
+            pr=(--pr-number "$PR_NUMBER" --pr-url "$PR_URL" --pr-title "$PR_TITLE")
+          fi
+          python3 -m rig bench --suite ci --out runs "${pr[@]}"
 
       - name: Upload the run file
         if: always() && steps.resolve.outputs.skip == 'false'
