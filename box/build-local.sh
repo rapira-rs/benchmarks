@@ -27,7 +27,7 @@ fi
 install -d "$DEST/bin"
 install -m 0755 "$HOME/core-target/release/rapira" "$DEST/bin/rapira"
 
-# The driver selects /opt/bench/rapira/<first 7 characters of sha>, so the sha "local" selects DEST.
+# The driver reads the install directory from "dir" in /opt/bench/meta.json, so the next run uses DEST.
 python3 - "$META" "$DEST" <<'PY'
 import hashlib
 import json

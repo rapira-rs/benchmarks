@@ -70,7 +70,9 @@ def run(host: Host, cmd: str, *, timeout: float | None = None, stdin: bytes | No
     out = proc.stdout.decode(errors="replace")
     if proc.returncode != 0:
         err = proc.stderr.decode(errors="replace")
-        raise SshError(f"{host.name}: exit {proc.returncode}: {cmd}\n{_tail(err or out)}")
+        # The stderr tail comes last: its last line is the ERROR line of a failed box script.
+        tails = [_tail(text) for text in (out, err) if text.strip()]
+        raise SshError("\n".join([f"{host.name}: exit {proc.returncode}: {cmd}", *tails]))
     return out
 
 
@@ -83,8 +85,6 @@ def run_many(jobs: list[tuple[Host, str]], *, timeout: float | None = None) -> l
         except SshError as exc:
             return exc
 
-    if not jobs:
-        return []
     with ThreadPoolExecutor(max_workers=len(jobs)) as pool:
         return list(pool.map(one, jobs))
 

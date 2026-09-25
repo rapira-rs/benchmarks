@@ -27,7 +27,8 @@ def load_json(path: str) -> dict:
 
 def cmd_bench(args: argparse.Namespace) -> int:
     rig = from_terraform(TF_DIR)
-    suite = load_suite(SUITES_DIR / f"{args.suite}.toml", load_targets(TARGETS_FILE), len(rig.loaders))
+    suite_path = SUITES_DIR / f"{args.suite}.toml"
+    suite = load_suite(suite_path, load_targets(TARGETS_FILE), len(rig.loaders))
     if args.rounds:
         suite = replace(suite, rounds=args.rounds)
     if args.smoke:
@@ -45,7 +46,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
     path = Path(args.out) / run_id / "run.json"
     try:
         run_suite(
-            rig, suite, boxes, Path(args.out), processes=processes, run_id=run_id, rapira=rapira,
+            rig, suite, boxes, Path(args.out), suite_path=suite_path, processes=processes, run_id=run_id, rapira=rapira,
             servers=server_versions(boxes, rig.server), apps=app_hashes(Path(".")), loader_threads=loader_threads,
         )
     except KeyboardInterrupt:

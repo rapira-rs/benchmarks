@@ -37,6 +37,7 @@ preflight:
 # The chosen knobs persist in rig.auto.tfvars so every later terraform
 # operation (provision, status, down) sees the applied values.
 up: preflight
+	@python3 -m rig needs --suite $(SUITE) >/dev/null
 	@test -n "$(NIGHTLY)$(REF)" || { echo "ERROR: set NIGHTLY=<sha7> or REF=<ref>, for example: make up REF=pr/97"; exit 1; }
 	@quota=$$($(AWSC) service-quotas get-service-quota --service-code ec2 --quota-code L-1216C47A --query Quota.Value --output text 2>/dev/null); \
 	test -n "$$quota" || { echo "ERROR: could not read quota L-1216C47A; check the AWS permissions"; exit 1; }; \
@@ -78,7 +79,7 @@ bench:
 
 # RUN selects a run directory; the default is the newest one under runs/.
 report:
-	@d="$(RUN)"; [ -n "$$d" ] || d=$$(ls -d runs/*/ 2>/dev/null | sort | tail -1); \
+	@d="$(RUN)"; [ -n "$$d" ] || d=$$(ls runs/*/run.json 2>/dev/null | sort | tail -1); d=$${d%/run.json}; \
 	test -n "$$d" || { echo "ERROR: no run in runs/"; exit 1; }; \
 	python3 -m rig report "$${d%/}/run.json"
 

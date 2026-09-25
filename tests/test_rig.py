@@ -124,6 +124,8 @@ RUN_CASES = [
     {"name": "stdout on exit 0", "returncode": 0, "stdout": b"8\n", "stderr": b"", "timeout": False, "result": "8\n", "error": None},
     {"name": "exit 255 names the host and keeps stderr", "returncode": 255, "stdout": b"", "stderr": b"Connection refused\n", "timeout": False, "result": None, "error": "loader-1: exit 255: nproc\nConnection refused"},
     {"name": "stdout replaces an empty stderr", "returncode": 1, "stdout": b"ERROR: port 8080 busy\n", "stderr": b"", "timeout": False, "result": None, "error": "loader-1: exit 1: nproc\nERROR: port 8080 busy"},
+    {"name": "stdout comes before stderr", "returncode": 1, "stdout": b"ERROR: server: dnf failed\n", "stderr": b"warning: x\n", "timeout": False, "result": None, "error": "loader-1: exit 1: nproc\nERROR: server: dnf failed\nwarning: x"},
+    {"name": "the box ERROR line on stderr is the last line", "returncode": 1, "stdout": b"", "stderr": b"ERROR: t: no listener\n", "timeout": False, "result": None, "error": "loader-1: exit 1: nproc\nERROR: t: no listener"},
     {"name": "timeout", "returncode": 0, "stdout": b"", "stderr": b"", "timeout": True, "result": None, "error": "loader-1: timeout after 5 s: nproc"},
 ]
 

@@ -13,7 +13,7 @@ from rig import ssh
 from rig.flags import cell_flags, cpu_pct, ena_delta, keepalive_flag, parse_snapshot, stage_flags, stage_void
 from rig.ladder import MAX_STAGES, PASS_TOLERANCE, RATIO, cell_numbers, evaluate_stage, stage_rates
 from rig.merge import merge, parse_result
-from rig.registry import Suite, SuiteError, Target, cell_key, plan_cells
+from rig.registry import RAPIRA_SERVERS, Suite, SuiteError, Target, cell_key, plan_cells
 from rig.rig import Rig, ensure_ttl
 from rig.runfile import RunFile
 from rig.ssh import Host, SshError
@@ -23,7 +23,6 @@ LEAD_S = 3
 WARMUP_S = 10
 BOX = f"bash {ssh.RIG_DIR}/box"
 BENCH_DIR = "/opt/bench"
-RAPIRA_SERVERS = ("rapira", "nginx-rapira")
 # k6 preallocates the VUs for this latency at the stage rate of one loader.
 K6_LATENCY_BUDGET_S = 0.005
 # ssh slack over the lead time and the stage duration of one load call.
@@ -31,7 +30,6 @@ LOAD_SLACK_S = 60
 SNAPSHOT_TIMEOUT_S = 30
 # Sleep until the wall clock time in argv[1].
 WAIT_PY = "import sys, time; time.sleep(max(0.0, float(sys.argv[1]) - time.time()))"
-SUITES_DIR = Path("suites")
 FACTS_CMD = (
     "echo kernel=$(uname -r); "
     "echo instance_id=$(cat /sys/devices/virtual/dmi/id/board_asset_tag); "
@@ -166,9 +164,8 @@ def app_hashes(root: Path) -> dict[str, str]:
     }
 
 
-def suite_record(suite: Suite) -> dict:
-    path = SUITES_DIR / f"{suite.name}.toml"
-    digest = hashlib.sha256(path.read_bytes()).hexdigest() if path.is_file() else None
+def suite_record(suite: Suite, path: Path) -> dict:
+    digest = hashlib.sha256(path.read_bytes()).hexdigest()
     return {"name": suite.name, "file_sha256": digest, "rounds": suite.rounds, "stage_s": suite.stage_s, "connections": suite.connections}
 
 
@@ -325,7 +322,7 @@ def measure(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, target: Target, ce
     results = boxes.run_many([(loader, probe_cmd(target, url)) for loader in rig.loaders], timeout=SNAPSHOT_TIMEOUT_S)
     for loader, out in zip(rig.loaders, results):
         if isinstance(out, SshError):
-            raise CellVoid(f"probe mismatch on {loader.name}")
+            raise CellVoid(f"probe mismatch on {loader.name}: {str(out).splitlines()[-1]}")
     rates = plan["rates"][target.app]
     epoch = time.time() + LEAD_S
     warmup = [(loader, load_cmd(target, url, epoch, rates[0] // len(rig.loaders), plan, WARMUP_S)) for loader in rig.loaders]
@@ -387,10 +384,13 @@ def run_cell(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, target: Target, c
             cell["flags"]["ladder_exhausted"] = True
 
 
-def run_suite(rig: Rig, suite: Suite, boxes: Boxes, out_dir: Path, *, processes: int, run_id: str, rapira: dict,
-              servers: dict, apps: dict, loader_threads: int) -> Path:
+def run_suite(rig: Rig, suite: Suite, boxes: Boxes, out_dir: Path, *, suite_path: Path, processes: int, run_id: str,
+              rapira: dict, servers: dict, apps: dict, loader_threads: int) -> Path:
     """Run every planned cell and write run.json. Returns the run.json path."""
     plan = plan_run(rig, suite, processes=processes, loader_threads=loader_threads)
+    # A base target on a rig without a base build fails here, before the run directory exists.
+    for _, target in plan["cells"]:
+        binary_dir(target, rapira)
     ensure_ttl(rig.hosts, len(plan["cells"]) * (8 * suite.stage_s + 60) + 300)
     run_dir = out_dir / run_id
     (run_dir / "raw").mkdir(parents=True)
@@ -398,7 +398,7 @@ def run_suite(rig: Rig, suite: Suite, boxes: Boxes, out_dir: Path, *, processes:
     server_facts = facts[rig.server.name]
     run_file = RunFile(
         run_id=run_id,
-        suite=suite_record(suite),
+        suite=suite_record(suite, suite_path),
         rig={
             "server_type": rig.server_type,
             "loader_type": rig.loader_type,

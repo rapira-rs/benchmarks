@@ -15,6 +15,8 @@ from rig.ssh import Host, SshError
 SERVER = Host("server", "3.0.0.1", "10.0.0.1")
 LOADERS = tuple(Host(f"loader-{i}", f"3.0.0.{i + 1}", f"10.0.0.{i + 1}") for i in range(1, 5))
 RIG = Rig(SERVER, LOADERS, "c7a.8xlarge", "c7a.xlarge", "ami-0123", Path("key"))
+# run_suite hashes a suite file into the run file.
+SUITE_FILE = Path(__file__).resolve().parent.parent / "suites" / "ci.toml"
 RAPIRA = {"ref": "main", "sha": "abc1234def", "version": "0.9.0", "build": "nightly", "dir": "/opt/bench/rapira/abc1234"}
 THREADS = 4
 
@@ -178,9 +180,9 @@ CELL_CASES = [
     },
     {
         "name": "probe mismatch on loader-2 voids before load",
-        "overrides": {("loader-2", PROBE): SshError("loader-2: exit 1: probe")},
+        "overrides": {("loader-2", PROBE): SshError("loader-2: exit 1: bash bench-rig/box/probe.sh\n/home/fedora/bench-rig/apps/hello/expect.txt /tmp/tmp.Xy12 differ: byte 7, line 1")},
         "status": "void",
-        "reason": "probe mismatch on loader-2",
+        "reason": "probe mismatch on loader-2: /home/fedora/bench-rig/apps/hello/expect.txt /tmp/tmp.Xy12 differ: byte 7, line 1",
         "held": None,
         "peak": None,
         "stages": 0,
@@ -246,10 +248,10 @@ INTERRUPT_CASES = [
 ]
 
 
-def bench(boxes, out, targets, connections=256):
+def bench(boxes, out, targets, connections=256, rapira=RAPIRA):
     with mock.patch("rig.bench.ensure_ttl") as ttl:
         path = run_suite(
-            RIG, suite(targets, connections), boxes, out, processes=32, run_id="run1", rapira=RAPIRA,
+            RIG, suite(targets, connections), boxes, out, suite_path=SUITE_FILE, processes=32, run_id="run1", rapira=rapira,
             servers={}, apps={}, loader_threads=THREADS,
         )
     return path, ttl
@@ -417,6 +419,26 @@ class BinaryDirTest(unittest.TestCase):
                 self.assertEqual(str(ctx.exception), case["error"])
 
 
+REFUSAL_CASES = [
+    {
+        "name": "connections not a multiple of the loader threads",
+        "targets": [WORKER],
+        "connections": 250,
+        "rapira": RAPIRA,
+        "error": SuiteError,
+        "message": "connections 250",
+    },
+    {
+        "name": "base target without a base build",
+        "targets": [WORKER, replace(WORKER, name="hello-rapira-worker-base", binary="base")],
+        "connections": 256,
+        "rapira": {**RAPIRA, "base": None},
+        "error": ValueError,
+        "message": "the suite needs a base build",
+    },
+]
+
+
 PLAN_CASES = [
     {"name": "256 over 4 loaders x 4 threads", "connections": 256, "error": None, "per_loader": 64},
     {"name": "128 over 4 loaders x 4 threads", "connections": 128, "error": None, "per_loader": 32},
@@ -439,9 +461,10 @@ class PlanRunTest(unittest.TestCase):
                 self.assertEqual(plan["keys"], ["r1-hello-rapira-worker", "r1-hello-php-fpm"])
 
     def test_refused_suite_creates_no_run_directory(self):
-        with tempfile.TemporaryDirectory() as tmp:
-            boxes = FakeBoxes(replies({}))
-            with self.assertRaises(SuiteError):
-                bench(boxes, Path(tmp), [WORKER], connections=250)
-            self.assertEqual(list(Path(tmp).iterdir()), [])
-            self.assertEqual(boxes.calls, [])
+        for case in REFUSAL_CASES:
+            with self.subTest(name=case["name"]), tempfile.TemporaryDirectory() as tmp:
+                boxes = FakeBoxes(replies({}))
+                with self.assertRaisesRegex(case["error"], case["message"]):
+                    bench(boxes, Path(tmp), case["targets"], case["connections"], case["rapira"])
+                self.assertEqual(list(Path(tmp).iterdir()), [])
+                self.assertEqual(boxes.calls, [])
