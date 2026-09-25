@@ -118,3 +118,8 @@ def plan_cells(suite: Suite) -> list[tuple[int, Target]]:
 
 def cell_key(round_no: int, target: Target) -> str:
     return f"r{round_no}-{target.name}"
+
+
+def suite_needs(suite: Suite) -> list[str]:
+    """Server kinds, then apps, of the suite targets. Provisioning installs only these."""
+    return sorted({target.server for target in suite.targets}) + sorted({target.app for target in suite.targets})
