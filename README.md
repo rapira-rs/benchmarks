@@ -4,7 +4,7 @@ The benchmark rig of [rapira](https://github.com/rapira-rs/rapira). It runs on A
 
 ## What is tested
 
-Rapira in its worker, classic, and dispatcher modes against FrankenPHP, php-fpm behind nginx, nginx in front of rapira, and RoadRunner, on five apps: a hello page, Symfony, Laravel, static files, and a gRPC echo service. `suites/targets.toml` lists every target, and the `ci` suite runs 16 of them after each nightly build of rapira main.
+Rapira in its worker, classic, and dispatcher modes against FrankenPHP, php-fpm behind nginx, nginx in front of rapira, and RoadRunner, on a set of PHP apps from a hello page and static files to a gRPC echo service. `suites/targets.toml` lists every target, and the `ci` suite runs 16 of them after each nightly build of rapira main.
 
 Each target reports the highest rate it held, its peak throughput in the first failing stage, and its unloaded latency. [METHOD.md](METHOD.md) defines the ladder, the pass rule, the flags, and the voids.
 
