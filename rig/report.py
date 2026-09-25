@@ -3,11 +3,6 @@
 import statistics
 
 
-def median_of(values):
-    vals = [v for v in values if v is not None]
-    return statistics.median(vals) if vals else None
-
-
 def flag_text(name, value):
     """`name` for a true flag, `name(value)` for a flag with a value."""
     if value is True:
@@ -21,11 +16,11 @@ def target_row(cells: list[dict]) -> dict:
     """The medians over the ok cells of one target, `held` when every cell held, and the union of the flags."""
     return {
         "name": cells[0]["target"]["name"],
-        "achieved": median_of(c["achieved_rps"] for c in cells),
+        "achieved": statistics.median(c["achieved_rps"] for c in cells),
         "held": all(c["held"] for c in cells),
-        "p99": median_of(c["latency_us"]["p99"] for c in cells),
-        "p50": median_of(c["latency_us"]["p50"] for c in cells),
-        "rss_kb": median_of(c["rss_kb"] for c in cells),
+        "p99": statistics.median(c["latency_us"]["p99"] for c in cells),
+        "p50": statistics.median(c["latency_us"]["p50"] for c in cells),
+        "rss_kb": statistics.median(c["rss_kb"] for c in cells),
         "n": len(cells),
         "flags": sorted({flag_text(k, v) for c in cells for k, v in c["flags"].items()}),
     }
@@ -41,15 +36,15 @@ def rows(run: dict) -> list[dict]:
 
 
 def num(value):
-    return f"{value:.0f}" if value is not None else "-"
+    return f"{value:.0f}"
 
 
 def ms(us):
-    return f"{us / 1000:.2f}ms" if us is not None else "-"
+    return f"{us / 1000:.2f}ms"
 
 
 def mib(kb):
-    return f"{kb / 1024:.1f}" if kb is not None else "-"
+    return f"{kb / 1024:.1f}"
 
 
 def render(run: dict) -> tuple[str, int]:

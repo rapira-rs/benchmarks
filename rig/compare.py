@@ -25,8 +25,8 @@ def identity_diffs(a: dict, b: dict) -> list[str]:
 
 
 def delta(va, vb):
-    """The change from va to vb in percent, or "-" without two values."""
-    if va and vb is not None:
+    """The change from va to vb in percent, or "-" when va is 0."""
+    if va:
         return f"{100.0 * (vb - va) / va:+.1f}%"
     return "-"
 
