@@ -282,7 +282,7 @@ A workflow in the core repository runs on the completion of its Nightly workflow
 5. Upload `raw/` as an artifact with 90 days retention, and `run.json` as an artifact.
 6. `terraform destroy` in an `always()` step, then `nuke` as a second guard.
 
-A concurrency group serializes bench runs and does not cancel a running one. A dispatch that arrives while one waits replaces the waiting one. A capacity error retries once in the next AZ. The workflow has a timeout of 90 minutes, and the TTL on the boxes is armed at 60 minutes and extended by the driver as today.
+A concurrency group serializes bench runs and does not cancel a running one. A dispatch that arrives while one waits replaces the waiting one. A capacity error retries once in the next AZ. The bench job has a timeout of 110 minutes (70 minutes for the suite), and the TTL on the boxes is armed at 60 minutes and extended by the driver as today.
 
 ### 8.3 Publish job
 
