@@ -1,16 +1,10 @@
-variable "profile" {
-  description = "AWS CLI profile (SSO). Run `aws sso login --profile <this>` before apply."
-  type        = string
-  default     = "Rustatian"
-}
-
 variable "region" {
   type    = string
   default = "eu-central-1"
 }
 
 variable "az" {
-  description = "Both instances share this AZ. Cross-AZ traffic is billed; same-AZ private IPv4 is free."
+  description = "Every instance shares this AZ. Cross-AZ traffic is billed; same-AZ private IPv4 is free."
   type        = string
   default     = "eu-central-1a"
 }
@@ -22,9 +16,20 @@ variable "server_instance_type" {
 }
 
 variable "loader_instance_type" {
-  description = "The load generator. Sized to saturate the server: ~0.62 loader cores and ~4.4 Gbps sustained per saturated 32-core server."
+  description = "One load generator. A c7a.xlarge moves at most about 1.1 Gbps of the hello workload, under its 1.562 Gbps baseline."
   type        = string
-  default     = "c7a.4xlarge"
+  default     = "c7a.xlarge"
+}
+
+variable "loader_count" {
+  description = "The number of loaders. Every stage rate and the connection count are split evenly over them."
+  type        = number
+  default     = 4
+
+  validation {
+    condition     = var.loader_count >= 1
+    error_message = "loader_count must be 1 or more."
+  }
 }
 
 variable "ami_id" {
@@ -38,4 +43,3 @@ variable "ssh_cidr" {
   type        = string
   default     = "127.0.0.1/32"
 }
-

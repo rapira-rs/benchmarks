@@ -14,3 +14,8 @@ terraform/rig-key.pem
 .ssh-known-hosts
 .ssh-cm-*
 __pycache__/
+
+# Local run output of `make bench`.
+runs/
+# Copied from backend.tf.s3 by `make up TF_BACKEND=s3`.
+terraform/backend.tf

@@ -1,12 +1,11 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-PROFILE=${PROFILE:-Rustatian}
 REGION=${REGION:-eu-central-1}
 TAGF=Name=tag:Project,Values=rapira-bench
 
 awsx() {
-  command aws --profile "$PROFILE" --region "$REGION" "$@"
+  command aws --region "$REGION" "$@"
 }
 
 ids=$(awsx ec2 describe-instances --filters "$TAGF" \
