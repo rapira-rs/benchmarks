@@ -10,7 +10,7 @@ terraform/*.tfstate*
 terraform/*.tfvars
 terraform/rig-key.pem
 
-# ssh session files the drivers create.
+# ssh session files that rig/ssh.py creates.
 .ssh-known-hosts
 .ssh-cm-*
 __pycache__/

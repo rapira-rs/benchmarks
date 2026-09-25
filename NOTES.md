@@ -1,6 +1,14 @@
 # Bench notes
 
-Dated records and the decisions the code cannot show. Methodology lives in INSTRUCTIONS.md, operations in README.md. Numbers from different rigs or instance sizes never mix into one table.
+Dated records and the decisions the code cannot show. Methodology lives in METHOD.md, operations in README.md. Numbers from different rigs or instance sizes never mix into one table.
+
+## Method change, 2026-09-25
+
+- From this date the rig measures with the staged rate ladder of METHOD.md. wrk2 loads the HTTP/1.1 targets and k6 loads the gRPC targets, from four c7a.xlarge loaders against one c7a.8xlarge server.
+- The numbers before this date come from closed-loop wrk, h2load, and k6 passes from one c7a.4xlarge loader at a fixed connection count. The numbers after this date are the held rate, the peak successful rate, and the unloaded latency of the ladder. Do not compare numbers from before and after this date, and do not put them in one table.
+- Each run now writes `runs/<id>/run.json` with the schema `rapira-bench-run/1`. The directories under `results/` stay as the record of the old method.
+- FrankenPHP now runs the glibc release asset 1.12.7 with the production worker shape, and every PHP runtime uses the shared `servers/php.ini`. The FrankenPHP and php-fpm numbers before this date used other settings.
+- The fixed pair of the decisions below no longer applies. The loader count and the instance types are knobs, and the Makefile quota check adds the vCPUs of the server and all loaders.
 
 ## gRPC baseline (rapira PHP dispatcher vs RoadRunner), 2026-09-24
 
