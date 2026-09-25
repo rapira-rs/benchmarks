@@ -3,12 +3,11 @@
 
 BENCH=/opt/bench
 RIG=$HOME/bench-rig
-# The one place of the target port on the boxes. nginx-rapira.sh sets PORT for its rapira backend.
-PORT=${PORT:-8080}
-LISTEN_HOST=${LISTEN_HOST:-}
-# Every PHP runtime loads the shared php.ini. The gRPC entries load the protobuf runtime from GRPC_VENDOR.
+# The one place of the target port on the boxes.
+PORT=8080
+# Every PHP process loads the shared php.ini. The gRPC entry loads the protobuf runtime from GRPC_VENDOR.
 export PHPRC=$BENCH/php.ini
-export GRPC_VENDOR=$BENCH/apps/roadrunner-grpc/vendor
+export GRPC_VENDOR=$BENCH/apps/grpc/vendor
 
 die() {
   echo "ERROR: $*" >&2
@@ -88,13 +87,13 @@ log_bytes() {
   { cat "$BENCH/log/$1".*.log 2>/dev/null || true; } | wc -c
 }
 
-# pss_kb TAG prints the sum of the proportional set size in KiB of the processes of TAG.
+# rss_kb TAG prints the sum of the resident set size in KiB of the processes of TAG.
 # https://docs.kernel.org/filesystems/proc.html#process-specific-subdirectories
-pss_kb() {
+rss_kb() {
   local pid
   for pid in $(pids_of "$1"); do
-    cat "/proc/$pid/smaps_rollup" 2>/dev/null || true
-  done | awk '/^Pss:/ { kb += $2 } END { print kb + 0 }'
+    cat "/proc/$pid/status" 2>/dev/null || true
+  done | awk '/^VmRSS:/ { kb += $2 } END { print kb + 0 }'
 }
 
 # fail TAG MESSAGE prints the last log lines of TAG and then the error, kills the processes of TAG,
@@ -108,7 +107,7 @@ fail() {
   echo "ERROR: $tag: $*" >&2
   # shellcheck disable=SC2046
   kill -KILL $(pids_of "$tag") 2>/dev/null || true
-  # A killed FrankenPHP holds the port for a few milliseconds after the signal.
+  # The kernel frees the port a moment after the kill.
   wait_port_free 10 || true
   rm -f "$BENCH/run/$tag".*.pid
   exit 1
@@ -165,16 +164,12 @@ wait_grpc_answer() {
   fail "$tag" "no gRPC answer on :$PORT"
 }
 
-# verify_children TAG PARENT COUNT WHAT [PATTERN] waits up to 30 s until PARENT has COUNT children
-# that match PATTERN, and fails the start when the count differs.
+# verify_children TAG PARENT COUNT WHAT waits up to 30 s until PARENT has COUNT children, and fails
+# the start when the count differs.
 verify_children() {
-  local tag=$1 parent=$2 want=$3 what=$4 pattern=${5:-} have=0
+  local tag=$1 parent=$2 want=$3 what=$4 have=0
   for _ in $(seq 1 60); do
-    if [ -n "$pattern" ]; then
-      have=$(pgrep -c -P "$parent" -f "$pattern" || true)
-    else
-      have=$(pgrep -c -P "$parent" || true)
-    fi
+    have=$(pgrep -c -P "$parent" || true)
     [ "$have" -ge "$want" ] && break
     sleep 0.5
   done

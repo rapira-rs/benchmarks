@@ -8,22 +8,22 @@ from pathlib import Path
 from rig.publish import publish
 
 
-def run_doc(run_id, started, status="complete"):
+def run_doc(run_id, started, status="complete", pr=None):
     return {
-        "schema": "rapira-bench-run/1",
+        "schema": "rapira-bench-run/2",
         "id": run_id,
         "suite": {"name": "ci", "sha256": "ab" * 32},
         "smoke": False,
         "started": started,
-        "rapira": {"ref": "main", "sha": "0a1b2c3d4e5f", "version": "0.9.0", "build": "nightly"},
+        "rapira": {"ref": "nightly", "sha": "0a1b2c3d4e5f", "version": "0.9.0", "build": "nightly", "pr": pr},
         "cells": [],
         "status": status,
         "reasons": [],
     }
 
 
-def entry(run_id, started, status="complete"):
-    """The index entry of `run_doc(run_id, started, status)`."""
+def entry(run_id, started, status="complete", pr=None):
+    """The index entry of `run_doc(run_id, started, status, pr)`."""
     return {
         "id": run_id,
         "started": started,
@@ -32,16 +32,19 @@ def entry(run_id, started, status="complete"):
         "rapira_version": "0.9.0",
         "status": status,
         "smoke": False,
+        "pr": pr,
     }
 
 
-RUN = run_doc("20260925T120000Z-ci-0a1b2c3", "2026-09-25T12:00:00Z")
+PR = {"number": 59, "url": "https://github.com/rapira-rs/rapira/pull/59", "title": "Faster hello"}
+RUN = run_doc("20260925T120000Z-ci-0a1b2c3", "2026-09-25T12:00:00Z", pr=PR)
 
 CASES = [
     {
         "name": "no index yet",
         "index": None,
-        "runs": [entry("20260925T120000Z-ci-0a1b2c3", "2026-09-25T12:00:00Z")],
+        "run": RUN,
+        "runs": [entry("20260925T120000Z-ci-0a1b2c3", "2026-09-25T12:00:00Z", pr=59)],
     },
     {
         "name": "new run sorts by start time",
@@ -49,9 +52,10 @@ CASES = [
             entry("20260924T120000Z-ci-1111111", "2026-09-24T12:00:00Z"),
             entry("20260926T120000Z-ci-2222222", "2026-09-26T12:00:00Z"),
         ]},
+        "run": RUN,
         "runs": [
             entry("20260924T120000Z-ci-1111111", "2026-09-24T12:00:00Z"),
-            entry("20260925T120000Z-ci-0a1b2c3", "2026-09-25T12:00:00Z"),
+            entry("20260925T120000Z-ci-0a1b2c3", "2026-09-25T12:00:00Z", pr=59),
             entry("20260926T120000Z-ci-2222222", "2026-09-26T12:00:00Z"),
         ],
     },
@@ -60,7 +64,14 @@ CASES = [
         "index": {"schema": "rapira-bench-index/1", "runs": [
             entry("20260925T120000Z-ci-0a1b2c3", "2026-09-25T12:00:00Z", "incomplete"),
         ]},
-        "runs": [entry("20260925T120000Z-ci-0a1b2c3", "2026-09-25T12:00:00Z")],
+        "run": RUN,
+        "runs": [entry("20260925T120000Z-ci-0a1b2c3", "2026-09-25T12:00:00Z", pr=59)],
+    },
+    {
+        "name": "a run without a pull request has a null pr",
+        "index": None,
+        "run": run_doc("20260925T130000Z-ci-0a1b2c3", "2026-09-25T13:00:00Z"),
+        "runs": [entry("20260925T130000Z-ci-0a1b2c3", "2026-09-25T13:00:00Z")],
     },
 ]
 
@@ -88,9 +99,9 @@ class TestPublish(unittest.TestCase):
                     if case["index"] is not None:
                         (pages / "data").mkdir()
                         (pages / "data" / "index.json").write_text(json.dumps(case["index"]))
-                    path = publish(RUN, pages)
-                    self.assertEqual(path, pages / "data" / "20260925T120000Z-ci-0a1b2c3.json")
-                    self.assertEqual(json.loads(path.read_text()), RUN)
+                    path = publish(case["run"], pages)
+                    self.assertEqual(path, pages / "data" / f"{case['run']['id']}.json")
+                    self.assertEqual(json.loads(path.read_text()), case["run"])
                     index = json.loads((pages / "data" / "index.json").read_text())
                 self.assertEqual(index, {"schema": "rapira-bench-index/1", "runs": case["runs"]})
 

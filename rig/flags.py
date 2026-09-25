@@ -51,9 +51,9 @@ def ena_delta(before: Snapshot, after: Snapshot) -> dict[str, int]:
     return delta
 
 
-def stage_flags(server_busy: int, loader_busy: dict[str, int], passed: bool) -> dict:
-    """Review flags of one stage. A passing stage has no flags."""
-    if passed or server_busy >= SERVER_BUSY:
+def stage_flags(server_busy: int, loader_busy: dict[str, int], held: bool) -> dict:
+    """Review flags of one stage. A stage that held its rate has no flags."""
+    if held or server_busy >= SERVER_BUSY:
         return {}
     if any(busy >= GENERATOR_BUSY for busy in loader_busy.values()):
         return {"generator_bound": True}

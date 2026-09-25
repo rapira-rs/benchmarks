@@ -132,14 +132,8 @@ RUN_CASES = [
 NEEDS_CASES = [
     {
         "name": "servers first then apps, each sorted without repeats",
-        "targets": [
-            ("symfony", "php-fpm"),
-            ("hello", "rapira"),
-            ("hello", "frankenphp"),
-            ("grpc", "roadrunner"),
-            ("symfony", "rapira"),
-        ],
-        "expected": ["frankenphp", "php-fpm", "rapira", "roadrunner", "grpc", "hello", "symfony"],
+        "targets": [("yii3", "rapira"), ("hello", "rapira"), ("grpc", "rapira")],
+        "expected": ["rapira", "grpc", "hello", "yii3"],
     },
     {
         "name": "one rapira target",
@@ -151,16 +145,16 @@ NEEDS_CASES = [
 PROVISION_CASES = [
     {
         "name": "nightly with a quoted needs list",
-        "env": {"NIGHTLY": "abc1234", "REF": "", "BASE_REF": "main", "NEEDS": "frankenphp rapira hello"},
+        "env": {"NIGHTLY": "abc1234", "REF": "", "NEEDS": "rapira hello yii3"},
         "results": ["ok", "ok", "ok"],
-        "server_cmd": "NIGHTLY=abc1234 REF='' BASE_REF=main NEEDS='frankenphp rapira hello' bash bench-rig/box/provision-server.sh",
+        "server_cmd": "NIGHTLY=abc1234 REF='' NEEDS='rapira hello yii3' bash bench-rig/box/provision-server.sh",
         "error": None,
     },
     {
         "name": "a failed loader fails the provisioning",
-        "env": {"NIGHTLY": "", "REF": "pr/97", "BASE_REF": "main", "NEEDS": "rapira hello"},
+        "env": {"NIGHTLY": "", "REF": "pr/97", "NEEDS": "rapira hello"},
         "results": ["ok", "ok", SshError("loader-2: exit 1: bash bench-rig/box/provision-loader.sh")],
-        "server_cmd": "NIGHTLY='' REF=pr/97 BASE_REF=main NEEDS='rapira hello' bash bench-rig/box/provision-server.sh",
+        "server_cmd": "NIGHTLY='' REF=pr/97 NEEDS='rapira hello' bash bench-rig/box/provision-server.sh",
         "error": "loader-2: exit 1",
     },
 ]
@@ -168,7 +162,7 @@ PROVISION_CASES = [
 
 def target(app, server):
     return Target(
-        name=f"{app}-{server}-worker", server=server, app=app, mode="worker", proto="http1", binary=None,
+        name=f"{app}-{server}-worker", server=server, app=app, mode="worker", proto="http1",
         start=(), url="/", expect="apps/hello/expect.txt", config="",
     )
 
@@ -275,7 +269,7 @@ class NeedsTest(unittest.TestCase):
         for case in NEEDS_CASES:
             with self.subTest(name=case["name"]):
                 suite = Suite(
-                    name="t", rounds=1, stage_s=20, connections=256, smoke=False, floors={},
+                    name="t", rounds=1, warmup_s=10, duration_s=60, smoke=False, rates={}, connections={}, grpc_streams=1,
                     targets=tuple(target(app, server) for app, server in case["targets"]),
                 )
                 self.assertEqual(suite_needs(suite), case["expected"])

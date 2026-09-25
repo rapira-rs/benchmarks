@@ -16,15 +16,15 @@ variable "server_instance_type" {
 }
 
 variable "loader_instance_type" {
-  description = "One load generator. A c7a.xlarge moves at most about 1.1 Gbps of the hello workload, under its 1.562 Gbps baseline."
+  description = "One load generator. A c7a.2xlarge has 8 vCPUs and a 3.125 Gbps baseline for the 250000 req/s HTTP rows with 5000 connections and the 100000 req/s gRPC row."
   type        = string
-  default     = "c7a.xlarge"
+  default     = "c7a.2xlarge"
 }
 
 variable "loader_count" {
-  description = "The number of loaders. Every stage rate and the connection count are split evenly over them."
+  description = "The number of loaders. The rate and the connection count of a stage are split evenly over them."
   type        = number
-  default     = 4
+  default     = 1
 
   validation {
     condition     = var.loader_count >= 1

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Write the gRPC request bodies and the expected responses to apps/grpc/."""
+"""Write the gRPC request frame and the expected response frame to apps/grpc/."""
 
 from pathlib import Path
 
@@ -25,13 +25,8 @@ def main():
     reply = message(REPLY)
     grpc_reply = frame(0x00, reply)
     files = {
-        "echo.bin": (request, 66),
         "echo.grpc": (frame(0x00, request), 71),
-        "echo.json": (f'{{"text":"{TEXT}"}}'.encode(), 75),
-        "expect.bin": (reply, 86),
         "expect.grpc": (grpc_reply, 91),
-        "expect.grpcweb": (grpc_reply + frame(0x80, b"grpc-status: 0\r\n"), 112),
-        "expect.json": (f'{{"text":"{REPLY}"}}'.encode(), 95),
     }
     for name, (data, size) in files.items():
         assert len(data) == size, f"{name} is {len(data)} bytes, expected {size}"

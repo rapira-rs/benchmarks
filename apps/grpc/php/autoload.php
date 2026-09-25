@@ -1,7 +1,7 @@
 <?php
 // Loads the protobuf runtime and the generated classes.
-// GRPC_VENDOR is the directory where provisioning installs servers/roadrunner/composer.lock. Its
-// google/protobuf package is the pure-PHP runtime. PHP uses ext-protobuf when the extension is loaded.
+// GRPC_VENDOR is the directory where provisioning installs apps/grpc/composer.lock. Its
+// google/protobuf package is the pure PHP runtime.
 // The rapira worker defines no STDERR constant, so the error goes to php://stderr.
 
 $vendor = getenv('GRPC_VENDOR') . '/autoload.php';

@@ -1,11 +1,6 @@
-"""Text tables of one run file."""
+"""The text table of one run file."""
 
 import statistics
-
-
-def median_of(values):
-    vals = [v for v in values if v is not None]
-    return statistics.median(vals) if vals else None
 
 
 def flag_text(name, value):
@@ -18,67 +13,51 @@ def flag_text(name, value):
 
 
 def target_row(cells: list[dict]) -> dict:
-    """The medians, the spread, the flags, and the fail reasons of the ok cells of one target."""
-    held_rate = statistics.median_low(c["held"]["rate"] if c["held"] is not None else 0 for c in cells)
-    # The lower median is the held rate of at least one round, so this list is never empty when held_rate is set.
-    held = [c for c in cells if c["held"] is not None and c["held"]["rate"] == held_rate]
-    peaks = [c["peak"] for c in cells if c["peak"] is not None]
-    peak = statistics.median(peaks) if peaks else None
-    fails = []
-    for c in cells:
-        last = c["stages"][-1]
-        if not last["pass"] and last["fail_reason"] not in fails:
-            fails.append(last["fail_reason"])
+    """The medians over the ok cells of one target, `held` when every cell held, and the union of the flags."""
     return {
         "name": cells[0]["target"]["name"],
-        "app": cells[0]["target"]["app"],
-        "held": held_rate or None,
-        "peak": peak,
-        "p99_held": median_of(c["stages"][c["held"]["stage"]]["latency_us"]["p99"] for c in held) if held_rate else None,
-        "unloaded_p50": median_of(c["unloaded"]["p50"] for c in cells),
+        "achieved": statistics.median(c["achieved_rps"] for c in cells),
+        "held": all(c["held"] for c in cells),
+        "p99": statistics.median(c["latency_us"]["p99"] for c in cells),
+        "p50": statistics.median(c["latency_us"]["p50"] for c in cells),
+        "rss_kb": statistics.median(c["rss_kb"] for c in cells),
         "n": len(cells),
-        "spread": 100.0 * (max(peaks) - min(peaks)) / peak if peak and len(peaks) > 1 else None,
         "flags": sorted({flag_text(k, v) for c in cells for k, v in c["flags"].items()}),
-        "fails": fails,
     }
 
 
 def rows(run: dict) -> list[dict]:
-    """One row per target with ok cells, sorted by app, then by peak from high to low."""
+    """One row per target with ok cells, in the order of the first cell of each target."""
     groups = {}
     for cell in run["cells"]:
         if cell["status"] == "ok":
             groups.setdefault(cell["target"]["name"], []).append(cell)
-    out = [target_row(cells) for cells in groups.values()]
-    out.sort(key=lambda r: (r["app"], -(r["peak"] or 0)))
-    return out
+    return [target_row(cells) for cells in groups.values()]
 
 
 def num(value):
-    return f"{value:.0f}" if value is not None else "-"
+    return f"{value:.0f}"
 
 
 def ms(us):
-    return f"{us / 1000:.2f}ms" if us is not None else "-"
+    return f"{us / 1000:.2f}ms"
 
 
-def pct(value):
-    return f"{value:.1f}%" if value is not None else "-"
+def mib(kb):
+    return f"{kb / 1024:.1f}"
 
 
 def render(run: dict) -> tuple[str, int]:
     """The report text and the exit status: 1 when the run is incomplete."""
     table = rows(run)
     w = max([len("target")] + [len(r["name"]) for r in table]) + 2
-    flags = {r["name"]: ",".join(r["flags"]) or "-" for r in table}
-    fw = max([len("flags")] + [len(f) for f in flags.values()])
-    hdr = f"{'target':<{w}} {'held req/s':>10} {'peak req/s':>10} {'p99 at held':>11} {'unloaded p50':>12} {'n':>3} {'spread':>7}  {'flags':<{fw}}  fail"
+    hdr = f"{'target':<{w}} {'req/s':>8} {'held':>4} {'p99':>9} {'p50':>9} {'RSS MiB':>8} {'n':>3}  flags"
     lines = [hdr, "-" * len(hdr)]
     for r in table:
-        fail = "; ".join(r["fails"]) or "-"
+        held = "yes" if r["held"] else "no"
         lines.append(
-            f"{r['name']:<{w}} {num(r['held']):>10} {num(r['peak']):>10} {ms(r['p99_held']):>11} "
-            f"{ms(r['unloaded_p50']):>12} {r['n']:>3} {pct(r['spread']):>7}  {flags[r['name']]:<{fw}}  {fail}"
+            f"{r['name']:<{w}} {num(r['achieved']):>8} {held:>4} {ms(r['p99']):>9} {ms(r['p50']):>9} "
+            f"{mib(r['rss_kb']):>8} {r['n']:>3}  {','.join(r['flags']) or '-'}"
         )
     voided = [c for c in run["cells"] if c["status"] == "void"]
     if voided:

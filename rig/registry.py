@@ -4,14 +4,11 @@ import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
-SERVERS = ("rapira", "frankenphp", "php-fpm", "nginx-rapira", "roadrunner")
-APPS = ("hello", "symfony", "laravel", "static", "grpc")
+SERVERS = ("rapira",)
+APPS = ("hello", "yii3", "grpc")
 MODES = ("worker", "classic", "dispatcher")
 PROTOS = ("http1", "grpc")
-BINARIES = ("pr", "base")
-# Only these servers run a rapira binary, so only they carry a binary field.
-RAPIRA_SERVERS = ("rapira", "nginx-rapira")
-MIN_STAGE_S = 12
+MIN_DURATION_S = 30
 
 
 class SuiteError(ValueError):
@@ -25,7 +22,6 @@ class Target:
     app: str
     mode: str
     proto: str
-    binary: str | None
     start: tuple[str, ...]
     url: str
     expect: str
@@ -39,16 +35,17 @@ class Target:
 class Suite:
     name: str
     rounds: int
-    stage_s: int
-    connections: int
+    warmup_s: int
+    duration_s: int
     smoke: bool
-    floors: dict[str, int]
+    rates: dict[str, int]
+    connections: dict[str, int]
+    grpc_streams: int
     targets: tuple[Target, ...]
 
 
 def _target(name: str, table: dict) -> Target:
     fields = dict(table)
-    fields.setdefault("binary", None)
     fields["start"] = tuple(fields.get("start", ()))
     fields["headers"] = tuple(fields.get("headers", {}).items())
     try:
@@ -59,11 +56,6 @@ def _target(name: str, table: dict) -> Target:
         value = getattr(target, field)
         if value not in allowed:
             raise SuiteError(f"target {name}: unknown {field} {value}")
-    if target.server in RAPIRA_SERVERS:
-        if target.binary not in BINARIES:
-            raise SuiteError(f"target {name}: binary must be one of {', '.join(BINARIES)}")
-    elif target.binary is not None:
-        raise SuiteError(f"target {name}: binary applies only to {', '.join(RAPIRA_SERVERS)}")
     return target
 
 
@@ -79,10 +71,8 @@ def load_suite(path: Path, targets: dict[str, Target], loader_count: int) -> Sui
     where = path.name
     if doc["rounds"] < 1:
         raise SuiteError(f"{where}: rounds {doc['rounds']} is under 1")
-    if doc["stage_s"] < MIN_STAGE_S:
-        raise SuiteError(f"{where}: stage_s {doc['stage_s']} is under {MIN_STAGE_S}")
-    if doc["connections"] % loader_count != 0:
-        raise SuiteError(f"{where}: connections {doc['connections']} is not a multiple of {loader_count} loaders")
+    if doc["duration_s"] < MIN_DURATION_S:
+        raise SuiteError(f"{where}: duration_s {doc['duration_s']} is under {MIN_DURATION_S}")
     seen = set()
     for name in doc["targets"]:
         if name not in targets:
@@ -91,20 +81,29 @@ def load_suite(path: Path, targets: dict[str, Target], loader_count: int) -> Sui
             raise SuiteError(f"{where}: target {name} is listed twice")
         seen.add(name)
     chosen = tuple(targets[name] for name in doc["targets"])
-    floors = dict(doc["floors"])
+    rates = dict(doc["rates"])
+    connections = dict(doc["connections"])
     for target in chosen:
-        if target.app not in floors:
-            raise SuiteError(f"{where}: no floor for app {target.app}")
-    for app, floor in floors.items():
-        if floor % loader_count != 0:
-            raise SuiteError(f"{where}: floor {floor} of app {app} is not a multiple of {loader_count} loaders")
+        if target.app not in rates:
+            raise SuiteError(f"{where}: no rate for app {target.app}")
+        if target.proto not in connections:
+            raise SuiteError(f"{where}: no connections for proto {target.proto}")
+    # Each loader sends its share of the rate and opens its share of the connections.
+    for app, rate in rates.items():
+        if rate % loader_count != 0:
+            raise SuiteError(f"{where}: rate {rate} of app {app} is not a multiple of {loader_count} loaders")
+    for proto, count in connections.items():
+        if count % loader_count != 0:
+            raise SuiteError(f"{where}: connections {count} of proto {proto} is not a multiple of {loader_count} loaders")
     return Suite(
         name=doc["name"],
         rounds=doc["rounds"],
-        stage_s=doc["stage_s"],
-        connections=doc["connections"],
+        warmup_s=doc["warmup_s"],
+        duration_s=doc["duration_s"],
         smoke=doc.get("smoke", False),
-        floors=floors,
+        rates=rates,
+        connections=connections,
+        grpc_streams=doc["grpc"]["streams"],
         targets=chosen,
     )
 

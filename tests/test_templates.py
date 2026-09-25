@@ -1,4 +1,4 @@
-"""Tests of the server config templates, the shared php.ini, and the expected body files."""
+"""Tests of the rapira config templates, the shared php.ini, and the expected body files."""
 
 import tomllib
 import unittest
@@ -21,27 +21,27 @@ TOML_CASES = [
         },
     },
     {
-        "name": "rapira http behind nginx",
+        "name": "rapira http dispatcher of the yii3 app",
         "path": "servers/rapira/http.toml.tpl",
-        "values": {"LISTEN": "127.0.0.1:8081", "ENTRY": "/opt/bench/apps/symfony/bench/worker-rapira.php", "MODE": "worker", "PROCS": "2"},
+        "values": {"LISTEN": ":8080", "ENTRY": "/opt/bench/apps/yii3/worker-rapira.php", "MODE": "dispatcher", "PROCS": "32"},
         "expected": {
             "http": {
-                "listen": "127.0.0.1:8081",
-                "pool": {"entrypoint": "/opt/bench/apps/symfony/bench/worker-rapira.php", "mode": "worker", "processes": 2},
+                "listen": ":8080",
+                "pool": {"entrypoint": "/opt/bench/apps/yii3/worker-rapira.php", "mode": "dispatcher", "processes": 32},
             },
             "log": {"level": "warn"},
         },
     },
     {
-        "name": "rapira static hit and miss",
+        "name": "rapira static middleware in front of the hello dispatcher",
         "path": "servers/rapira/static.toml.tpl",
-        "values": {"LISTEN": ":8080", "ROOT": RIG + "/apps/static", "ENTRY": RIG + "/apps/hello/worker.php", "MODE": "worker", "PROCS": "32"},
+        "values": {"LISTEN": ":8080", "ROOT": RIG + "/apps/hello", "ENTRY": RIG + "/apps/hello/dispatcher.php", "MODE": "dispatcher", "PROCS": "32"},
         "expected": {
             "http": {
                 "listen": ":8080",
                 "middleware": ["static"],
-                "static": {"root": RIG + "/apps/static"},
-                "pool": {"entrypoint": RIG + "/apps/hello/worker.php", "mode": "worker", "processes": 32},
+                "static": {"root": RIG + "/apps/hello"},
+                "pool": {"entrypoint": RIG + "/apps/hello/dispatcher.php", "mode": "dispatcher", "processes": 32},
             },
             "log": {"level": "warn"},
         },
@@ -62,90 +62,28 @@ TOML_CASES = [
     },
 ]
 
-TEXT_CASES = [
-    {
-        "name": "frankenphp worker skips the document root",
-        "path": "servers/frankenphp/worker.Caddyfile.tpl",
-        # num_threads is the worker num plus one.
-        "values": {"LISTEN": ":8080", "THREADS": "33", "PROCS": "32", "DOCROOT": RIG + "/apps/hello", "ENTRY": RIG + "/apps/hello/frankenphp.php", "ENV": ""},
-        "present": ["grace_period 2s", "admin off", "auto_https off", "num_threads 33", "num 32", "file_server off", "match *", "file " + RIG + "/apps/hello/frankenphp.php", ":8080 {"],
-        "absent": ["encode", "try_files"],
-    },
-    {
-        "name": "frankenphp worker with Octane env lines",
-        "path": "servers/frankenphp/worker.Caddyfile.tpl",
-        "values": {"LISTEN": ":8080", "THREADS": "3", "PROCS": "2", "DOCROOT": "/opt/bench/apps/laravel/public", "ENTRY": "/opt/bench/apps/laravel/public/frankenphp-worker.php", "ENV": "\t\t\tenv LARAVEL_OCTANE 1\n\t\t\tenv APP_DEBUG false\n"},
-        "present": ["\t\t\tenv LARAVEL_OCTANE 1\n\t\t\tenv APP_DEBUG false\n", "num_threads 3", "num 2", "match *"],
-        "absent": ["encode"],
-    },
-    {
-        "name": "frankenphp classic runs the index file",
-        "path": "servers/frankenphp/classic.Caddyfile.tpl",
-        # num_threads is the pool size in the classic shape.
-        "values": {"LISTEN": ":8080", "THREADS": "32", "DOCROOT": "/opt/bench/apps/symfony/public", "INDEX": "index.php"},
-        "present": ["grace_period 2s", "num_threads 32", "file_server off", "try_files {path} index.php", "root * /opt/bench/apps/symfony/public"],
-        "absent": ["worker", "encode"],
-    },
-    {
-        "name": "frankenphp stock keeps the file server",
-        "path": "servers/frankenphp/stock.Caddyfile.tpl",
-        "values": {"LISTEN": ":8080", "THREADS": "33", "PROCS": "32", "DOCROOT": RIG + "/apps/static", "INDEX": "index.php", "ENV": ""},
-        "present": ["grace_period 2s", "num_threads 33", "num 32", "file " + RIG + "/apps/static/index.php", "index index.php", "try_files {path} {path}/index.php index.php", "root * " + RIG + "/apps/static"],
-        "absent": ["file_server off", "match *", "encode"],
-    },
-    {
-        "name": "nginx in front of rapira",
-        "path": "servers/nginx/rapira.conf.tpl",
-        "values": {"PROCS": "32", "LISTEN": "8080"},
-        "present": ["worker_processes 32;", "listen 8080 backlog=65535;", "server 127.0.0.1:8081;", "keepalive_requests 1000000;"],
-        "absent": [],
-    },
-    {
-        "name": "nginx in front of php-fpm",
-        "path": "servers/nginx/fpm.conf.tpl",
-        "values": {"PROCS": "32", "LISTEN": "8080", "DOCROOT": "/opt/bench/apps/symfony/public", "INDEX": "index.php"},
-        "present": ["worker_processes 32;", "listen 8080 backlog=65535;", "root /opt/bench/apps/symfony/public;", "fastcgi_pass 127.0.0.1:9000;", "SCRIPT_FILENAME  $document_root/index.php;", "SCRIPT_NAME      /index.php;"],
-        "absent": ["include"],
-    },
-    {
-        "name": "php-fpm static pool",
-        "path": "servers/php-fpm/php-fpm.conf.tpl",
-        "values": {"PROCS": "32"},
-        "present": ["pm = static", "pm.max_children = 32", "listen = 127.0.0.1:9000"],
-        "absent": [],
-    },
-    {
-        "name": "roadrunner grpc",
-        "path": "servers/roadrunner/grpc.rr.yaml.tpl",
-        "values": {"RIG": RIG, "LISTEN": "0.0.0.0:8080", "PROCS": "32"},
-        "present": ['listen: "tcp://0.0.0.0:8080"', "num_workers: 32", 'command: "php ' + RIG + '/apps/grpc/php/rr-worker.php"', '["' + RIG + '/apps/grpc/bench.proto"]'],
-        "absent": ["-d opcache"],
-    },
-]
-
-# The 128-byte asset of the static hit targets.
-TINY_CSS = b"/* bench asset, micro tier: the response must be far smaller than the wire */\n.a { color: #1a2b3c; padding: 0 } /*-----------*/\n"
-
 BODY_CASES = [
     {
         "name": "hello expected body",
         "path": "apps/hello/expect.txt",
-        # 24 bytes: the body of GET /?name=you on every hello, symfony, and laravel target.
+        # 24 bytes: the body of GET /?name=you on every hello target.
         "expected": b"Hello from worker, you!\n",
     },
     {
-        "name": "static asset of 128 bytes",
-        "path": "apps/static/tiny.css",
-        "expected": TINY_CSS,
+        "name": "grpc request frame",
+        "path": "apps/grpc/echo.grpc",
+        # The length-prefixed frame of an EchoRequest with the 64 character text of apps/grpc/fixtures.py: 71 bytes.
+        "expected": b"\x00\x00\x00\x00\x42\x0a\x40" + b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01",
     },
     {
-        "name": "static hit expected body is the asset",
-        "path": "apps/static/tiny.expect",
-        "expected": TINY_CSS,
+        "name": "yii3 expected body",
+        "path": "apps/yii3/expect.json",
+        # 65 bytes: the body of GET / on the Yii3 app-api at the pinned commit, without a trailing newline.
+        "expected": b'{"status":"success","data":{"name":"My Project","version":"1.0"}}',
     },
 ]
 
-# Spec section 3.4: the values of the shared php.ini.
+# The values of the shared php.ini.
 PHP_INI = {
     "opcache.enable": "1",
     "opcache.enable_cli": "1",
@@ -170,19 +108,6 @@ def render(path, values):
     return text
 
 
-def settings(text):
-    # The config lines without the comment lines.
-    return "\n".join(line for line in text.splitlines() if not line.lstrip().startswith(("#", ";")))
-
-
-def shared_block(path):
-    # The lines from worker_processes to the first keepalive_requests line.
-    lines = (REPO / path).read_text().splitlines()
-    start = next(i for i, line in enumerate(lines) if line.startswith("worker_processes"))
-    end = next(i for i, line in enumerate(lines) if line.strip() == "keepalive_requests 1000000;")
-    return lines[start : end + 1]
-
-
 class TemplateTests(unittest.TestCase):
     def test_toml_templates(self):
         for case in TOML_CASES:
@@ -190,20 +115,6 @@ class TemplateTests(unittest.TestCase):
                 text = render(case["path"], case["values"])
                 self.assertNotIn("@@", text)
                 self.assertEqual(case["expected"], tomllib.loads(text))
-
-    def test_text_templates(self):
-        for case in TEXT_CASES:
-            with self.subTest(name=case["name"]):
-                text = render(case["path"], case["values"])
-                self.assertNotIn("@@", text)
-                text = settings(text)
-                for part in case["present"]:
-                    self.assertIn(part, text)
-                for part in case["absent"]:
-                    self.assertNotIn(part, text)
-
-    def test_nginx_templates_share_the_http_settings(self):
-        self.assertEqual(shared_block("servers/nginx/rapira.conf.tpl"), shared_block("servers/nginx/fpm.conf.tpl"))
 
     def test_php_ini_values(self):
         values = {}

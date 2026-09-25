@@ -71,45 +71,45 @@ ENA_CASES = [
 
 STAGE_FLAG_CASES = [
     {
-        "name": "passing stage has no flags",
+        "name": "a stage that held has no flags",
         "server_busy": 50,
         "loader_busy": {"loader-1": 99},
-        "passed": True,
+        "held": True,
         "flags": {},
     },
     {
         "name": "loader at 85 and server at 89 is generator bound",
         "server_busy": 89,
         "loader_busy": {"loader-1": 40, "loader-2": 85},
-        "passed": False,
+        "held": False,
         "flags": {"generator_bound": True},
     },
     {
         "name": "loader above 85 and server at 89 is generator bound",
         "server_busy": 89,
         "loader_busy": {"loader-1": 97, "loader-2": 40},
-        "passed": False,
+        "held": False,
         "flags": {"generator_bound": True},
     },
     {
         "name": "server at 90 with a busy loader has no flags",
         "server_busy": 90,
         "loader_busy": {"loader-1": 85},
-        "passed": False,
+        "held": False,
         "flags": {},
     },
     {
         "name": "server above 90 with idle loaders has no flags",
         "server_busy": 99,
         "loader_busy": {"loader-1": 10},
-        "passed": False,
+        "held": False,
         "flags": {},
     },
     {
         "name": "server at 89 and every loader at 84 is server unsaturated",
         "server_busy": 89,
         "loader_busy": {"loader-1": 84, "loader-2": 84},
-        "passed": False,
+        "held": False,
         "flags": {"server_unsaturated": True},
     },
 ]
@@ -188,7 +188,7 @@ class TestFlags(unittest.TestCase):
     def test_stage_flags(self):
         for case in STAGE_FLAG_CASES:
             with self.subTest(name=case["name"]):
-                self.assertEqual(stage_flags(case["server_busy"], case["loader_busy"], case["passed"]), case["flags"])
+                self.assertEqual(stage_flags(case["server_busy"], case["loader_busy"], case["held"]), case["flags"])
 
     def test_stage_void(self):
         for case in VOID_CASES:

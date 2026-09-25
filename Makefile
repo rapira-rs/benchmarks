@@ -5,12 +5,11 @@ SHELL := /bin/bash
 
 REGION ?= eu-central-1
 SERVER_TYPE ?= c7a.8xlarge
-LOADER_TYPE ?= c7a.xlarge
-LOADER_COUNT ?= 4
+LOADER_TYPE ?= c7a.2xlarge
+LOADER_COUNT ?= 1
 AZ ?= eu-central-1a
 TTL ?= 60
 REF ?=
-BASE_REF ?= main
 NIGHTLY ?=
 SUITE ?= ci
 ROUNDS ?=
@@ -64,7 +63,7 @@ up: preflight
 
 provision:
 	@needs=$$(python3 -m rig needs --suite $(SUITE)) && \
-	python3 -m rig provision --ttl $(TTL) --needs "$$needs" --nightly "$(NIGHTLY)" --ref "$(REF)" --base-ref "$(BASE_REF)" --frame-pointers "$(FRAME_POINTERS)"
+	python3 -m rig provision --ttl $(TTL) --needs "$$needs" --nightly "$(NIGHTLY)" --ref "$(REF)" --frame-pointers "$(FRAME_POINTERS)"
 
 status: preflight
 	@out=$$($(TF) output 2>/dev/null); \
@@ -95,6 +94,7 @@ extend:
 sync:
 	@python3 -m rig sync --src ../core
 
+# Creates the Yii3 and gRPC lock files and the Yii3 expected body. Needs PHP 8.5, Composer, and a Valkey on 127.0.0.1:6379.
 lock:
 	box/lock-apps.sh
 
