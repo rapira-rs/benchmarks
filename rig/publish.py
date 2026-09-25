@@ -15,6 +15,7 @@ def index_entry(run: dict) -> dict:
         "rapira_version": run["rapira"]["version"],
         "status": run["status"],
         "smoke": run["smoke"],
+        "pr": run["rapira"]["pr"]["number"] if run["rapira"]["pr"] else None,
     }
 
 

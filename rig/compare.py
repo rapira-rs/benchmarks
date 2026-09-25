@@ -1,6 +1,6 @@
-"""Deltas of held and peak between two run files."""
+"""Deltas of the achieved rate, the p99, and the RSS between two run files."""
 
-from rig.report import pct, rows
+from rig.report import mib, ms, num, rows
 
 # Run fields that must match for a fair comparison, as (section, key). An empty section is the top level.
 IDENTITY = (
@@ -8,7 +8,8 @@ IDENTITY = (
     ("rig", "loader_type"),
     ("rig", "loader_count"),
     ("", "processes"),
-    ("ladder", "stage_s"),
+    ("suite", "rates"),
+    ("suite", "duration_s"),
 )
 
 
@@ -23,8 +24,11 @@ def identity_diffs(a: dict, b: dict) -> list[str]:
     return diffs
 
 
-def num(value, digits):
-    return f"{value:.{digits}f}" if value is not None else "-"
+def delta(va, vb):
+    """The change from va to vb in percent, or "-" without two values."""
+    if va and vb is not None:
+        return f"{100.0 * (vb - va) / va:+.1f}%"
+    return "-"
 
 
 def compare(a: dict, b: dict, *, force: bool = False) -> tuple[str, int]:
@@ -47,12 +51,9 @@ def compare(a: dict, b: dict, *, force: bool = False) -> tuple[str, int]:
         if ra is None:
             lines.append(f"{name:<{w}}  only in b")
             continue
-        delta = "-"
-        if ra["peak"] and rb["peak"] is not None:
-            delta = f"{100.0 * (rb['peak'] - ra['peak']) / ra['peak']:+.1f}%"
         lines.append(
-            f"{name:<{w}}  held {num(ra['held'], 0)} -> {num(rb['held'], 0)}"
-            f"  peak {num(ra['peak'], 1)} -> {num(rb['peak'], 1)}  {delta}"
-            f"  spread {pct(ra['spread'])} / {pct(rb['spread'])}"
+            f"{name:<{w}}  req/s {num(ra['achieved'])} -> {num(rb['achieved'])} {delta(ra['achieved'], rb['achieved'])}"
+            f"  p99 {ms(ra['p99'])} -> {ms(rb['p99'])} {delta(ra['p99'], rb['p99'])}"
+            f"  rss {mib(ra['rss_kb'])} -> {mib(rb['rss_kb'])} {delta(ra['rss_kb'], rb['rss_kb'])}"
         )
     return "\n".join(lines) + "\n", 0
