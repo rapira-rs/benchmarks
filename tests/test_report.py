@@ -211,10 +211,11 @@ CASES = [
             ok_cell("hello-rapira-worker", "hello", 2, held=320000, held_p99=2000, peak=360000.0, unloaded_p50=800,
                     fail_reason="achieved 360000 req/s under 95% of 640000"),
         ]),
-        # The held rate is a stage rate: median_low(160000, 320000) = 160000. p99_held median(1000, 2000) = 1500 us.
+        # The held rate is a stage rate: median_low(160000, 320000) = 160000. p99_held comes from the rounds that
+        # held 160000, so it is 1000 us, not the median over both rounds.
         # Peak median(200000, 360000) = 280000, spread 100 * (360000 - 200000) / 280000 = 57.1%.
         "rows": [[
-            "hello-rapira-worker", "160000", "280000", "1.50ms", "0.70ms", "2", "57.1%", "-",
+            "hello-rapira-worker", "160000", "280000", "1.00ms", "0.70ms", "2", "57.1%", "-",
             "achieved 200000 req/s under 95% of 320000; achieved 360000 req/s under 95% of 640000",
         ]],
         "voided": [],

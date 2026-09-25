@@ -19,8 +19,9 @@ def flag_text(name, value):
 
 def target_row(cells: list[dict]) -> dict:
     """The medians, the spread, the flags, and the fail reasons of the ok cells of one target."""
-    held = [c for c in cells if c["held"] is not None]
     held_rate = statistics.median_low(c["held"]["rate"] if c["held"] is not None else 0 for c in cells)
+    # The lower median is the held rate of at least one round, so this list is never empty when held_rate is set.
+    held = [c for c in cells if c["held"] is not None and c["held"]["rate"] == held_rate]
     peaks = [c["peak"] for c in cells if c["peak"] is not None]
     peak = statistics.median(peaks) if peaks else None
     fails = []
