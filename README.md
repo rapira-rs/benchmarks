@@ -168,3 +168,38 @@ terraform -chdir=terraform/ci import aws_iam_openid_connect_provider.github arn:
 The role policy allows the EC2 actions of the rig stack in `eu-central-1`, all EC2 describe calls, the service quota read, and read and write access to the `rig/` objects of the state bucket.
 
 With `TF_BACKEND=s3`, the rig stack keeps its state in the bucket. `terraform/s3.tfbackend` holds the key `rig/terraform.tfstate`, the region, and `use_lockfile = true`. The bucket name holds the account id, so it is not in the repository: the CI workflow gives it to `terraform init` through `TF_CLI_ARGS_init`. If a CI run leaves a rig that bills, run `make nuke` on the operator machine. It finds the resources by their tag and needs no state.
+
+## CI
+
+After each successful Nightly run on the rapira main branch, the core repository starts `.github/workflows/bench.yml` in this repository. The bench job finds the commit of the current `nightly` release and stops when the board already has that commit. Then it creates the rig with the S3 backend, provisions it with the nightly asset, runs `suites/ci.toml`, and uploads `run.json` and `raw/` as artifacts for 90 days. `make down` and `make nuke` run at the end of each bench job that passes the commit check, also after a failure. A capacity error retries once in `eu-central-1b`. The publish job runs only when the run is complete. It adds the run to the `gh-pages` branch and copies `board/` there.
+
+Only one bench run runs at a time. A new dispatch replaces a waiting one and never stops a running one. The bench job stops after 90 minutes.
+
+Do these owner steps once, in this order:
+
+1. Examine the tracked files for account ids, IP addresses, and keys. Then make this repository public.
+2. Create the `gh-pages` branch with the commands below.
+3. In the repository settings, open Pages, select "Deploy from a branch", and select the branch `gh-pages` with the folder `/`.
+4. Apply `terraform/ci` as the "CI bootstrap" section shows.
+5. Set the repository variables `AWS_ROLE_ARN` and `TF_STATE_BUCKET` with the commands below.
+6. Create a fine-grained token for the resource owner `rapira-rs` with access to the repository `rapira-rs/benchmarks` only and the permission "Actions: Read and write". If the organization approves tokens, approve the request.
+7. Store the token as the secret `BENCH_DISPATCH_TOKEN` in `rapira-rs/rapira`.
+8. Copy `docs/core-dispatch.yml` to `.github/workflows/bench-dispatch.yml` in `rapira-rs/rapira` through a pull request.
+9. Start the first run by hand with `gh workflow run bench.yml -R rapira-rs/benchmarks` and examine the result on the board.
+
+Commands for step 2:
+
+```bash
+git switch --orphan gh-pages
+git commit --allow-empty -s -S -m "chore: start the board branch"
+git push origin gh-pages
+git switch main
+```
+
+Commands for step 5 and step 7:
+
+```bash
+gh variable set AWS_ROLE_ARN -R rapira-rs/benchmarks --body "$(terraform -chdir=terraform/ci output -raw role_arn)"
+gh variable set TF_STATE_BUCKET -R rapira-rs/benchmarks --body "$(terraform -chdir=terraform/ci output -raw bucket)"
+gh secret set BENCH_DISPATCH_TOKEN -R rapira-rs/rapira
+```
