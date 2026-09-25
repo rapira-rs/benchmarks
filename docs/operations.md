@@ -71,6 +71,7 @@ The driver refuses a suite before it creates a run directory when one of these c
 - `ROUNDS` replaces the round count of the suite.
 - `PROCESSES` sets the worker count of every target. It defaults to the server CPU count.
 - `SERVER_TYPE` defaults to `c7a.8xlarge`. `LOADER_TYPE` defaults to `c7a.2xlarge`. `LOADER_COUNT` defaults to 1.
+- `LOADER_COUNT` must divide every rate and connection count of the suite, and the HTTP connection count must be a multiple of the loader count times the loader vCPU count: with the `ci` suite on `c7a.2xlarge` loaders that is 1, 5, or 25. `make bench` refuses another count after the rig is up.
 - `AZ` defaults to `eu-central-1a`. `REGION` defaults to `eu-central-1`.
 - `AMI` pins an AMI. Without it, Terraform selects the newest Fedora 44 image, which Fedora rebuilds every day. Pin it when a result set takes more than one day.
 - `TTL` sets the instance lifetime in minutes. It defaults to 60.

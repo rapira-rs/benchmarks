@@ -27,7 +27,7 @@ These wrk2 facts shape the method:
 
 - `-R` is the total request rate of one process. wrk2 divides it over its threads and connections.
 - wrk2 divides `-c` by `-t` with integer division and drops the remainder. The driver therefore requires a connection count that is a multiple of the thread count.
-- The first 10 seconds of a run are a calibration window. wrk2 resets the latency histogram after that window but keeps the request count. The warm-up of the suite is 10 seconds, so the reported latency covers the measured window and the request count covers the whole run.
+- The calibration window of wrk2 is 10 s plus 5 ms per connection of a thread: about 13 s with 5000 connections over 8 threads. wrk2 resets the latency histogram after that window but keeps the request count. The reported latency therefore covers the last 57 s of the 60 s measured window, and the request count covers the whole run.
 - The reported latency is corrected for coordinated omission.
 - The `status` error counter counts responses with a status above 399. The `timeout` counter is a tally per connection that wrk2 takes every 2 seconds. It is not a request count.
 - An overloaded target gives no wrk2 errors. The achieved rate falls below the requested rate, and the corrected latency grows to seconds.
@@ -38,6 +38,7 @@ These h2load facts shape the method:
 - `--rps` is the rate per connection. The driver divides the rate of a loader by its connection count. `-m` limits the streams in flight per connection.
 - `--warm-up-time` and `-D` set the warm-up and the measured window. h2load counts only the requests that end in the measured window, and writes one line per such request to `--log-file`: the start time, the HTTP status or -1 for a failed stream, and the response time. `loader/h2load-report.py` turns that log into the `RESULT` line.
 - h2load does not read the `grpc-status` trailer. A gRPC error inside a 200 response is invisible to the counters. The probes before and after the stage are the correctness check.
+- h2load times a request from the moment it sends it, so its latency is not corrected for coordinated omission: a request that waits for a free stream does not count that wait. Compare the gRPC p99 with the wrk2 rows with this in mind.
 
 ## The cell sequence
 
@@ -77,7 +78,7 @@ With more than one round, the report shows the median of the ok cells, and `held
 
 Flags carry values. They are review items. They do not make a cell fail.
 
-- `generator_bound`: the cell did not hold, the busy CPU of a loader is 85% or more, and the server is below 90%. The achieved rate is then a floor. State it as "at least" the value.
+- `generator_bound`: the cell did not hold, the busy CPU of a loader is 85% or more, and the server is below 90%. The achieved rate is then a lower bound. State it as "at least" the value.
 - `server_unsaturated`: the cell did not hold, the server is below 90%, and every loader is below 85%. The target failed for a reason other than CPU, for example a queue in its worker pool.
 - `ena_throttled`: the ENA allowance counters of the server changed during the stage. The flag gives the deltas. Do not use that cell for a throughput claim.
 - `keepalive_broken`: the TIME-WAIT count of the server grew by more than the connection count during the stage. The target does not keep connections open.
@@ -116,7 +117,7 @@ If the result depends on a response header or on a server configuration, capture
 
 ## Reading the board
 
-The board on the `gh-pages` branch shows the newest 60 runs. One run is one merged pull request on the rapira main branch, benched from its nightly build.
+The board on the `gh-pages` branch shows the newest 60 runs. One run is one nightly build of the rapira main branch, labelled with the merged pull request of its commit. Merges that land between two nightly builds share one run.
 
 - The p99 chart shows the p99 latency of every target in milliseconds on a logarithmic scale. The RSS chart shows the RSS of the rapira process tree in MiB.
 - The x axis lists the runs in order, labelled with the pull request number. A run without a pull request, for example a manual run, shows the first 7 characters of the rapira sha. A click on a point opens the pull request, or the commit.
@@ -124,7 +125,7 @@ The board on the `gh-pages` branch shows the newest 60 runs. One run is one merg
 - A voided cell and a run without the target give no point.
 - Smoke runs are not shown.
 
-Compare points only when the rig shape is the same. Numbers from before 2026-09-25 come from other methods and are not on the board.
+Compare points only when the rig shape is the same. Numbers from the earlier methods, the ladder run of 2026-09-25 included, are not on the board.
 
 ## Server facts
 

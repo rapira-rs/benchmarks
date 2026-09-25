@@ -80,7 +80,7 @@ streams = 100
 
 ### 5.2 wrk2 (HTTP rows)
 
-`box/load.sh wrk2 EPOCH RATE THREADS CONNS WARMUP_S DURATION_S URL [METHOD] [BODY_FILE] [HEADER...]` runs one wrk2 process for `WARMUP_S + DURATION_S` seconds at `RATE` req/s with `CONNS` connections and `THREADS` threads. wrk2 resets its latency histogram after its own 10 s calibration window, so the warm-up is the calibration window and the reported latency covers the measured 60 s. `requests` in the `RESULT` line counts the whole run; the driver divides the requests by `WARMUP_S + DURATION_S` for the achieved rate. `loader/wrk2-report.lua` stays. The defaults are 5000 connections and one thread per loader vCPU.
+`box/load.sh wrk2 EPOCH RATE THREADS CONNS WARMUP_S DURATION_S URL [METHOD] [BODY_FILE] [HEADER...]` runs one wrk2 process for `WARMUP_S + DURATION_S` seconds at `RATE` req/s with `CONNS` connections and `THREADS` threads. wrk2 resets its latency histogram after its calibration window of 10 s plus 5 ms per connection of a thread (about 13 s with 625 connections per thread), so the reported latency covers the last 57 s of the measured window. `requests` in the `RESULT` line counts the whole run; the driver divides the requests by `WARMUP_S + DURATION_S` for the achieved rate. `loader/wrk2-report.lua` stays. The defaults are 5000 connections and one thread per loader vCPU.
 
 ### 5.3 h2load (gRPC row)
 
@@ -139,7 +139,7 @@ One page, two charts, no selector:
 - An x label is `#<number>` when the run has `rapira.pr`, and the first 7 characters of the sha otherwise. A click on a point opens the pull request of that run in a new tab; a run without a pull request opens the commit on GitHub.
 - The tooltip shows the label, the pull request title, the target, the achieved rate against the requested rate, `held`, the p99 or the RSS, and the flags.
 - A voided cell is a gap. A run without the target has no point.
-- The page draws only run files with the schema `rapira-bench-run/2`. The run of the ladder method stays in the manifest and is not drawn.
+- The page draws only run files with the schema `rapira-bench-run/2`. The operator removes the run of the ladder method from the manifest and the data when the first schema 2 run is published.
 
 `board/app.js` exports `visibleRuns(entries)`, `runLabel(run)`, `runLink(run)`, and `targetSeries(runs)` for the node test. `targetSeries` returns `labels`, `links`, `titles`, and `targets` with `p99_ms`, `rss_mib`, `achieved`, `rate`, `held`, and `flags` per run.
 
