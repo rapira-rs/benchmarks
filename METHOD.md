@@ -75,7 +75,7 @@ A stage passes when `achieved_rps` is at least 95% of the stage rate and every e
 - `peak`: the successful req/s of the failing stage. Use it to track regressions, because it changes continuously with the target. It is null when every stage passes.
 - `unloaded`: the p50 and p99 latency of the first stage, at the floor rate.
 
-With more than one round, the report shows the median of the surviving cells and the spread of the peak: 100 times (maximum minus minimum) divided by the median.
+With more than one round, the report shows the median of the surviving cells (for the held rate the lower median, which is a stage rate) and the spread of the peak: 100 times (maximum minus minimum) divided by the median.
 
 ## Flags
 
