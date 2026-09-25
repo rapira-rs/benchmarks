@@ -71,7 +71,7 @@ Each loader gets wrk2 built from a pinned upstream commit, the pinned k6 rpm, th
 
 ### 3.8 TTL and teardown
 
-The cloud-init TTL mechanism is unchanged and applies to every box. The driver extends the TTL from its run estimate as today. In CI, `terraform destroy` runs in an `always()` step and `nuke` runs after it as a second guard.
+The cloud-init TTL mechanism is unchanged and applies to every box. The driver extends the TTL from its run estimate as today. In CI, `terraform destroy` runs in an `always()` step, and `nuke` runs only when that destroy failed, because `nuke` selects by tag and would also delete a local rig.
 
 ## 4. Targets, suites, identity
 
@@ -243,7 +243,7 @@ All numbers are JSON numbers.
 
 ### 6.2 Raw evidence
 
-`runs/<id>/raw/` keeps the wrk2 and k6 output per stage per loader, the rendered server configs, the server logs, and the snapshots. In CI the directory is uploaded as a workflow artifact. It is never committed.
+`runs/<id>/raw/` keeps the wrk2 and k6 output per stage per loader, the rendered server configs, the WARN and ERROR lines of the server log, and the snapshots. In CI the directory is uploaded as a workflow artifact. It is never committed.
 
 ### 6.3 Tools
 
