@@ -23,13 +23,13 @@ Date: 2026-09-25. Status: approved by the owner in conversation; this document i
 
 - Terraform: `loader_count` defaults to 1 and `loader_instance_type` to `c7a.2xlarge`. The server stays `c7a.8xlarge`. Nothing else changes in `terraform/`.
 - Loader provisioning installs wrk2 (unchanged, pinned commit) and the `nghttp2` package for h2load. k6 goes. `/opt/bench/loader.json` records `wrk2_commit` and `h2load_version` (the first line of `h2load --version`).
-- Server provisioning installs PHP with opcache and the shared `servers/php.ini`, the rapira binary (nightly asset or a build of `REF` and `BASE_REF`), the Yii3 app, and the pure PHP protobuf runtime for the gRPC app. FrankenPHP, php-fpm, nginx, RoadRunner, Symfony, Laravel, and the PECL protobuf extension are no longer installed. `/opt/bench/versions.json` records the PHP version and the rapira version only.
-- The Yii3 app: `apps/yii3/source.toml` pins `repo = "https://github.com/Yii3-Benchmarks/app-api"` and `commit` (the master head on 2026-09-25, `0fa2e2a`). Provisioning clones that commit to `/opt/bench/apps/yii3`, copies the committed `apps/yii3/composer.lock` over it, and runs `composer install --no-dev --classmap-authoritative --no-scripts`. `make lock` creates the lock file from the pinned commit on the operator machine (PHP 8.5 and Composer). The app runs with `APP_ENV=prod` and `APP_DEBUG=0` through its `worker-rapira.php` entry point, which supports all three rapira modes. The `/` endpoint returns a JSON body without a database; `apps/yii3/expect.json` holds that body byte for byte, captured on the operator machine by `make lock` with `php -S` and `public/index.php`.
-- The gRPC app keeps `apps/grpc` as it is: the descriptor, the PHP classes, the dispatcher, `echo.grpc` (the request frame), and `expect.grpc` (the response frame).
+- Server provisioning installs PHP with opcache and the shared `servers/php.ini`, the rapira binary (the nightly asset or a build of `REF`), and for the apps of the suite: Composer, the PHP modules of the Yii3 app (`php-mbstring`, `php-xml`, `php-pdo`, `php-pgsql`), Valkey, the Yii3 app, and the pure PHP protobuf runtime of the gRPC app from `apps/grpc/composer.json` and its committed `composer.lock` into `/opt/bench/apps/grpc/vendor`. FrankenPHP, php-fpm, nginx, RoadRunner, Symfony, Laravel, the PECL protobuf extension, and the base build of `BASE_REF` are no longer installed. `/opt/bench/versions.json` records `php`, and with the Yii3 app `valkey` and `yii3` (the commit), and with the gRPC app `protobuf` (the runtime version).
+- The Yii3 app: `apps/yii3/source.toml` pins `repo = "https://github.com/Yii3-Benchmarks/app-api"` and `commit` (the master head on 2026-09-25, `0fa2e2a`). Provisioning clones that commit to `/opt/bench/apps/yii3`, copies the committed `apps/yii3/composer.lock` over it, and runs `composer install --no-dev --classmap-authoritative --no-scripts`. The app keeps its compiled routes in its PSR-16 cache, which is `yiisoft/cache-redis` on `127.0.0.1:6379`, and reads that cache when a process builds its container, so the server runs the Fedora `valkey` service. The app defaults to the `prod` environment without debug when `APP_ENV` and `APP_DEBUG` are unset, so nothing sets them. Its `worker-rapira.php` entry point detects the rapira mode at startup and supports all three modes. The `/` endpoint returns the 65 byte JSON body `{"status":"success","data":{"name":"My Project","version":"1.0"}}` without a database; `apps/yii3/expect.json` holds that body byte for byte. `make lock` creates `apps/yii3/composer.lock` with `composer install` from the pristine `composer.json` of the pinned commit (`composer update` would also bump the constraints of that file) and captures `expect.json` with `php -S` and `public/index.php`. It runs on the operator machine with PHP 8.5, Composer, and a Valkey or Redis server on `127.0.0.1:6379`, for example `docker run --rm -d -p 127.0.0.1:6379:6379 valkey/valkey:9.1.2-alpine`. `make lock` also writes `apps/grpc/composer.lock`.
+- The gRPC app keeps in `apps/grpc` the descriptor, the request and response classes, the dispatcher, `echo.grpc` (the request frame), and `expect.grpc` (the response frame), and gains `composer.json` with `google/protobuf` and its lock. The RoadRunner worker, the RoadRunner service interface and its buf plugin, and the gRPC-Web and Connect fixtures go.
 
 ## 4. Targets and the suite
 
-`suites/targets.toml` defines six targets. The name form stays `<app>-rapira-<mode>` with a `-static` suffix for the static middleware; the gRPC target is `grpc-rapira`. Every target has `server = "rapira"` and `binary = "pr"`; `-base` twins are gone with the `ab` suite.
+`suites/targets.toml` defines six targets. The name form stays `<app>-rapira-<mode>` with a `-static` suffix for the static middleware; the gRPC target is `grpc-rapira`. Every target has `server = "rapira"`. The `binary` field, the `-base` twins, `BASE_REF`, and the base build are gone with the `ab` suite.
 
 | target | app | mode | config template | request |
 | --- | --- | --- | --- | --- |
@@ -65,7 +65,7 @@ grpc = 100
 streams = 100
 ```
 
-The registry keeps `Target` as it is (the `proto` field selects wrk2 for `http1` and h2load for `grpc`). `Suite` loses `stage_s`, `connections`, and `floors` and gains `warmup_s`, `duration_s`, `rates` (one per app), `connections` (per proto), and `grpc_streams`. `load_suite` refuses a suite when an app of a target has no rate, when `duration_s` is under 30, or when `connections.http1` is not a multiple of the loader vCPU count times the loader count. `plan_cells` and the round rotation stay.
+`Target` loses `binary`; its `proto` field selects wrk2 for `http1` and h2load for `grpc`. `Suite` loses `stage_s`, `connections`, and `floors` and gains `warmup_s`, `duration_s`, `rates` (one per app), `connections` (per proto), and `grpc_streams`. `load_suite` refuses a suite when an app of a target has no rate, when a proto of a target has no connection count, when `duration_s` is under 30, or when a rate or a connection count is not a multiple of the loader count. The driver refuses the run before it creates the run directory when `connections.http1` is not a multiple of the loader count times the loader vCPU count, as today. `plan_cells` and the round rotation stay.
 
 ## 5. Load and measurement
 
@@ -84,14 +84,14 @@ The registry keeps `Target` as it is (the `proto` field selects wrk2 for `http1`
 
 ### 5.3 h2load (gRPC row)
 
-`box/load.sh h2load EPOCH RATE CONNS STREAMS WARMUP_S DURATION_S URL BODY_FILE [HEADER...]` runs one h2load process over h2c: `-c CONNS`, `--rps RATE/CONNS` (the rate per client), `-m STREAMS`, `-t` one thread per vCPU, `--warm-up-time WARMUP_S`, `-D DURATION_S`, `-d BODY_FILE`, the gRPC headers (`content-type: application/grpc`, `te: trailers`), and `--log-file` to a temporary file. A new script `loader/h2load-report.py` (Python 3 standard library) reads the per-request log (start time, status, response time in microseconds), drops the requests that started before the measured window, and prints the same `RESULT` line as wrk2: `requests`, `duration_us`, `requests_per_sec`, `bytes` (0, h2load does not report it per request), `errors` with `status` (responses that are not 200), `connect`, `read`, `write`, `timeout`, and `dropped` at 0, and `latency_us` with `mean`, `p50`, `p90`, `p95`, `p99`, `p999`, and `max`. The plan verifies the log format against `h2load --help` on the loader image before the parser is written. h2load does not read the `grpc-status` trailer, so a gRPC error inside a 200 response is invisible to the counters; the probes before and after the stage are the correctness check, and a target that answers errors fails the probe after the stage.
+`box/load.sh h2load EPOCH RATE THREADS CONNS STREAMS WARMUP_S DURATION_S URL BODY_FILE` runs one h2load process over h2c: `-t THREADS`, `-c CONNS`, `-m STREAMS`, `--rps RATE/CONNS` (the rate per client), `--warm-up-time WARMUP_S`, `-D DURATION_S`, `-d BODY_FILE`, the gRPC headers (`content-type: application/grpc`, `te: trailers`), and `--log-file` to a temporary file. h2load writes one log line per request that ended in the measured window (the `--log-file` write of `src/h2load.cc` in nghttp2 is inside the main duration phase, so the warm-up requests are not in the log): the start time in microseconds since the epoch, the HTTP status or -1 for a failed stream, and the response time in microseconds, separated by tabs. A new script `loader/h2load-report.py LOG_FILE DURATION_S` (Python 3 standard library) reads that log and prints the same `RESULT` line as wrk2: `requests`, `duration_us` (`DURATION_S` in microseconds), `requests_per_sec`, `bytes` (0, h2load does not report it per request), `errors` with `status` (the lines whose status is not 200, the -1 lines included), `connect`, `read`, `write`, `timeout`, and `dropped` at 0, and `latency_us` with `mean`, the nearest-rank `p50`, `p90`, `p95`, `p99`, `p999`, and `max`. A failed h2load process leaves no `RESULT` line, as a failed wrk2 does. h2load does not read the `grpc-status` trailer, so a gRPC error inside a 200 response is invisible to the counters; the probes before and after the stage are the correctness check, and a target that answers errors fails the probe after the stage.
 
 ### 5.4 Merge and numbers
 
 One loader gives one record; with `LOADER_COUNT` above 1 the merge of the rework applies (sums of requests and errors, the maximum of each percentile). The cell record carries:
 
 - `rate`: the requested rate.
-- `achieved_rps`: the merged requests divided by the run length.
+- `achieved_rps`: the merged requests divided by the window the tool counted: `warmup_s` plus `duration_s` for wrk2, which counts the whole run, and `duration_s` for h2load, which counts the measured window only.
 - `successful_rps`: the achieved rate without status errors.
 - `errors`: the merged error counters.
 - `latency_us`: `p50`, `p90`, `p99`, `p999`, `max`.
@@ -114,7 +114,7 @@ A cell is about 10 s start and probe, 70 s load, and 15 s stop and drain. Six ce
 
 ### 6.1 The run file
 
-`runs/<id>/run.json` has the schema `rapira-bench-run/2`. The top level keeps `id`, `suite` (`name`, `file_sha256`, `rounds`, `warmup_s`, `duration_s`, `rates`, `connections`), `smoke`, `started`, `finished`, `rig`, `rapira`, `servers` (the PHP version, the rapira version, the php.ini text), `apps` (the hashes, plus the Yii3 commit), `loaders` (`wrk2_commit`, `h2load_version`), `processes`, `plan`, `cells`, `status`, `reasons`, and `reporter`. `ladder` goes. `rapira` gains `pr`: `{"number", "url", "title"}` or null.
+`runs/<id>/run.json` has the schema `rapira-bench-run/2`. The top level keeps `id`, `suite` (`name`, `file_sha256`, `rounds`, `warmup_s`, `duration_s`, `rates`, `connections`), `smoke`, `started`, `finished`, `rig`, `rapira` (without `base`), `servers` (the version lines of `/opt/bench/versions.json` and the php.ini text), `apps` (the hashes of the staged `apps/` files), `loaders` (`wrk2_commit`, `h2load_version`), `processes`, `plan`, `cells`, `status`, `reasons`, and `reporter`. `ladder` goes. `rapira` gains `pr`: `{"number", "url", "title"}` or null.
 
 A cell is `key`, `target` (`name`, `app`, `mode`, `proto`), `round`, `status` (`ok`, `void`, `incomplete`), `reason`, `flags`, `rate`, `achieved_rps`, `successful_rps`, `errors`, `latency_us`, `rss_kb`, `held`, `cpu`, `loaders` (the record per loader), and `unloaded` goes. A cell that is not `ok` has null numbers.
 
@@ -128,7 +128,7 @@ A cell is `key`, `target` (`name`, `app`, `mode`, `proto`), `round`, `status` (`
 
 ## 7. Report and compare
 
-`rig report` prints one row per target: `achieved req/s`, `held`, `p99`, `p50`, `RSS MiB`, `n`, `flags`, and the reason of a cell that is not ok. With more than one round the numbers are medians over the ok cells. The publication warning and the exit status rules stay. `rig compare` prints the deltas of `achieved req/s`, `p99`, and `RSS` between two runs and refuses runs with a different server type, loader type, loader count, worker count, rate, or duration unless `--force` is given.
+`rig report` prints one row per target with ok cells, in the order of the cells: `req/s`, `held`, `p99`, `p50`, `RSS MiB`, `n`, and `flags`. The voided cells and their reasons follow the table, as today. With more than one round the numbers are medians over the ok cells, and `held` is true when every ok cell held. The publication warning and the exit status rules stay. `rig compare` prints the deltas of `achieved req/s`, `p99`, and `RSS` between two runs and refuses runs with a different server type, loader type, loader count, worker count, rate, or duration unless `--force` is given.
 
 ## 8. Board
 
@@ -139,6 +139,7 @@ One page, two charts, no selector:
 - An x label is `#<number>` when the run has `rapira.pr`, and the first 7 characters of the sha otherwise. A click on a point opens the pull request of that run in a new tab; a run without a pull request opens the commit on GitHub.
 - The tooltip shows the label, the pull request title, the target, the achieved rate against the requested rate, `held`, the p99 or the RSS, and the flags.
 - A voided cell is a gap. A run without the target has no point.
+- The page draws only run files with the schema `rapira-bench-run/2`. The run of the ladder method stays in the manifest and is not drawn.
 
 `board/app.js` exports `visibleRuns(entries)`, `runLabel(run)`, `runLink(run)`, and `targetSeries(runs)` for the node test. `targetSeries` returns `labels`, `links`, `titles`, and `targets` with `p99_ms`, `rss_mib`, `achieved`, `rate`, `held`, and `flags` per run.
 
@@ -161,7 +162,7 @@ Flat case tables with a `name` field, standard library only. New or changed: the
 
 ## 12. Removals
 
-`apps/symfony`, `apps/laravel`, `apps/static`, `servers/frankenphp`, `servers/php-fpm`, `servers/nginx`, `servers/roadrunner`, `box/servers/frankenphp.sh`, `box/servers/php-fpm.sh`, `box/servers/nginx-rapira.sh`, `box/servers/roadrunner.sh`, `loader/k6-grpc.js`, `suites/full.toml`, `suites/ab.toml`, `rig/ladder.py`, the k6 and RoadRunner and PECL provisioning, the Symfony and Laravel lock flow of `box/lock-apps.sh`, and every registry target that is not in section 4.
+`apps/symfony`, `apps/laravel`, `apps/static`, `apps/hello/fpm.php`, `apps/hello/frankenphp.php`, `apps/grpc/php/rr-worker.php`, `apps/grpc/php/gen/Bench/V1/EchoServiceInterface.php`, the gRPC-Web and Connect fixtures of `apps/grpc` (`echo.bin`, `echo.json`, `expect.bin`, `expect.grpcweb`, `expect.json`) and their lines in `apps/grpc/fixtures.py`, the RoadRunner plugin of `apps/grpc/buf.gen.yaml`, `servers/frankenphp`, `servers/php-fpm`, `servers/nginx`, `servers/roadrunner`, `box/servers/frankenphp.sh`, `box/servers/php-fpm.sh`, `box/servers/nginx-rapira.sh`, `box/servers/roadrunner.sh`, `loader/k6-grpc.js`, `suites/full.toml`, `suites/ab.toml`, `rig/ladder.py`, `tests/test_ladder.py`, the `binary` field of the targets and the base build (`BASE_REF`, `--base-ref`, `binary_dir`), the k6 and RoadRunner and PECL provisioning, the Symfony and Laravel lock flow of `box/lock-apps.sh`, the FrankenPHP, nginx, and php-fpm packages of `tests/box.Dockerfile`, and every registry target that is not in section 4.
 
 ## 13. Follow-ups outside this change
 
