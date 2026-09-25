@@ -46,7 +46,7 @@ probe)
   log_bytes "$tag"
   ;;
 mem)
-  pss_kb "$tag"
+  rss_kb "$tag"
   ;;
 log)
   { cat "$BENCH/log/$tag".*.log 2>/dev/null || true; } | { grep -E 'WARN|ERROR' || true; }

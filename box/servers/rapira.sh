@@ -3,7 +3,7 @@
 # rapira.sh start TAG PROCS BINARY_DIR grpc ENTRY
 # rapira.sh stop TAG
 # MODE is worker, classic, or dispatcher. CONFIG_TPL is servers/rapira/http.toml.tpl by default.
-# PORT and LISTEN_HOST select the listen address.
+# The static template serves the hello app directory as its root.
 set -euo pipefail
 # shellcheck source=box/lib.sh
 . "$(dirname "$0")/../lib.sh"
@@ -21,7 +21,7 @@ start() {
   [ -f "$entry" ] || die "$entry is missing"
   [ -f "$tpl" ] || die "$tpl is missing"
   ensure_port_free
-  render "$tpl" "$toml" "LISTEN=$LISTEN_HOST:$PORT" "ENTRY=$entry" "MODE=$mode" "PROCS=$procs" "ROOT=$RIG/apps/static" "RIG=$RIG"
+  render "$tpl" "$toml" "LISTEN=:$PORT" "ENTRY=$entry" "MODE=$mode" "PROCS=$procs" "ROOT=$RIG/apps/hello" "RIG=$RIG"
   launch rapira "$tag" "$bin" serve "$toml"
   wait_listener "$tag" "$bin"
   if [ "$mode" = grpc ]; then

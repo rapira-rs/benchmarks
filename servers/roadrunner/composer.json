@@ -1,6 +1,0 @@
-{
-    "require": {
-        "google/protobuf": "~5.36.0",
-        "spiral/roadrunner-grpc": "~3.6.0"
-    }
-}
