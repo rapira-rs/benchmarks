@@ -2,7 +2,7 @@
 name = "ci"
 rounds = 1
 stage_s = 20
-connections = 256
+connections = 1024
 smoke = false
 targets = [
   "hello-rapira-worker",

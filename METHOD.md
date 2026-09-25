@@ -44,7 +44,7 @@ These k6 facts shape the method:
 
 The stage rates of an app start at the floor of the suite file and double at each stage: floor, 2 times floor, 4 times floor, and so on. The driver stops a cell at the first failing stage and at 20 stages at most. The floors of the `ci` suite are 10000 req/s for hello, Symfony, static, and gRPC, and 5000 req/s for Laravel.
 
-Each loader sends the stage rate divided by the loader count. For wrk2, each loader runs one thread per vCPU and the connection count divided by the loader count. With the default rig and the default suite, that is 64 connections per loader and 256 connections in total. k6 opens one connection per VU, so a gRPC stage above 51200 req/s uses more than 64 connections per loader.
+Each loader sends the stage rate divided by the loader count. For wrk2, each loader runs one thread per vCPU and the connection count divided by the loader count. With the default rig and the default suite, that is 256 connections per loader and 1024 connections in total. k6 opens one connection per VU, so a gRPC stage above 204800 req/s uses more than 256 connections per loader.
 
 The driver runs this sequence for each cell:
 

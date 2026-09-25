@@ -10,6 +10,15 @@ Dated records and the decisions the code cannot show. Methodology lives in METHO
 - FrankenPHP now runs the glibc release asset 1.12.7 with the production worker shape, and every PHP runtime uses the shared `servers/php.ini`. The FrankenPHP and php-fpm numbers before this date used other settings.
 - The fixed pair of the decisions below no longer applies. The loader count and the instance types are knobs, and the Makefile quota check adds the vCPUs of the server and all loaders.
 
+## First ladder run, 2026-09-25
+
+Rig: one c7a.8xlarge server and four c7a.xlarge loaders, eu-central-1a, a server build of rapira `feature/grpc-connectrpc` at `73b9d30`, the `ci` suite at 256 connections, one round. Run: `20260925T190409Z-ci-73b9d30`, published as the first board point. The run has 14 targets: a suite edit that was reverted the same day had removed the two gRPC targets.
+
+- Every fast row ends with `server_unsaturated`: at the 1.28M stage the hello worker achieves 952k req/s with the server at 84% busy and the loaders at 70%, and the static row achieves 1.14M with the server at 59% and the loaders at 81%. 256 HTTP/1.1 connections at about 0.25 ms per request bound the in-flight rate near 1M req/s. The `ci` suite moves to 1024 connections from the next run, so numbers from this run and later runs do not compare on the fast rows.
+- The FrankenPHP worker collapses at 160k req/s on hello: 56k achieved with the server at 15%, then the probe fails (`died`).
+- The rapira WARN void did not fire on any cell: the server log stays empty through the overloaded stage.
+- The ci suite takes 52 minutes of cells on this rig; the CloudWatch CPU chart averages that to 40% over 5-minute periods.
+
 ## gRPC baseline (rapira PHP dispatcher vs RoadRunner), 2026-09-24
 
 Rig: c7a.8xlarge server + c7a.4xlarge loader, eu-central-1a, AMI ami-066f414c6023b2bf9, plain release build of rapira at feature/grpc-connectrpc `e421bbc` (pr_sha `924399d` is that commit plus a since-removed example that the run did not use), PHP 8.5.10 NTS with opcache and PECL protobuf 5.36.2, RoadRunner 2025.1.15 with php opcache.enable_cli=1 and 32 workers, h2load nghttp2/1.70.0, k6 2.2.0, wrk 4.2.0, 32 workers on every leg, 512 connections and 15 s on every saturated pass, lowc at 32 connections for 10 s, k6 open loop at 20000 req/s with 256 VUs (1 s ramp then 15 s), medians of 3 interleaved rounds. Run dir: `results/20260924T191959Z-c7a.8xlarge-grpc`.
