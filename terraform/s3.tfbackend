@@ -1,0 +1,5 @@
+# S3 backend settings of the rig stack for TF_BACKEND=s3. The bucket name
+# holds the account id and comes from -backend-config=bucket=<name>.
+key          = "rig/terraform.tfstate"
+region       = "eu-central-1"
+use_lockfile = true

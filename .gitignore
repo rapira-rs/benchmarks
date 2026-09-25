@@ -19,3 +19,7 @@ __pycache__/
 runs/
 # Copied from backend.tf.s3 by `make up TF_BACKEND=s3`.
 terraform/backend.tf
+
+# The bootstrap stack keeps its state on the owner machine.
+terraform/ci/.terraform/
+terraform/ci/*.tfstate*
