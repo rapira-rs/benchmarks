@@ -96,7 +96,7 @@ PY
 }
 
 echo "==> packages"
-sudo dnf -y install gcc make git openssl-devel binutils ethtool curl tar diffutils python3 chrony
+sudo dnf -y install gcc make git openssl-devel zlib-devel binutils ethtool curl tar diffutils python3 chrony
 sudo install -d -o fedora -g fedora "$BENCH"
 echo "==> system knobs"
 system_knobs
