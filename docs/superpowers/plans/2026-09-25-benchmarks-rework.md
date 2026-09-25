@@ -12,7 +12,7 @@
 
 **Branch:** `feat/bench-rework`. Never commit to `main`. Every commit is `git commit -s -S` with a Conventional Commits subject and no AI attribution trailer.
 
-**PR boundary:** Tasks 1 to 15 produce a working manual rig and are one pull request. Tasks 16 to 18 (board, CI bootstrap, workflows) are a second pull request. Ask the owner before splitting further.
+**Pull request:** all 18 tasks land in one pull request from `feat/bench-rework`. Tasks 1 to 15 give a working manual rig; tasks 16 to 18 add the board, the CI bootstrap stack, and the workflows. The publish job commits run data to `gh-pages` with the Actions token, so those commits carry a sign-off only; the owner accepted this.
 
 ## Global Constraints
 
