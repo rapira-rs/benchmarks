@@ -258,7 +258,7 @@ The board is one page with one chart per target, grouped under one heading per a
 One chart:
 
 - The x axis lists the newest 60 runs that are not smoke runs, in `started` order, each labelled with the first 7 characters of the rapira sha.
-- One line per ladder rate that appears in the stages of that target in any of those runs, in ascending rate order.
+- One line per ladder rate that the target held in at least one of those runs, in ascending rate order. A rate that only failed has no line.
 - The y axis is the p99 latency in milliseconds at that rate, on a logarithmic scale.
 - A point exists only where the stage passed. The value is the median over the ok cells of the target in that run. A failing stage, a voided cell, and a run without the target give no point, so the highest line with a point is the held rate of that run.
 - The tooltip of a point shows the sha, the rapira version, the rate, the p99, and the flags of the cell.
