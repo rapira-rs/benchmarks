@@ -156,6 +156,9 @@ PHP_INI = {
     "realpath_cache_size": "4096K",
     "realpath_cache_ttl": "600",
     "expose_php": "0",
+    "display_errors": "0",
+    "log_errors": "1",
+    "error_reporting": "E_ALL & ~E_DEPRECATED",
     "error_log": "/dev/stderr",
 }
 
