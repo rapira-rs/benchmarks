@@ -251,15 +251,19 @@ All numbers are JSON numbers.
 
 ## 7. Board
 
-The `gh-pages` branch holds `data/<run-id>.json`, `data/index.json` (a manifest with id, date, suite, rapira sha and version, status), and the board files. The board is static HTML and JavaScript under `board/` in the main branch, copied to `gh-pages` by the publish job, with Chart.js vendored as one pinned file.
+The `gh-pages` branch holds `data/<run-id>.json`, `data/index.json` (a manifest with id, date, suite, rapira sha and version, status, smoke), and the board files. The board is static HTML and JavaScript under `board/` in the main branch, copied to `gh-pages` by the publish job, with Chart.js vendored as one pinned file.
 
-Views:
+The board is one page with one chart per target, grouped under one heading per app, sorted by app and then by target name. There is no run selector and no second view. The layout follows perf.rust-lang.org: a run is one merged commit on the rapira main branch, because the nightly build that the CI benches exists only after a merge.
 
-- History: peak and held per target across commits, one line per target, grouped by app. Points with `generator_bound` render as floors with a distinct marker. Voided cells render as gaps.
-- Run: for one run, the latency percentiles versus rate for every target, and the stage table.
-- Flags are shown next to any point that carries one.
+One chart:
 
-Smoke runs are in the manifest with `smoke = true` and hidden by default.
+- The x axis lists the newest 60 runs that are not smoke runs, in `started` order, each labelled with the first 7 characters of the rapira sha.
+- One line per ladder rate that appears in the stages of that target in any of those runs, in ascending rate order.
+- The y axis is the p99 latency in milliseconds at that rate, on a logarithmic scale.
+- A point exists only where the stage passed. The value is the median over the ok cells of the target in that run. A failing stage, a voided cell, and a run without the target give no point, so the highest line with a point is the held rate of that run.
+- The tooltip of a point shows the sha, the rapira version, the rate, the p99, and the flags of the cell.
+
+The peak is not on the chart. `rig report` and `rig compare` carry it. Smoke runs are in the manifest with `smoke = true` and are not shown.
 
 ## 8. CI
 
