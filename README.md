@@ -117,10 +117,10 @@ Use only runs from the same rig shape for a direct comparison. Read [METHOD.md](
 
 ## Remote state
 
-`make up TF_BACKEND=s3` copies `terraform/backend.tf.s3` to `terraform/backend.tf`. The S3 settings come from the `TF_CLI_ARGS_init` environment variable:
+`make up TF_BACKEND=s3` copies `terraform/backend.tf.s3` to `terraform/backend.tf`. `terraform/s3.tfbackend` holds the key, the region, and `use_lockfile`. Only the bucket comes from the `TF_CLI_ARGS_init` environment variable:
 
 ```bash
-export TF_CLI_ARGS_init='-backend-config=bucket=<bucket> -backend-config=key=rig/terraform.tfstate -backend-config=region=eu-central-1 -backend-config=use_lockfile=true'
+export TF_CLI_ARGS_init='-backend-config=s3.tfbackend -backend-config=bucket=<bucket>'
 make up TF_BACKEND=s3 NIGHTLY=<sha7>
 ```
 
@@ -151,7 +151,7 @@ terraform -chdir=terraform/ci apply
 terraform -chdir=terraform/ci output
 ```
 
-The output `role_arn` is the value of the repository variable `AWS_ROLE_ARN`. The output `bucket` is the value of the repository variable `TF_STATE_BUCKET`.
+The output `role_arn` is the value of the repository secret `AWS_ROLE_ARN`. The output `bucket` is the value of the repository secret `TF_STATE_BUCKET`. Secrets are masked in the workflow logs. Repository variables are not.
 
 The role trusts only jobs on the `main` branch of this repository. This repository uses the immutable OIDC subject format, which contains the owner id and the repository id. The variable `github_sub_prefix` holds that prefix. This command prints the current value:
 
@@ -159,11 +159,13 @@ The role trusts only jobs on the `main` branch of this repository. This reposito
 gh api repos/rapira-rs/benchmarks/actions/oidc/customization/sub --jq .sub_claim_prefix
 ```
 
-An AWS account has at most one OIDC provider for `token.actions.githubusercontent.com`. If the apply stops with `EntityAlreadyExists`, import the provider and apply again:
+An AWS account has at most one OIDC provider for `token.actions.githubusercontent.com`. If the apply stops with `EntityAlreadyExists`, import the provider. Then apply again.
 
 ```bash
 terraform -chdir=terraform/ci import aws_iam_openid_connect_provider.github arn:aws:iam::<account id>:oidc-provider/token.actions.githubusercontent.com
 ```
+
+After the import, this stack owns the provider. A destroy of this stack removes the provider for every role that uses it.
 
 The role policy allows the EC2 actions of the rig stack in `eu-central-1`, all EC2 describe calls, the service quota read, and read and write access to the `rig/` objects of the state bucket.
 
@@ -181,7 +183,7 @@ Do these owner steps once, in this order:
 2. Create the `gh-pages` branch with the commands below.
 3. In the repository settings, open Pages. Select "Deploy from a branch". Select the branch `gh-pages` with the folder `/`.
 4. Apply `terraform/ci` as the "CI bootstrap" section shows.
-5. Set the repository variables `AWS_ROLE_ARN` and `TF_STATE_BUCKET` with the commands below.
+5. Set the repository secrets `AWS_ROLE_ARN` and `TF_STATE_BUCKET` with the commands below.
 6. Create a fine-grained token for the resource owner `rapira-rs` with access to the repository `rapira-rs/benchmarks` only and the permission "Actions: Read and write". If the organization approves tokens, approve the request. The token has an expiry date. Create a new token before that date and repeat step 7.
 7. Store the token as the secret `BENCH_DISPATCH_TOKEN` in `rapira-rs/rapira`.
 8. Copy `docs/core-dispatch.yml` to `.github/workflows/bench-dispatch.yml` in `rapira-rs/rapira` through a pull request.
@@ -199,7 +201,7 @@ git switch main
 Commands for step 5 and step 7:
 
 ```bash
-gh variable set AWS_ROLE_ARN -R rapira-rs/benchmarks --body "$(terraform -chdir=terraform/ci output -raw role_arn)"
-gh variable set TF_STATE_BUCKET -R rapira-rs/benchmarks --body "$(terraform -chdir=terraform/ci output -raw bucket)"
+gh secret set AWS_ROLE_ARN -R rapira-rs/benchmarks --body "$(terraform -chdir=terraform/ci output -raw role_arn)"
+gh secret set TF_STATE_BUCKET -R rapira-rs/benchmarks --body "$(terraform -chdir=terraform/ci output -raw bucket)"
 gh secret set BENCH_DISPATCH_TOKEN -R rapira-rs/rapira
 ```

@@ -34,7 +34,7 @@ jobs:
     env:
       TF_BACKEND: s3
       # Every terraform init of the Makefile gets the S3 backend settings.
-      TF_CLI_ARGS_init: -backend-config=s3.tfbackend -backend-config=bucket=${{ vars.TF_STATE_BUCKET }}
+      TF_CLI_ARGS_init: -backend-config=s3.tfbackend -backend-config=bucket=${{ secrets.TF_STATE_BUCKET }}
     outputs:
       skip: ${{ steps.resolve.outputs.skip }}
     steps:
@@ -75,9 +75,10 @@ jobs:
         if: steps.resolve.outputs.skip == 'false'
         uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
         with:
-          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-central-1
-          # The credentials must last for the whole 90 minute job, the destroy included.
+          mask-aws-account-id: true
+          # The credentials must last for the whole 110 minute job, the destroy included.
           role-duration-seconds: 7200
 
       - name: Install terraform
@@ -134,7 +135,7 @@ jobs:
         if: always() && steps.resolve.outputs.skip == 'false'
         run: make down
 
-      # Tag-scoped cleanup only when the destroy failed, so a local rig with the same tag is safe.
+      # make nuke deletes every resource with the Project tag, a local rig included, so it runs only after a failed destroy.
       - name: Remove tagged leftovers
         if: always() && steps.resolve.outputs.skip == 'false' && steps.down.outcome == 'failure'
         run: make nuke

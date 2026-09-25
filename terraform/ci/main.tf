@@ -83,7 +83,6 @@ data "aws_iam_policy_document" "ci" {
       "ec2:DeletePlacementGroup",
       "ec2:ImportKeyPair",
       "ec2:DeleteKeyPair",
-      "ec2:DeleteVolume",
     ]
     resources = ["*"]
 
