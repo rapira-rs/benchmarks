@@ -68,7 +68,21 @@ CASES = [
 ]
 
 
+REFUSAL_CASES = [
+    {"name": "incomplete run", "status": "incomplete"},
+]
+
+
 class TestPublish(unittest.TestCase):
+    def test_refuses_a_run_that_is_not_complete(self):
+        for case in REFUSAL_CASES:
+            with self.subTest(name=case["name"]), tempfile.TemporaryDirectory() as tmp:
+                pages = Path(tmp)
+                run = run_doc("20260925T120000Z-ci-0a1b2c3", "2026-09-25T12:00:00Z", case["status"])
+                with self.assertRaises(ValueError):
+                    publish(run, pages)
+                self.assertFalse((pages / "data").exists())
+
     def test_publish(self):
         for case in CASES:
             with self.subTest(name=case["name"]):

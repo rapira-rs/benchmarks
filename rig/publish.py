@@ -19,7 +19,9 @@ def index_entry(run: dict) -> dict:
 
 
 def publish(run: dict, pages_dir: Path) -> Path:
-    """Write `data/<id>.json`, add or replace the run in `data/index.json`, and return the data path."""
+    """Write `data/<id>.json`, add or replace the run in `data/index.json`, and return the data path. Refuse a run that is not complete."""
+    if run["status"] != "complete":
+        raise ValueError(f"run {run['id']} is {run['status']}; publish only a complete run")
     data = pages_dir / "data" / f"{run['id']}.json"
     data.parent.mkdir(parents=True, exist_ok=True)
     data.write_text(json.dumps(run, indent=1) + "\n")
