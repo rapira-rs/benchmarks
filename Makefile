@@ -24,7 +24,7 @@ BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 TF := terraform -chdir=terraform
 AWSC := aws --profile $(PROFILE) --region $(REGION)
 
-.PHONY: up provision status bench bench_fleet bench_frameworks bench_static bench_grpc perf sync extend report down nuke preflight grpc_fixtures
+.PHONY: up provision status bench bench_fleet bench_frameworks bench_static bench_grpc perf sync extend report down nuke preflight grpc_fixtures lock
 
 preflight:
 	@$(AWSC) sts get-caller-identity >/dev/null 2>&1 || \
@@ -121,3 +121,7 @@ grpc_fixtures:
 	$(BUF) build apps/grpc --as-file-descriptor-set -o apps/grpc/bench.binpb
 	$(BUF) generate apps/grpc --template apps/grpc/buf.gen.yaml
 	python3 apps/grpc/fixtures.py
+
+# Local only: needs PHP 8.5 and composer. Commit apps/symfony and apps/laravel composer.json and composer.lock after a run.
+lock:
+	box/lock-apps.sh
