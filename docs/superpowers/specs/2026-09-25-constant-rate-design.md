@@ -38,7 +38,7 @@ Date: 2026-09-25. Status: approved by the owner in conversation; this document i
 | hello-rapira-dispatcher | hello | dispatcher | servers/rapira/http.toml.tpl | GET /?name=you |
 | hello-rapira-dispatcher-static | hello | dispatcher | servers/rapira/static.toml.tpl | GET /?name=you |
 | yii3-rapira-dispatcher | yii3 | dispatcher | servers/rapira/http.toml.tpl | GET / |
-| grpc-rapira | grpc | grpc | servers/rapira/grpc.toml.tpl | POST /bench.v1.EchoService/Echo |
+| grpc-rapira | grpc | dispatcher | servers/rapira/grpc.toml.tpl | POST /bench.v1.EchoService/Echo |
 
 The static row enables rapira's static middleware with the static root of the hello app; the request misses the root and reaches PHP, so the row shows the cost of the middleware on the PHP path.
 
@@ -114,9 +114,9 @@ A cell is about 10 s start and probe, 70 s load, and 15 s stop and drain. Six ce
 
 ### 6.1 The run file
 
-`runs/<id>/run.json` has the schema `rapira-bench-run/2`. The top level keeps `id`, `suite` (`name`, `file_sha256`, `rounds`, `warmup_s`, `duration_s`, `rates`, `connections`), `smoke`, `started`, `finished`, `rig`, `rapira` (without `base`), `servers` (the version lines of `/opt/bench/versions.json` and the php.ini text), `apps` (the hashes of the staged `apps/` files), `loaders` (`wrk2_commit`, `h2load_version`), `processes`, `plan`, `cells`, `status`, `reasons`, and `reporter`. `ladder` goes. `rapira` gains `pr`: `{"number", "url", "title"}` or null.
+`runs/<id>/run.json` has the schema `rapira-bench-run/2`. The top level keeps `id`, `suite` (`name`, `file_sha256`, `rounds`, `warmup_s`, `duration_s`, `rates`, `connections`), `smoke`, `started`, `finished`, `rig`, `rapira` (without `base`), `servers` (the version lines of `/opt/bench/versions.json` and the php.ini text), `apps` (the hashes of the staged `apps/` files), `loaders` (one record per loader with `wrk2`, the wrk2 commit, and `h2load`, the h2load version line), `processes`, `plan`, `cells`, `status`, `reasons`, and `reporter`. `ladder` goes. `rapira` gains `pr`: `{"number", "url", "title"}` or null.
 
-A cell is `key`, `target` (`name`, `app`, `mode`, `proto`), `round`, `status` (`ok`, `void`, `incomplete`), `reason`, `flags`, `rate`, `achieved_rps`, `successful_rps`, `errors`, `latency_us`, `rss_kb`, `held`, `cpu`, `loaders` (the record per loader), and `unloaded` goes. A cell that is not `ok` has null numbers.
+A cell is `key`, `target` (the registry record of the target), `round`, `status` (`ok`, `void`, `incomplete`), `reason`, `flags`, `rate`, `achieved_rps`, `successful_rps`, `errors`, `latency_us`, `rss_kb`, `held`, `cpu`, `loaders` (the record per loader), and `unloaded` goes. A cell that is not `ok` has null numbers.
 
 ### 6.2 Raw evidence
 

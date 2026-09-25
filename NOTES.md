@@ -4,11 +4,17 @@ Dated records and the decisions the code cannot show. Methodology lives in METHO
 
 ## Method change, 2026-09-25
 
-- From this date the rig measures with the staged rate ladder of METHOD.md. wrk2 loads the HTTP/1.1 targets and k6 loads the gRPC targets, from four c7a.xlarge loaders against one c7a.8xlarge server.
+- From this date the rig measures with the staged rate ladder of METHOD.md. wrk2 loads the HTTP/1.1 targets and k6 loads the gRPC targets, from four c7a.xlarge loaders against one c7a.8xlarge server. This method was replaced the same day, see the next section.
 - The numbers before this date come from closed-loop wrk and h2load passes and fixed-rate k6 passes from one c7a.4xlarge loader at a fixed connection count. The numbers after this date are the held rate, the peak successful rate, and the unloaded latency of the ladder. Do not compare numbers from before and after this date, and do not put them in one table.
 - Each run now writes `runs/<id>/run.json` with the schema `rapira-bench-run/1`. The directories under `results/` stay as the record of the old method.
 - FrankenPHP now runs the glibc release asset 1.12.7 with the production worker shape, and every PHP runtime uses the shared `servers/php.ini`. The FrankenPHP and php-fpm numbers before this date used other settings.
 - The fixed pair of the decisions below no longer applies. The loader count and the instance types are knobs, and the Makefile quota check adds the vCPUs of the server and all loaders.
+
+## Method change 2, 2026-09-25
+
+- From this date the rig measures one constant rate per target, as METHOD.md defines: 250000 req/s over 5000 connections for the HTTP targets and 100000 req/s over 100 connections for the gRPC target, 60 s measured after a 10 s warm-up, from one c7a.2xlarge loader against one c7a.8xlarge server. The numbers are the p99 latency and the RSS of the rapira process tree next to the achieved rate.
+- The targets are rapira only: hello in the classic, worker, and dispatcher modes, the dispatcher behind the static middleware, the Yii3 app-api on the dispatcher, and gRPC echo. FrankenPHP, php-fpm, nginx, RoadRunner, Symfony, Laravel, the static file rows, the gRPC-Web and Connect rows, k6, the base build, and the `full` and `ab` suites are removed.
+- Each run writes `runs/<id>/run.json` with the schema `rapira-bench-run/2`. The ladder run of the same day, `20260925T190409Z-ci-73b9d30`, has the schema 1: its numbers do not compare with the runs after it, and the board does not draw it.
 
 ## First ladder run, 2026-09-25
 

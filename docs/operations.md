@@ -28,8 +28,8 @@ make down
 Bench a Git ref that the server builds from source:
 
 ```bash
-make up REF=pr/97 SUITE=full
-make bench SUITE=full
+make up REF=pr/97
+make bench
 make down
 ```
 
@@ -37,44 +37,40 @@ make down
 
 `NIGHTLY` is the first 7 characters of the commit SHA of a nightly release asset of `rapira-rs/rapira`. The core Nightly workflow deletes the assets of older builds, so use the SHA of the current `nightly` release. `REF` accepts a branch, a tag, a commit, or `pr/N`. When you set `NIGHTLY`, provisioning ignores `REF`.
 
-Provisioning installs only the servers and apps that the suite uses. Set the same `SUITE` on `make up` and on `make bench`. To bench another suite on the same rig, run `make provision SUITE=<suite>` with the same `NIGHTLY` or `REF` first.
+Provisioning installs only the apps that the suite uses. Set the same `SUITE` on `make up` and on `make bench`.
 
 ## Software on the EC2 instances
 
 | Instance | Condition | Software |
 | --- | --- | --- |
-| Server | All runs | PHP with opcache, the shared `servers/php.ini`, and the rapira binary: the nightly release asset, or a build of `REF` and `BASE_REF` |
-| Server | FrankenPHP targets | FrankenPHP 1.12.7, the glibc release asset |
-| Server | php-fpm targets | php-fpm and nginx |
-| Server | nginx-rapira targets | nginx |
-| Server | Symfony and Laravel targets | The Composer dependencies from the committed `composer.lock` files |
-| Server | gRPC targets | RoadRunner 2025.1.15 and its PHP worker packages. A server build also gets PECL protobuf 5.36.2. |
-| Loader | All runs | wrk2 at commit `44a94c1`, k6 2.2.0, and a chrony synchronization check |
+| Server | All runs | PHP with opcache, the shared `servers/php.ini`, and the rapira binary: the nightly release asset, or a build of `REF` |
+| Server | Yii3 target | The PHP modules `mbstring`, `xml`, `pdo`, and `pgsql`, Composer, the app-api at the commit of `apps/yii3/source.toml` with the dependencies of the committed `composer.lock`, and the Valkey service for its route cache |
+| Server | gRPC target | Composer and the pure PHP protobuf runtime of `apps/grpc/composer.lock` |
+| Loader | All runs | wrk2 at commit `44a94c1`, h2load from the Fedora `nghttp2` package, and a chrony synchronization check |
 
 The Fedora 44 EC2 image supplies Bash, `dnf`, `sudo`, the OpenSSH server, cloud-init, systemd, core utilities, and the procps and iproute tools. Provisioning uses these tools but does not install them.
 
 ## Suites
 
-`suites/targets.toml` defines every target. A target name is `<app>-<server>-<mode>`. A target that runs the base rapira binary has the suffix `-base`. A request variant has its own suffix, for example `grpc-rapira-connect`. A suite file lists its targets, the number of rounds, the stage duration, the total connection count, and the ladder floor of each app.
+`suites/targets.toml` defines every target. A target name is `<app>-rapira-<mode>`, with the suffix `-static` for the static middleware; the gRPC target is `grpc-rapira`. A suite file lists its targets, the number of rounds, the warm-up and the measured duration in seconds, the rate of each app, the connection count of each proto, and the stream count of the gRPC connections.
 
-- `ci` is the per-merge suite: 16 targets over hello, Symfony, Laravel, static files, and gRPC, one round.
-- `full` adds the nginx-rapira worker rows, the FrankenPHP stock rows, the static miss and plain rows, the 27 KiB asset, and the gRPC-Web and Connect variants. It runs three rounds.
-- `ab` runs hello on the rapira worker, classic, and dispatcher modes and Symfony on the worker and classic modes, for the `pr` and the `base` binary. It runs three rounds. Provision it with `REF` and `BASE_REF`.
+- `ci` is the per-merge suite: the six targets, one round, 250000 req/s over 5000 connections for the HTTP targets and 100000 req/s over 100 connections for the gRPC target, 60 s measured after a 10 s warm-up.
 
 The driver refuses a suite before it creates a run directory when one of these conditions is true:
 
-- A floor is not a multiple of the loader count.
-- `stage_s` is less than 12.
-- The connection count is not a multiple of the loader count times the loader vCPU count.
+- An app of a target has no rate, or a proto of a target has no connection count.
+- A rate or a connection count is not a multiple of the loader count.
+- `duration_s` is less than 30.
+- The HTTP connection count is not a multiple of the loader count times the loader vCPU count.
 
 ## Settings
 
 - `SUITE` selects `suites/<name>.toml`. It defaults to `ci`.
 - `NIGHTLY` selects the nightly release asset by its SHA prefix.
-- `REF` selects the Git ref that the server builds. `BASE_REF` selects the base ref and defaults to `main`.
+- `REF` selects the Git ref that the server builds.
 - `ROUNDS` replaces the round count of the suite.
 - `PROCESSES` sets the worker count of every target. It defaults to the server CPU count.
-- `SERVER_TYPE` defaults to `c7a.8xlarge`. `LOADER_TYPE` defaults to `c7a.xlarge`. `LOADER_COUNT` defaults to 4.
+- `SERVER_TYPE` defaults to `c7a.8xlarge`. `LOADER_TYPE` defaults to `c7a.2xlarge`. `LOADER_COUNT` defaults to 1.
 - `AZ` defaults to `eu-central-1a`. `REGION` defaults to `eu-central-1`.
 - `AMI` pins an AMI. Without it, Terraform selects the newest Fedora 44 image, which Fedora rebuilds every day. Pin it when a result set takes more than one day.
 - `TTL` sets the instance lifetime in minutes. It defaults to 60.
@@ -93,7 +89,7 @@ The driver refuses a suite before it creates a run directory when one of these c
 - `make report` prints the tables of the newest run. `make report RUN=runs/<id>` prints another run.
 - `make compare A=runs/<a> B=runs/<b>` prints the deltas between two runs.
 - `make board` copies the board files into `PAGES` and serves the directory on 127.0.0.1:8000. Fill the directory first with `python3 -m rig publish --pages-dir runs/pages runs/<id>/run.json`.
-- `make lock` creates the Symfony and Laravel `composer.lock` files. It needs PHP 8.5 and Composer on the operator machine.
+- `make lock` creates `apps/yii3/composer.lock`, `apps/yii3/expect.json`, and `apps/grpc/composer.lock` from the pinned sources. It needs PHP 8.5, Composer, and a Valkey or Redis server on 127.0.0.1:6379 on the operator machine, for example `docker run --rm -d -p 127.0.0.1:6379:6379 valkey/valkey:9.1.2-alpine`.
 - `make test` runs the unit tests.
 - `make nuke` removes the tagged AWS resources when the Terraform state is not usable.
 - `make grpc_fixtures` builds the gRPC descriptor, the PHP classes, and the request and response fixtures. It needs Go and access to the buf remote plugins.
@@ -102,12 +98,12 @@ The driver refuses a suite before it creates a run directory when one of these c
 
 Each run writes `runs/<id>/`. The run id is `<UTC timestamp>-<suite>-<rapira sha7>`. The directory holds:
 
-- `run.json`: the run file with the schema `rapira-bench-run/1`. It records the rig, the rapira build, the server versions, the php.ini text, the app hashes, the loaders, the ladder, every cell, and every stage.
-- `raw/<cell>/`: the wrk2 or k6 output of each stage and loader, the rendered server configs, the WARN and ERROR lines of the server log, and the snapshots.
+- `run.json`: the run file with the schema `rapira-bench-run/2`. It records the rig, the rapira build and its pull request, the version lines of the server, the php.ini text, the app hashes, the loaders, the suite, and every cell with its rate, its achieved rate, its latency, its RSS, its `held` state, its flags, and the record of each loader.
+- `raw/<cell>/`: the wrk2 or h2load output of each loader with its `RESULT` line, the rendered rapira config, the WARN and ERROR lines of the server log, and the snapshots.
 
 `make bench` and `make report` return a nonzero status when the run is incomplete. An incomplete run has a missing, voided, or interrupted cell. The report then ends with `Do not publish these tables.`
 
-`make compare` refuses two runs with a different server type, loader type, loader count, worker count, or stage duration. Give `--force` to `python3 -m rig compare` to compare them anyway.
+`make compare` refuses two runs with a different server type, loader type, loader count, worker count, rate, or duration. Give `--force` to `python3 -m rig compare` to compare them anyway.
 
 `python3 -m rig publish --pages-dir <dir> runs/<id>/run.json` adds a run to a checkout of the `gh-pages` branch: it writes `data/<id>.json` and updates `data/index.json`.
 
@@ -128,9 +124,9 @@ Keep `TF_BACKEND=s3` and the variable set for every later target that uses Terra
 
 ## Cost and teardown
 
-The instances use on-demand billing per second. The `ci` suite takes about 45 minutes and costs about $3 with the default rig. The server type is most of the cost.
+The instances use on-demand billing per second. The `ci` suite takes about 10 minutes of cells; with the rig creation, the provisioning, and the destroy a CI run holds the rig for about 30 minutes and costs about $1 with the default rig. The server type is most of the cost.
 
-Every box has a lifetime. The bootstrap sets 180 minutes. Provisioning replaces it with `TTL`. `make bench` extends it from the run estimate: the number of cells times (8 times `stage_s` plus 60) plus 300 seconds. When the lifetime ends, the box shuts down, and a shutdown terminates the instance.
+Every box has a lifetime. The bootstrap sets 180 minutes. Provisioning replaces it with `TTL`. `make bench` extends it from the run estimate: the number of cells times (`warmup_s` plus `duration_s` plus 60) plus 300 seconds. When the lifetime ends, the box shuts down, and a shutdown terminates the instance.
 
 - Run `make down` after every session. Check `make status` when you are not sure.
 - When `make down` fails, run it again. Placement group deletion can lag instance termination.
@@ -173,9 +169,9 @@ With `TF_BACKEND=s3`, the rig stack keeps its state in the bucket. `terraform/s3
 
 ## CI
 
-After each successful Nightly run on the rapira main branch, the core repository starts `.github/workflows/bench.yml` in this repository. The bench job finds the commit of the current `nightly` release and stops when the board already has that commit. Then it creates the rig with the S3 backend, provisions it with the nightly asset, runs `suites/ci.toml`, and uploads `run.json` and `raw/` as artifacts for 90 days. `make down` runs at the end of each bench job that passes the commit check, also after a failure. `make nuke` runs only when `make down` failed. A capacity error retries once in `eu-central-1b`. The publish job runs only when the run is complete. It adds the run to the `gh-pages` branch and copies `board/` there.
+After each successful Nightly run on the rapira main branch, the core repository starts `.github/workflows/bench.yml` in this repository. The bench job finds the commit of the current `nightly` release and stops when the board already has that commit. Then it creates the rig with the S3 backend, provisions it with the nightly asset, looks up the merged pull request of that commit for the board label, runs `suites/ci.toml`, and uploads `run.json` and `raw/` as artifacts for 90 days. `make down` runs at the end of each bench job that passes the commit check, also after a failure. `make nuke` runs only when `make down` failed. A capacity error retries once in `eu-central-1b`. The publish job runs only when the run is complete. It adds the run to the `gh-pages` branch and copies `board/` there.
 
-Only one bench run runs at a time. A new dispatch replaces a waiting one and never stops a running one. The bench job stops after 110 minutes. A local rig and the CI bench cannot run at the same time, because they use the same resource names and the same tag. Check the Bench runs of this repository before `make up` and before `make nuke`.
+Only one bench run runs at a time. A new dispatch replaces a waiting one and never stops a running one. The bench job stops after 60 minutes. A local rig and the CI bench cannot run at the same time, because they use the same resource names and the same tag. Check the Bench runs of this repository before `make up` and before `make nuke`.
 
 Do these owner steps once, in this order:
 
