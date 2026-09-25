@@ -98,6 +98,8 @@ out=$(mktemp)
 log=$(mktemp)
 trap 'rm -f "$out" "$log"' EXIT
 late_ms=0
+# The soft limit of the ssh session is the box default until the next login; 5000 connections need more.
+ulimit -n 65536
 
 case $tool in
 wrk2) run_wrk2 "$@" ;;

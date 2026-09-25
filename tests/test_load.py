@@ -46,15 +46,16 @@ H2LOAD_RESULT = {
     "requests_per_sec": 0.033,
 }
 
-# The fake tool writes its arguments and the request environment to FAKE_LOG, writes FAKE_LOG_ROWS
-# to the file after --log-file when that option is present, prints the file FAKE_OUTPUT, and exits
-# with FAKE_EXIT.
+# The fake tool writes its arguments, the request environment, and the soft descriptor limit to
+# FAKE_LOG, writes FAKE_LOG_ROWS to the file after --log-file when that option is present, prints
+# the file FAKE_OUTPUT, and exits with FAKE_EXIT.
 FAKE_TOOL = textwrap.dedent("""\
     #!/usr/bin/env python3
-    import json, os, sys
+    import json, os, resource, sys
     names = ("WRK_METHOD", "WRK_BODY_FILE", "WRK_HEADERS")
     with open(os.environ["FAKE_LOG"], "w") as f:
-        json.dump({"argv": sys.argv[1:], "env": {n: os.environ.get(n) for n in names}}, f)
+        json.dump({"argv": sys.argv[1:], "env": {n: os.environ.get(n) for n in names},
+                   "nofile": resource.getrlimit(resource.RLIMIT_NOFILE)[0]}, f)
     if "--log-file" in sys.argv:
         with open(sys.argv[sys.argv.index("--log-file") + 1], "w") as f:
             f.write(os.environ.get("FAKE_LOG_ROWS", ""))
@@ -187,6 +188,8 @@ class LoadScriptTest(unittest.TestCase):
                     argv[index] = "LOG"
                 self.assertEqual(argv, case["argv"])
                 self.assertEqual(fake["env"], case["env"])
+                # 5000 connections need 5000 descriptors and more; the script raises the soft limit to 65536 before the tool runs.
+                self.assertGreaterEqual(fake["nofile"], 5000)
 
     def test_missing_result_keeps_output(self):
         for case in MISSING_RESULT_CASES:
