@@ -423,6 +423,9 @@ if needs roadrunner || needs grpc; then
   echo "==> grpc runtimes"
   if [ -z "$NIGHTLY" ]; then
     install_protobuf
+  else
+    # A nightly rig uses the pure PHP runtime. An earlier server build can leave the PECL extension enabled.
+    sudo rm -f /etc/php.d/40-protobuf.ini
   fi
   install_roadrunner
   record_version protobuf "$(php -r 'echo phpversion("protobuf") ?: "ext-protobuf not loaded";')"
