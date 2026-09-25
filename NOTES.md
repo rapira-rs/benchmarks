@@ -1,6 +1,6 @@
 # Bench notes
 
-Dated records and the decisions the code cannot show. Methodology lives in METHOD.md, operations in README.md. Numbers from different rigs or instance sizes never mix into one table.
+Dated records and the decisions the code cannot show. Methodology lives in METHOD.md, operations in docs/operations.md. Numbers from different rigs or instance sizes never mix into one table.
 
 ## Method change, 2026-09-25
 

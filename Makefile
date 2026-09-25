@@ -1,4 +1,4 @@
-# AWS bench rig for rapira. See README.md for the flow and the knobs.
+# AWS bench rig for rapira. See docs/operations.md for the targets and the knobs.
 
 SHELL := /bin/bash
 .NOTPARALLEL:

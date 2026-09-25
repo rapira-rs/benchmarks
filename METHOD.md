@@ -1,6 +1,6 @@
 # Benchmark method
 
-This document defines how the rig measures a target, which numbers it reports, when it voids a cell, and how to review a run before publication. [README.md](README.md) gives the operations. [NOTES.md](NOTES.md) keeps dated records.
+This document defines how the rig measures a target, which numbers it reports, when it voids a cell, and how to review a run before publication. [README.md](README.md) gives the overview and [docs/operations.md](docs/operations.md) the operations. [NOTES.md](NOTES.md) keeps dated records.
 
 ## Terms
 
