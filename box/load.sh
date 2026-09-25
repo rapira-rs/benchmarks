@@ -2,20 +2,22 @@
 # Runs one load process at a shared start time for one stage.
 # Prints the tool output with the RESULT line extended by the tool and late_ms fields.
 #
-#   load.sh wrk2 EPOCH RATE THREADS CONNS DURATION_S URL [METHOD] [BODY_FILE] [HEADER...]
-#   load.sh k6 EPOCH RATE VUS DURATION_S URL
+#   load.sh wrk2 EPOCH RATE THREADS CONNS WARMUP_S DURATION_S URL [METHOD] [BODY_FILE] [HEADER...]
+#   load.sh h2load EPOCH RATE THREADS CONNS STREAMS WARMUP_S DURATION_S URL BODY_FILE
 #
 # EPOCH is a Unix time in seconds and can have a fraction. When EPOCH has passed,
 # the tool starts at once and late_ms is the delay in milliseconds.
+# wrk2 runs for WARMUP_S plus DURATION_S seconds. Its RESULT line counts the whole run.
+# h2load measures DURATION_S seconds after a warm-up of WARMUP_S seconds and sends
+# RATE / CONNS requests per second on each connection. Its RESULT line counts the measured window.
 # A relative BODY_FILE is a path in the staged rig directory.
 set -euo pipefail
 
 RIG=$(cd "$(dirname "$0")/.." && pwd)
-TREND_STATS="avg,med,p(90),p(95),p(99),p(99.9),max"
 
 usage() {
-  echo "usage: load.sh wrk2 EPOCH RATE THREADS CONNS DURATION_S URL [METHOD] [BODY_FILE] [HEADER...]" >&2
-  echo "       load.sh k6 EPOCH RATE VUS DURATION_S URL" >&2
+  echo "usage: load.sh wrk2 EPOCH RATE THREADS CONNS WARMUP_S DURATION_S URL [METHOD] [BODY_FILE] [HEADER...]" >&2
+  echo "       load.sh h2load EPOCH RATE THREADS CONNS STREAMS WARMUP_S DURATION_S URL BODY_FILE" >&2
   exit 2
 }
 
@@ -46,52 +48,60 @@ with open(path, errors="replace") as f:
 ' "$1" "$2" "$3"
 }
 
+# body_path FILE prints FILE with a relative path made absolute under the staged rig.
+body_path() {
+  case $1 in
+  - | /*) printf '%s\n' "$1" ;;
+  *) printf '%s\n' "$RIG/$1" ;;
+  esac
+}
+
 run_wrk2() {
-  [ $# -ge 6 ] || usage
-  local epoch=$1 rate=$2 threads=$3 conns=$4 duration=$5 url=$6
-  shift 6
+  [ $# -ge 7 ] || usage
+  local epoch=$1 rate=$2 threads=$3 conns=$4 warmup=$5 duration=$6 url=$7
+  shift 7
   local method=GET body=-
   if [ $# -gt 0 ]; then
     method=$1
     shift
   fi
   if [ $# -gt 0 ]; then
-    body=$1
+    body=$(body_path "$1")
     shift
   fi
-  case $body in
-  - | /*) ;;
-  *) body=$RIG/$body ;;
-  esac
   local headers
   headers=$(printf '%s\n' "$@")
   late_ms=$(wait_epoch "$epoch")
-  # The driver treats a missing RESULT line as an invalid stage, so a tool failure does not stop the script.
+  # The driver treats a missing RESULT line as a void, so a tool failure does not stop the script.
   WRK_METHOD=$method WRK_BODY_FILE=$body WRK_HEADERS=$headers \
-    wrk2 -t "$threads" -c "$conns" -d "${duration}s" -R "$rate" --latency \
+    wrk2 -t "$threads" -c "$conns" -d "$((warmup + duration))s" -R "$rate" --latency \
     -s "$RIG/loader/wrk2-report.lua" "$url" >"$out" 2>&1 || true
 }
 
-run_k6() {
-  [ $# -eq 5 ] || usage
-  local epoch=$1 rate=$2 vus=$3 duration=$4 url=$5
+run_h2load() {
+  [ $# -eq 9 ] || usage
+  local epoch=$1 rate=$2 threads=$3 conns=$4 streams=$5 warmup=$6 duration=$7 url=$8 body
+  body=$(body_path "$9")
   late_ms=$(wait_epoch "$epoch")
-  # The driver treats a missing RESULT line as an invalid stage, so a tool failure does not stop the script.
-  k6 run --quiet --no-color --summary-trend-stats "$TREND_STATS" \
-    -e TARGET="$url" -e RATE="$rate" -e DURATION="$duration" -e VUS="$vus" \
-    "$RIG/loader/k6-grpc.js" >"$out" 2>&1 || true
+  # The RESULT line comes from the per-request log, so a failed h2load leaves no RESULT line.
+  if h2load -t "$threads" -c "$conns" -m "$streams" --rps "$((rate / conns))" \
+    --warm-up-time "$warmup" -D "$duration" -d "$body" \
+    -H 'content-type: application/grpc' -H 'te: trailers' --log-file "$log" "$url" >"$out" 2>&1; then
+    python3 "$RIG/loader/h2load-report.py" "$log" "$duration" >>"$out"
+  fi
 }
 
 [ $# -ge 1 ] || usage
 tool=$1
 shift
 out=$(mktemp)
-trap 'rm -f "$out"' EXIT
+log=$(mktemp)
+trap 'rm -f "$out" "$log"' EXIT
 late_ms=0
 
 case $tool in
 wrk2) run_wrk2 "$@" ;;
-k6) run_k6 "$@" ;;
+h2load) run_h2load "$@" ;;
 *) usage ;;
 esac
 rewrite "$tool" "$late_ms" "$out"
