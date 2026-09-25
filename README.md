@@ -10,7 +10,7 @@ Each target reports the highest rate it held, its peak throughput in the first f
 
 ## Where the results are
 
-- The board: https://rapira-rs.github.io/benchmarks/ (one chart per target, the merged commits on the x axis, one line per rate, p99 latency).
+- The board: https://rapira.rs/benchmarks/ (one chart per target, the merged commits on the x axis, one line per rate, p99 latency).
 - The run files: `run.json` and the raw evidence of every CI run, as workflow artifacts and in the `gh-pages` branch under `data/`.
 - [NOTES.md](NOTES.md): dated records, including the numbers of the earlier method.
 
