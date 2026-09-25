@@ -122,13 +122,15 @@ If the result depends on a response header or on a server configuration, capture
 
 ## Reading the board
 
-The board on the `gh-pages` branch shows every published run.
+The board on the `gh-pages` branch shows the newest 60 runs. One run is one merged commit on the rapira main branch, benched from its nightly build.
 
-- The history view shows the held rate and the peak of each target across runs, one line per target, grouped by app.
-- A point with `generator_bound` is a floor. The board draws it with a triangle marker.
-- A voided cell is a gap in its line.
-- The run view shows the latency percentiles against the rate for each target, and the stage table.
-- The board hides smoke runs. Select the checkbox to show them.
+- Each target has one chart. The x axis lists the runs in order, labelled with the first 7 characters of the rapira sha.
+- Each line is one ladder rate. The y axis is the p99 latency at that rate in milliseconds, on a logarithmic scale.
+- A point exists only where the stage passed. The highest line with a point is the held rate of that run.
+- A voided cell, a failing stage, and a run without the target give no point.
+- The tooltip shows the flags of the cell. Read the flag rules above before you draw a conclusion from a point.
+- The peak is not on the chart. `make report` and `make compare` carry it.
+- Smoke runs are not shown.
 
 Compare points only when the rig shape is the same. Numbers from before 2026-09-25 come from another method and are not on the board.
 

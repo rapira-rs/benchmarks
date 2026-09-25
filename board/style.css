@@ -31,11 +31,6 @@ a {
   color: inherit;
 }
 
-.note,
-#run-meta {
-  color: var(--muted);
-}
-
 #error {
   color: var(--error);
   font-weight: bold;
@@ -43,47 +38,6 @@ a {
 
 .chart {
   position: relative;
-  height: 22rem;
+  height: 320px;
   margin-bottom: 1.5rem;
-}
-
-.cell {
-  border-top: 1px solid var(--grid);
-  padding-top: 0.5rem;
-}
-
-table {
-  border-collapse: collapse;
-  width: 100%;
-  font-variant-numeric: tabular-nums;
-  margin-bottom: 1.5rem;
-}
-
-th,
-td {
-  border-bottom: 1px solid var(--grid);
-  padding: 0.25rem 0.5rem;
-  text-align: right;
-}
-
-th:nth-child(3),
-td:nth-child(3),
-th:last-child,
-td:last-child {
-  text-align: left;
-}
-
-tr.fail {
-  background: var(--fail);
-}
-
-@media (max-width: 40rem) {
-  .chart {
-    height: 16rem;
-  }
-
-  table {
-    display: block;
-    overflow-x: auto;
-  }
 }
