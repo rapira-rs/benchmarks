@@ -1,6 +1,6 @@
 # Rapira AWS benchmark rig
 
-This repository runs Rapira benchmarks on Amazon EC2. Terraform creates one server instance and several loader instances in one cluster placement group. The loaders send a staged rate ladder to the private address of the server: wrk2 for HTTP/1.1 targets and k6 for gRPC targets. The operator machine controls the run through SSH.
+This repository runs Rapira benchmarks on Amazon EC2. Terraform creates one server instance and several loader instances in one cluster placement group. The loaders send a staged rate ladder to the private address of the server: wrk2 for HTTP/1.1 targets and k6 for gRPC targets. The gRPC-Web and Connect variants use HTTP/1.1, so wrk2 loads them. The operator machine controls the run through SSH.
 
 [METHOD.md](METHOD.md) defines the measurement method and the review before publication. [NOTES.md](NOTES.md) keeps dated records.
 
@@ -49,7 +49,8 @@ Provisioning installs only the servers and apps that the suite uses. Set the sam
 | --- | --- | --- |
 | Server | All runs | PHP with opcache, the shared `servers/php.ini`, and the rapira binary: the nightly release asset, or a build of `REF` and `BASE_REF` |
 | Server | FrankenPHP targets | FrankenPHP 1.12.7, the glibc release asset |
-| Server | php-fpm and nginx-rapira targets | php-fpm and nginx |
+| Server | php-fpm targets | php-fpm and nginx |
+| Server | nginx-rapira targets | nginx |
 | Server | Symfony and Laravel targets | The Composer dependencies from the committed `composer.lock` files |
 | Server | gRPC targets | RoadRunner 2025.1.15 and its PHP worker packages. A server build also gets PECL protobuf 5.36.2. |
 | Loader | All runs | wrk2 at commit `44a94c1`, k6 2.2.0, and a chrony synchronization check |
@@ -64,7 +65,11 @@ The Fedora 44 EC2 image supplies Bash, `dnf`, `sudo`, the OpenSSH server, cloud-
 - `full` adds the nginx-rapira worker rows, the FrankenPHP stock rows, the static miss and plain rows, the 27 KiB asset, and the gRPC-Web and Connect variants. It runs three rounds.
 - `ab` runs hello on the rapira worker, classic, and dispatcher modes and Symfony on the worker and classic modes, for the `pr` and the `base` binary. It runs three rounds. Provision it with `REF` and `BASE_REF`.
 
-The driver refuses a suite before it creates a run directory when a floor is not a multiple of the loader count, when `stage_s` is less than 12, or when the connection count is not a multiple of the loader count times the loader vCPU count.
+The driver refuses a suite before it creates a run directory when one of these conditions is true:
+
+- A floor is not a multiple of the loader count.
+- `stage_s` is less than 12.
+- The connection count is not a multiple of the loader count times the loader vCPU count.
 
 ## Settings
 
@@ -90,7 +95,7 @@ The driver refuses a suite before it creates a run directory when a floor is not
 - `make sync` builds the local `../core` working tree on the server. The next `make bench` uses that binary. The rig must come from `make up REF=<ref>`, because a nightly rig has no Rust toolchain.
 - `make report` prints the tables of the newest run. `make report RUN=runs/<id>` prints another run.
 - `make compare A=runs/<a> B=runs/<b>` prints the deltas between two runs.
-- `make lock` creates the Symfony and Laravel `composer.lock` files.
+- `make lock` creates the Symfony and Laravel `composer.lock` files. It needs PHP 8.5 and Composer on the operator machine.
 - `make test` runs the unit tests.
 - `make nuke` removes the tagged AWS resources when the Terraform state is not usable.
 - `make grpc_fixtures` builds the gRPC descriptor, the PHP classes, and the request and response fixtures. It needs Go and access to the buf remote plugins.

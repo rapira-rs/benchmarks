@@ -20,11 +20,9 @@ This document defines how the rig measures a target, which numbers it reports, w
 - The driver runs the cells in rotated order: round r starts at target r of the suite and wraps. No target is always first.
 - Pin `AMI` when a result set takes more than one day.
 
-Do not combine results from different rig shapes in one direct comparison.
-
 ## Load tools
 
-wrk2 loads the HTTP/1.1 targets. k6 loads the gRPC targets. Each loader runs one load process per stage.
+wrk2 loads the HTTP/1.1 targets. k6 loads the gRPC targets. The gRPC-Web and Connect variants use HTTP/1.1, so wrk2 loads them. Each loader runs one load process per stage.
 
 These wrk2 facts shape the method:
 
@@ -46,7 +44,7 @@ These k6 facts shape the method:
 
 The stage rates of an app start at the floor of the suite file and double at each stage: floor, 2 times floor, 4 times floor, and so on. The driver stops a cell at the first failing stage and at 20 stages at most. The floors of the `ci` suite are 10000 req/s for hello, Symfony, static, and gRPC, and 5000 req/s for Laravel.
 
-Each loader sends the stage rate divided by the loader count. Each loader runs one thread per vCPU and the connection count divided by the loader count. With the default rig and the default suite, that is 64 connections per loader and 256 connections in total.
+Each loader sends the stage rate divided by the loader count. For wrk2, each loader runs one thread per vCPU and the connection count divided by the loader count. With the default rig and the default suite, that is 64 connections per loader and 256 connections in total. k6 opens one connection per VU, so a gRPC stage above 51200 req/s uses more than 64 connections per loader.
 
 The driver runs this sequence for each cell:
 
@@ -57,7 +55,7 @@ The driver runs this sequence for each cell:
 5. After a failing stage, one loader sends one more probe.
 6. The driver stops the target, verifies that its processes are gone, and reads the WARN and ERROR lines of its log.
 
-A load process that starts more than 1000 ms after the start time makes the stage invalid. Provisioning verifies that chrony is synchronized on every box, so the shared start time is valid to much less than one second.
+A load process that starts more than 1000 ms after the start time voids the cell. Provisioning verifies that chrony is synchronized on every box, so the shared start time is valid to much less than one second.
 
 ## Merge over loaders
 
@@ -77,7 +75,7 @@ A stage passes when `achieved_rps` is at least 95% of the stage rate and every e
 - `peak`: the successful req/s of the failing stage. Use it to track regressions, because it changes continuously with the target. It is null when every stage passes.
 - `unloaded`: the p50 and p99 latency of the first stage, at the floor rate.
 
-With more than one round, the report shows the median of the surviving cells and the spread: 100 times (maximum minus minimum) divided by the median.
+With more than one round, the report shows the median of the surviving cells and the spread of the peak: 100 times (maximum minus minimum) divided by the median.
 
 ## Flags
 
