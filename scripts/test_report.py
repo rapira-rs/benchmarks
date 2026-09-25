@@ -180,6 +180,15 @@ H2LOAD_ERROR_CASES = [
         "legs": True,
         "lowc": True,
     },
+    {
+        "name": "truncated summary",
+        "artifact": "h2load",
+        "text": H2LOAD[: H2LOAD.index("request     :")],
+        "rc": 1,
+        "issues": ["cell: unparseable h2load output"],
+        "legs": False,
+        "lowc": True,
+    },
 ]
 
 OPEN_LOOP_CASES = [

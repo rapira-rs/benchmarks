@@ -444,7 +444,7 @@ class NginxLifecycleTests(unittest.TestCase):
                 {
                     "http": {
                         "middleware": ["static"],
-                        "static": {"root": "/home/fedora/bench-rig/fleet/static"},
+                        "static": {"root": str(RIG / "fleet/static")},
                     }
                 },
                 tomllib.load(rendered),
@@ -453,7 +453,7 @@ class NginxLifecycleTests(unittest.TestCase):
         self.addCleanup(connection.close)
         response, _ = self.request(connection, "/?name=you")
         self.assertEqual(
-            "/home/fedora/bench-rig/php/hello/worker.php", response["script"]
+            str(RIG / "php/hello/worker.php"), response["script"]
         )
 
         connection.close()
@@ -473,9 +473,9 @@ class NginxLifecycleTests(unittest.TestCase):
                     "http": {
                         "listen": ":8080",
                         "middleware": ["static"],
-                        "static": {"root": "/home/fedora/bench-rig/fleet/static"},
+                        "static": {"root": str(RIG / "fleet/static")},
                         "pool": {
-                            "entrypoint": "/home/fedora/bench-rig/php/hello/worker.php",
+                            "entrypoint": str(RIG / "php/hello/worker.php"),
                             "mode": "worker",
                             "processes": 2,
                         },
@@ -489,7 +489,7 @@ class NginxLifecycleTests(unittest.TestCase):
         self.addCleanup(connection.close)
         response, _ = self.request(connection, "/?name=you")
         self.assertEqual(
-            "/home/fedora/bench-rig/php/hello/worker.php", response["script"]
+            str(RIG / "php/hello/worker.php"), response["script"]
         )
 
         connection.close()

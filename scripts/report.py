@@ -46,7 +46,11 @@ def parse_h2load(path):
     codes = re.search(r"(\d+) 3xx, (\d+) 4xx, (\d+) 5xx", txt)
     data = re.search(r"\((\d+)\) data", txt)
     # Columns: min, max, median, p95, p99, mean, sd, +/- sd.
-    row = re.search(r"^request\s+:" + r"\s+(\S+)" * 6, txt, re.M).groups()
+    row = re.search(r"^request\s+:" + r"\s+(\S+)" * 6, txt, re.M)
+    # A summary cut after the header has no rows: the cell is unparseable.
+    if not (req and codes and data and row):
+        return None
+    row = row.groups()
     succeeded, failed, errored, timeout = map(int, req.groups())
     s3xx, s4xx, s5xx = map(int, codes.groups())
     return {
