@@ -1,0 +1,40 @@
+[
+ {
+  "id": "20260926T010000Z-ci-aaaaaaa",
+  "started": "2026-09-26T01:00:00Z",
+  "smoke": false,
+  "rapira": {"sha": "aaaaaaa0000000000000000000000000000000a1"},
+  "cells": [
+   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker", "app": "hello"}, "round": 1, "status": "ok", "flags": {}, "held": {"rate": 640000, "stage": 6}, "peak": 1180234.5, "stages": []},
+   {"key": "r1-symfony-rapira-worker", "target": {"name": "symfony-rapira-worker", "app": "symfony"}, "round": 1, "status": "ok", "flags": {}, "held": {"rate": 80000, "stage": 3}, "peak": 120500.0, "stages": []},
+   {"key": "r1-grpc-rapira-grpc", "target": {"name": "grpc-rapira-grpc", "app": "grpc"}, "round": 1, "status": "ok", "flags": {"generator_bound": true}, "held": {"rate": 80000, "stage": 3}, "peak": 150000.0, "stages": []}
+  ]
+ },
+ {
+  "id": "20260927T010000Z-ci-bbbbbbb",
+  "started": "2026-09-27T01:00:00Z",
+  "smoke": false,
+  "rapira": {"sha": "bbbbbbb0000000000000000000000000000000b2"},
+  "cells": [
+   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker", "app": "hello"}, "round": 1, "status": "ok", "flags": {"generator_bound": true}, "held": {"rate": 1280000, "stage": 7}, "peak": 1300000.0, "stages": []},
+   {"key": "r1-symfony-rapira-worker", "target": {"name": "symfony-rapira-worker", "app": "symfony"}, "round": 1, "status": "void", "reason": "probe mismatch on loader-2", "flags": {}, "held": null, "peak": null, "stages": []},
+   {"key": "r1-grpc-rapira-grpc", "target": {"name": "grpc-rapira-grpc", "app": "grpc"}, "round": 1, "status": "ok", "flags": {"generator_bound": true}, "held": {"rate": 80000, "stage": 3}, "peak": 140000.0, "stages": []}
+  ]
+ },
+ {
+  "id": "20260928T010000Z-full-ccccccc",
+  "started": "2026-09-28T01:00:00Z",
+  "smoke": false,
+  "rapira": {"sha": "ccccccc0000000000000000000000000000000c3"},
+  "cells": [
+   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker", "app": "hello"}, "round": 1, "status": "ok", "flags": {}, "held": {"rate": 640000, "stage": 6}, "peak": 1100000.0, "stages": []},
+   {"key": "r2-hello-rapira-worker", "target": {"name": "hello-rapira-worker", "app": "hello"}, "round": 2, "status": "ok", "flags": {"log_growth": 70000}, "held": {"rate": 640000, "stage": 6}, "peak": 1150000.0, "stages": []},
+   {"key": "r3-hello-rapira-worker", "target": {"name": "hello-rapira-worker", "app": "hello"}, "round": 3, "status": "void", "reason": "loader loader-3 returned no RESULT line", "flags": {}, "held": null, "peak": null, "stages": []},
+   {"key": "r1-symfony-rapira-worker", "target": {"name": "symfony-rapira-worker", "app": "symfony"}, "round": 1, "status": "ok", "flags": {}, "held": {"rate": 80000, "stage": 3}, "peak": 110000.0, "stages": []},
+   {"key": "r2-symfony-rapira-worker", "target": {"name": "symfony-rapira-worker", "app": "symfony"}, "round": 2, "status": "ok", "flags": {}, "held": {"rate": 80000, "stage": 3}, "peak": 130000.0, "stages": []},
+   {"key": "r3-symfony-rapira-worker", "target": {"name": "symfony-rapira-worker", "app": "symfony"}, "round": 3, "status": "ok", "flags": {}, "held": {"rate": 40000, "stage": 2}, "peak": 90000.0, "stages": []},
+   {"key": "r1-static-rapira-hit", "target": {"name": "static-rapira-hit", "app": "static"}, "round": 1, "status": "ok", "flags": {}, "held": null, "peak": 9000.0, "stages": []},
+   {"key": "r1-grpc-rapira-grpc", "target": {"name": "grpc-rapira-grpc", "app": "grpc"}, "round": 1, "status": "incomplete", "flags": {}, "held": null, "peak": null, "stages": []}
+  ]
+ }
+]

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rapira benchmarks</title>
+<link rel="stylesheet" href="style.css">
+<script src="chart.umd.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<header>
+<h1>Rapira benchmarks</h1>
+<p>Rate ladder results for each merge to the rapira main branch. <a href="https://github.com/rapira-rs/benchmarks/blob/main/METHOD.md">How to read these numbers</a>.</p>
+<label><input type="checkbox" id="smoke"> Show smoke runs</label>
+</header>
+<p id="error" hidden></p>
+<main>
+<section id="history">
+<h2>History</h2>
+<p class="note">Solid line: peak req/s, the successful rate in the first failing stage. Dashed line: held req/s, the highest passing rate. A triangle marks a generator-bound peak: the real peak is higher. A gap marks a voided or missing cell.</p>
+<div id="history-charts"></div>
+</section>
+<section id="run">
+<h2>Run</h2>
+<label>Run <select id="run-select"></select></label>
+<p id="run-meta"></p>
+<div id="run-cells"></div>
+</section>
+</main>
+</body>
+</html>

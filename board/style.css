@@ -1,0 +1,89 @@
+:root {
+  --bg: #ffffff;
+  --fg: #1f2328;
+  --muted: #59636e;
+  --grid: #d0d7de;
+  --fail: #fbe9e7;
+  --error: #b42318;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0d1117;
+    --fg: #e6edf3;
+    --muted: #9198a1;
+    --grid: #30363d;
+    --fail: #3d1d1a;
+    --error: #ff7b72;
+  }
+}
+
+body {
+  margin: 0 auto;
+  max-width: 72rem;
+  padding: 1rem;
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 system-ui, sans-serif;
+}
+
+a {
+  color: inherit;
+}
+
+.note,
+#run-meta {
+  color: var(--muted);
+}
+
+#error {
+  color: var(--error);
+  font-weight: bold;
+}
+
+.chart {
+  position: relative;
+  height: 22rem;
+  margin-bottom: 1.5rem;
+}
+
+.cell {
+  border-top: 1px solid var(--grid);
+  padding-top: 0.5rem;
+}
+
+table {
+  border-collapse: collapse;
+  width: 100%;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 1.5rem;
+}
+
+th,
+td {
+  border-bottom: 1px solid var(--grid);
+  padding: 0.25rem 0.5rem;
+  text-align: right;
+}
+
+th:nth-child(3),
+td:nth-child(3),
+th:last-child,
+td:last-child {
+  text-align: left;
+}
+
+tr.fail {
+  background: var(--fail);
+}
+
+@media (max-width: 40rem) {
+  .chart {
+    height: 16rem;
+  }
+
+  table {
+    display: block;
+    overflow-x: auto;
+  }
+}

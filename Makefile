@@ -115,3 +115,12 @@ grpc_fixtures:
 	$(BUF) build apps/grpc --as-file-descriptor-set -o apps/grpc/bench.binpb
 	$(BUF) generate apps/grpc --template apps/grpc/buf.gen.yaml
 	python3 apps/grpc/fixtures.py
+
+# Serve the board and a local pages dir for a manual check. Fill the dir first:
+# python3 -m rig publish --pages-dir runs/pages runs/<id>/run.json
+PAGES ?= runs/pages
+.PHONY: board
+board:
+	@test -f $(PAGES)/data/index.json || { echo "ERROR: no $(PAGES)/data/index.json; run: python3 -m rig publish --pages-dir $(PAGES) runs/<id>/run.json"; exit 1; }
+	cp board/index.html board/app.js board/style.css board/chart.umd.js $(PAGES)/
+	python3 -m http.server --bind 127.0.0.1 --directory $(PAGES) 8000
