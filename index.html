@@ -1,0 +1,19 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Rapira benchmarks</title>
+<link rel="stylesheet" href="style.css">
+<script src="chart.umd.js" defer></script>
+<script src="app.js" defer></script>
+</head>
+<body>
+<header>
+<h1>Rapira benchmarks</h1>
+<p>p99 latency at each ladder rate, for each merged commit on the rapira main branch, from its nightly build. A line ends where the target did not hold that rate. <a href="https://github.com/rapira-rs/benchmarks/blob/main/METHOD.md">How to read these numbers</a>.</p>
+</header>
+<p id="error" hidden></p>
+<main id="charts"></main>
+</body>
+</html>

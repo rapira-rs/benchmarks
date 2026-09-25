@@ -1,0 +1,14 @@
+{
+ "schema": "rapira-bench-index/1",
+ "runs": [
+  {
+   "id": "20260925T190409Z-ci-73b9d30",
+   "started": "2026-09-25T19:04:10Z",
+   "suite": "ci",
+   "rapira_sha": "73b9d30ec036e417c59f01a4e299837b9a4b6980",
+   "rapira_version": "v0.8.1-121-g73b9d30",
+   "status": "complete",
+   "smoke": false
+  }
+ ]
+}
