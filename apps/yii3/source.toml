@@ -1,0 +1,3 @@
+# The Yii3 API benchmark app. box/lock-apps.sh and box/provision-server.sh clone this commit.
+repo = "https://github.com/Yii3-Benchmarks/app-api"
+commit = "0fa2e2a"
