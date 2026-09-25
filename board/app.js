@@ -92,10 +92,12 @@ async function fetchJson(path) {
   return response.json();
 }
 
-function drawTarget(parent, series, target) {
+function drawTarget(parent, series, name, target) {
   const box = el("div");
   box.className = "chart";
   const canvas = el("canvas");
+  canvas.setAttribute("role", "img");
+  canvas.setAttribute("aria-label", name + ": p99 latency by rate");
   box.appendChild(canvas);
   parent.appendChild(box);
   new Chart(canvas, {
@@ -152,7 +154,7 @@ async function main() {
     root.appendChild(el("h2", app));
     Object.keys(series.apps[app]).forEach((name) => {
       root.appendChild(el("h3", name));
-      drawTarget(root, series, series.apps[app][name]);
+      drawTarget(root, series, name, series.apps[app][name]);
     });
   });
 }
