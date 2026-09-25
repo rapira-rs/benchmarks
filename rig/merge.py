@@ -62,7 +62,8 @@ def parse_result(text: str, loader: str) -> LoaderRecord | None:
         raise ValueError(f"{loader}: RESULT line has no key {exc}") from None
 
 
-def merge(records: dict[str, LoaderRecord | None], stage_s: int) -> Merged:
+def merge(records: dict[str, LoaderRecord | None], window_s: int) -> Merged:
+    """Merge the loader records. window_s is the seconds that the requests counts of the records cover."""
     present = []
     for loader, record in records.items():
         if record is None:
@@ -83,7 +84,7 @@ def merge(records: dict[str, LoaderRecord | None], stage_s: int) -> Merged:
         successful=successful,
         bytes=sum(r.bytes for r in present),
         errors=errors,
-        achieved_rps=requests / stage_s,
-        successful_rps=successful / stage_s,
+        achieved_rps=requests / window_s,
+        successful_rps=successful / window_s,
         latency_us=latency,
     )

@@ -5,7 +5,7 @@ from pathlib import Path
 
 from rig import VERSION
 
-SCHEMA = "rapira-bench-run/1"
+SCHEMA = "rapira-bench-run/2"
 
 
 def run_status(plan: list[str], cells: list[dict]) -> tuple[str, list[str]]:
@@ -29,9 +29,9 @@ def run_status(plan: list[str], cells: list[dict]) -> tuple[str, list[str]]:
 
 
 class RunFile:
-    """The `rapira-bench-run/1` document of one run."""
+    """The `rapira-bench-run/2` document of one run."""
 
-    def __init__(self, *, run_id: str, suite: dict, rig: dict, rapira: dict, servers: dict, apps: dict, loaders: list[dict], ladder: dict, processes: int, plan: list[str], smoke: bool, started: str):
+    def __init__(self, *, run_id: str, suite: dict, rig: dict, rapira: dict, servers: dict, apps: dict, loaders: list[dict], processes: int, plan: list[str], smoke: bool, started: str):
         self.doc = {
             "schema": SCHEMA,
             "id": run_id,
@@ -44,7 +44,6 @@ class RunFile:
             "servers": servers,
             "apps": apps,
             "loaders": loaders,
-            "ladder": ladder,
             "processes": processes,
             "plan": plan,
             "cells": [],

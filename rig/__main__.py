@@ -40,8 +40,11 @@ def cmd_bench(args: argparse.Namespace) -> int:
     processes = args.processes or int(boxes.run(rig.server, "nproc"))
     loader_threads = int(boxes.run(rig.loaders[0], "nproc"))
     meta = json.loads(boxes.run(rig.server, f"cat {BENCH_DIR}/meta.json"))
-    # The base build is part of the identity of a run with base targets.
-    rapira = {**meta["rapira"], "base": meta["base"]}
+    # The merged pull request of the commit labels the run on the board. A manual run has none.
+    pr = None
+    if args.pr_number is not None:
+        pr = {"number": args.pr_number, "url": args.pr_url, "title": args.pr_title}
+    rapira = {**meta["rapira"], "pr": pr}
     run_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{suite.name}-{rapira['sha'][:7]}"
     path = Path(args.out) / run_id / "run.json"
     try:
@@ -88,7 +91,6 @@ def cmd_provision(args: argparse.Namespace) -> int:
     env = {
         "NIGHTLY": args.nightly,
         "REF": args.ref,
-        "BASE_REF": args.base_ref,
         "NEEDS": args.needs,
         "FRAME_POINTERS": args.frame_pointers,
     }
@@ -126,6 +128,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--processes", type=int)
     p.add_argument("--smoke", action="store_true")
     p.add_argument("--out", default="runs")
+    p.add_argument("--pr-number", type=int)
+    p.add_argument("--pr-url", default="")
+    p.add_argument("--pr-title", default="")
     p.set_defaults(func=cmd_bench)
 
     p = sub.add_parser("report", help="print the tables of one run file")
@@ -152,7 +157,6 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--needs", required=True)
     p.add_argument("--nightly", default="")
     p.add_argument("--ref", default="")
-    p.add_argument("--base-ref", default="main")
     p.add_argument("--frame-pointers", default="0", choices=("0", "1"))
     p.set_defaults(func=cmd_provision)
 

@@ -1,31 +1,28 @@
-# The per-merge suite. CI runs it after every merge to the rapira main branch.
+# The per-merge suite. CI runs it after every nightly build of the rapira main branch.
+# Every target runs one stage: warmup_s seconds of warm-up, then duration_s seconds measured,
+# at the rate of its app, with the connections of its proto.
 name = "ci"
 rounds = 1
-stage_s = 20
-connections = 1024
+warmup_s = 10
+duration_s = 60
 smoke = false
 targets = [
+  "hello-rapira-classic",
   "hello-rapira-worker",
   "hello-rapira-dispatcher",
-  "hello-rapira-classic",
-  "hello-frankenphp-worker",
-  "hello-php-fpm",
-  "symfony-rapira-worker",
-  "symfony-rapira-classic",
-  "symfony-frankenphp-worker",
-  "symfony-frankenphp-classic",
-  "symfony-php-fpm",
-  "laravel-rapira-worker",
-  "laravel-frankenphp-worker",
-  "static-rapira-hit",
-  "static-frankenphp-hit",
+  "hello-rapira-dispatcher-static",
+  "yii3-rapira-dispatcher",
   "grpc-rapira",
-  "grpc-roadrunner",
 ]
 
-[floors]
-hello = 10000
-symfony = 10000
-laravel = 5000
-static = 10000
-grpc = 10000
+[rates]
+hello = 250000
+yii3 = 250000
+grpc = 100000
+
+[connections]
+http1 = 5000
+grpc = 100
+
+[grpc]
+streams = 100

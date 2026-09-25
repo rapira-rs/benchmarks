@@ -1,17 +1,24 @@
 # The target registry. The driver reads it with tomllib.
-# A name is <app>-<server>-<mode>. A target that runs the base binary adds -base.
-# php-fpm and roadrunner have one mode, so their names have no mode.
-# A static or grpc name ends with the request variant in the position of the mode.
+# A name is <app>-rapira-<mode>, with the suffix -static for the static middleware. The gRPC target is grpc-rapira.
 # The start arguments follow the box protocol of box/target.sh.
 # On the box @RIG@ expands to $HOME/bench-rig and @APPS@ expands to /opt/bench/apps.
 # The expect, body, and config paths are relative to the repository root.
+
+[hello-rapira-classic]
+server = "rapira"
+app = "hello"
+mode = "classic"
+proto = "http1"
+start = ["classic", "@RIG@/apps/hello/classic.php"]
+url = "/?name=you"
+expect = "apps/hello/expect.txt"
+config = "servers/rapira/http.toml.tpl"
 
 [hello-rapira-worker]
 server = "rapira"
 app = "hello"
 mode = "worker"
 proto = "http1"
-binary = "pr"
 start = ["worker", "@RIG@/apps/hello/worker.php"]
 url = "/?name=you"
 expect = "apps/hello/expect.txt"
@@ -22,367 +29,42 @@ server = "rapira"
 app = "hello"
 mode = "dispatcher"
 proto = "http1"
-binary = "pr"
 start = ["dispatcher", "@RIG@/apps/hello/dispatcher.php"]
 url = "/?name=you"
 expect = "apps/hello/expect.txt"
 config = "servers/rapira/http.toml.tpl"
 
-[hello-rapira-classic]
-server = "rapira"
-app = "hello"
-mode = "classic"
-proto = "http1"
-binary = "pr"
-start = ["classic", "@RIG@/apps/hello/classic.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
-
-[hello-rapira-worker-base]
-server = "rapira"
-app = "hello"
-mode = "worker"
-proto = "http1"
-binary = "base"
-start = ["worker", "@RIG@/apps/hello/worker.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
-
-[hello-rapira-dispatcher-base]
+# The static middleware serves apps/hello as its root. The request misses the root and reaches PHP.
+[hello-rapira-dispatcher-static]
 server = "rapira"
 app = "hello"
 mode = "dispatcher"
 proto = "http1"
-binary = "base"
-start = ["dispatcher", "@RIG@/apps/hello/dispatcher.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
-
-[hello-rapira-classic-base]
-server = "rapira"
-app = "hello"
-mode = "classic"
-proto = "http1"
-binary = "base"
-start = ["classic", "@RIG@/apps/hello/classic.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
-
-[hello-nginx-rapira-worker]
-server = "nginx-rapira"
-app = "hello"
-mode = "worker"
-proto = "http1"
-binary = "pr"
-start = ["worker", "@RIG@/apps/hello/worker.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/nginx/rapira.conf.tpl"
-
-[hello-frankenphp-worker]
-server = "frankenphp"
-app = "hello"
-mode = "worker"
-proto = "http1"
-start = ["worker", "@RIG@/apps/hello/frankenphp.php", "@RIG@/apps/hello"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/frankenphp/worker.Caddyfile.tpl"
-
-[hello-frankenphp-stock]
-server = "frankenphp"
-app = "hello"
-mode = "worker"
-proto = "http1"
-start = ["stock", "@RIG@/apps/hello/frankenphp.php", "@RIG@/apps/hello"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/frankenphp/stock.Caddyfile.tpl"
-
-[hello-php-fpm]
-server = "php-fpm"
-app = "hello"
-mode = "classic"
-proto = "http1"
-start = ["@RIG@/apps/hello", "fpm.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/php-fpm/php-fpm.conf.tpl"
-
-[symfony-rapira-worker]
-server = "rapira"
-app = "symfony"
-mode = "worker"
-proto = "http1"
-binary = "pr"
-start = ["worker", "@APPS@/symfony/bench/worker-rapira.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
-
-[symfony-rapira-classic]
-server = "rapira"
-app = "symfony"
-mode = "classic"
-proto = "http1"
-binary = "pr"
-start = ["classic", "@APPS@/symfony/public/index.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
-
-[symfony-rapira-worker-base]
-server = "rapira"
-app = "symfony"
-mode = "worker"
-proto = "http1"
-binary = "base"
-start = ["worker", "@APPS@/symfony/bench/worker-rapira.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
-
-[symfony-rapira-classic-base]
-server = "rapira"
-app = "symfony"
-mode = "classic"
-proto = "http1"
-binary = "base"
-start = ["classic", "@APPS@/symfony/public/index.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
-
-[symfony-nginx-rapira-worker]
-server = "nginx-rapira"
-app = "symfony"
-mode = "worker"
-proto = "http1"
-binary = "pr"
-start = ["worker", "@APPS@/symfony/bench/worker-rapira.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/nginx/rapira.conf.tpl"
-
-[symfony-frankenphp-worker]
-server = "frankenphp"
-app = "symfony"
-mode = "worker"
-proto = "http1"
-start = ["worker", "@APPS@/symfony/public/worker-franken.php", "@APPS@/symfony/public"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/frankenphp/worker.Caddyfile.tpl"
-
-[symfony-frankenphp-classic]
-server = "frankenphp"
-app = "symfony"
-mode = "classic"
-proto = "http1"
-start = ["classic", "@APPS@/symfony/public/index.php", "@APPS@/symfony/public"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/frankenphp/classic.Caddyfile.tpl"
-
-[symfony-frankenphp-stock]
-server = "frankenphp"
-app = "symfony"
-mode = "worker"
-proto = "http1"
-start = ["stock", "@APPS@/symfony/public/worker-franken.php", "@APPS@/symfony/public"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/frankenphp/stock.Caddyfile.tpl"
-
-[symfony-php-fpm]
-server = "php-fpm"
-app = "symfony"
-mode = "classic"
-proto = "http1"
-start = ["@APPS@/symfony/public", "index.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/php-fpm/php-fpm.conf.tpl"
-
-[laravel-rapira-worker]
-server = "rapira"
-app = "laravel"
-mode = "worker"
-proto = "http1"
-binary = "pr"
-start = ["worker", "@APPS@/laravel/bench/worker-rapira.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
-
-[laravel-frankenphp-worker]
-server = "frankenphp"
-app = "laravel"
-mode = "worker"
-proto = "http1"
-start = ["worker", "@APPS@/laravel/public/frankenphp-worker.php", "@APPS@/laravel/public", "LARAVEL_OCTANE=1", "MAX_REQUESTS=100000000", "APP_DEBUG=false"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/frankenphp/worker.Caddyfile.tpl"
-
-# The static rows serve apps/static. tiny.css is 128 B and app.css is 27 KiB.
-# A miss falls through to the hello worker. The plain row runs the hello worker without the static middleware.
-
-[static-rapira-hit]
-server = "rapira"
-app = "static"
-mode = "worker"
-proto = "http1"
-binary = "pr"
-start = ["worker", "@RIG@/apps/hello/worker.php", "@RIG@/servers/rapira/static.toml.tpl"]
-url = "/tiny.css"
-expect = "apps/static/tiny.expect"
-config = "servers/rapira/static.toml.tpl"
-
-[static-rapira-app]
-server = "rapira"
-app = "static"
-mode = "worker"
-proto = "http1"
-binary = "pr"
-start = ["worker", "@RIG@/apps/hello/worker.php", "@RIG@/servers/rapira/static.toml.tpl"]
-url = "/app.css"
-expect = "apps/static/app.css"
-config = "servers/rapira/static.toml.tpl"
-
-[static-rapira-miss]
-server = "rapira"
-app = "static"
-mode = "worker"
-proto = "http1"
-binary = "pr"
-start = ["worker", "@RIG@/apps/hello/worker.php", "@RIG@/servers/rapira/static.toml.tpl"]
+start = ["dispatcher", "@RIG@/apps/hello/dispatcher.php", "@RIG@/servers/rapira/static.toml.tpl"]
 url = "/?name=you"
 expect = "apps/hello/expect.txt"
 config = "servers/rapira/static.toml.tpl"
 
-[static-rapira-plain]
+# The Yii3 app-api at the commit of apps/yii3/source.toml. Its entry point detects the rapira mode.
+[yii3-rapira-dispatcher]
 server = "rapira"
-app = "static"
-mode = "worker"
+app = "yii3"
+mode = "dispatcher"
 proto = "http1"
-binary = "pr"
-start = ["worker", "@RIG@/apps/hello/worker.php"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
+start = ["dispatcher", "@APPS@/yii3/worker-rapira.php"]
+url = "/"
+expect = "apps/yii3/expect.json"
 config = "servers/rapira/http.toml.tpl"
 
-[static-frankenphp-hit]
-server = "frankenphp"
-app = "static"
-mode = "worker"
-proto = "http1"
-start = ["stock", "@RIG@/apps/hello/frankenphp.php", "@RIG@/apps/static"]
-url = "/tiny.css"
-expect = "apps/static/tiny.expect"
-config = "servers/frankenphp/stock.Caddyfile.tpl"
-
-[static-frankenphp-app]
-server = "frankenphp"
-app = "static"
-mode = "worker"
-proto = "http1"
-start = ["stock", "@RIG@/apps/hello/frankenphp.php", "@RIG@/apps/static"]
-url = "/app.css"
-expect = "apps/static/app.css"
-config = "servers/frankenphp/stock.Caddyfile.tpl"
-
-[static-frankenphp-miss]
-server = "frankenphp"
-app = "static"
-mode = "worker"
-proto = "http1"
-start = ["stock", "@RIG@/apps/hello/frankenphp.php", "@RIG@/apps/static"]
-url = "/?name=you"
-expect = "apps/hello/expect.txt"
-config = "servers/frankenphp/stock.Caddyfile.tpl"
-
-# The gRPC rows call bench.v1.EchoService/Echo. The grpc rows run under k6.
-# The gRPC-Web and Connect rows use the same rapira gRPC listener over HTTP/1.1 and run under wrk2.
-
+# The gRPC target calls bench.v1.EchoService/Echo over h2c under h2load.
 [grpc-rapira]
 server = "rapira"
 app = "grpc"
 mode = "dispatcher"
 proto = "grpc"
-binary = "pr"
 start = ["grpc", "@RIG@/apps/grpc/php/dispatcher.php"]
 url = "/bench.v1.EchoService/Echo"
 expect = "apps/grpc/expect.grpc"
 config = "servers/rapira/grpc.toml.tpl"
 method = "POST"
 body = "apps/grpc/echo.grpc"
-
-[grpc-roadrunner]
-server = "roadrunner"
-app = "grpc"
-mode = "worker"
-proto = "grpc"
-start = ["grpc"]
-url = "/bench.v1.EchoService/Echo"
-expect = "apps/grpc/expect.grpc"
-config = "servers/roadrunner/grpc.rr.yaml.tpl"
-method = "POST"
-body = "apps/grpc/echo.grpc"
-
-[grpc-rapira-grpcweb]
-server = "rapira"
-app = "grpc"
-mode = "dispatcher"
-proto = "http1"
-binary = "pr"
-start = ["grpc", "@RIG@/apps/grpc/php/dispatcher.php"]
-url = "/bench.v1.EchoService/Echo"
-expect = "apps/grpc/expect.grpcweb"
-config = "servers/rapira/grpc.toml.tpl"
-method = "POST"
-body = "apps/grpc/echo.grpc"
-
-[grpc-rapira-grpcweb.headers]
-content-type = "application/grpc-web+proto"
-x-grpc-web = "1"
-
-[grpc-rapira-connect]
-server = "rapira"
-app = "grpc"
-mode = "dispatcher"
-proto = "http1"
-binary = "pr"
-start = ["grpc", "@RIG@/apps/grpc/php/dispatcher.php"]
-url = "/bench.v1.EchoService/Echo"
-expect = "apps/grpc/expect.bin"
-config = "servers/rapira/grpc.toml.tpl"
-method = "POST"
-body = "apps/grpc/echo.bin"
-
-[grpc-rapira-connect.headers]
-content-type = "application/proto"
-connect-protocol-version = "1"
-accept-encoding = "identity"
-
-[grpc-rapira-connectjson]
-server = "rapira"
-app = "grpc"
-mode = "dispatcher"
-proto = "http1"
-binary = "pr"
-start = ["grpc", "@RIG@/apps/grpc/php/dispatcher.php"]
-url = "/bench.v1.EchoService/Echo"
-expect = "apps/grpc/expect.json"
-config = "servers/rapira/grpc.toml.tpl"
-method = "POST"
-body = "apps/grpc/echo.json"
-
-[grpc-rapira-connectjson.headers]
-content-type = "application/json"
-connect-protocol-version = "1"
-accept-encoding = "identity"

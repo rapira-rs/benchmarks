@@ -86,14 +86,14 @@ ZERO = {"mean": 0.0, "p50": 0.0, "p90": 0.0, "p95": 0.0, "p99": 0.0, "p999": 0.0
 
 MERGE_CASES = [
     {
-        # requests: 39989 + 40011 + 39800 + 40200 = 160000, and 160000 / 20 = 8000.
+        # requests: 39989 + 40011 + 39800 + 40200 = 160000, and 160000 / 20 = 8000 req/s over the 20 s window.
         # bytes: 5038614 + 5041386 + 5014800 + 5065200 = 20160000.
         # successful: 160000 - 7 status errors = 159993.
         # mean: (39989 * 689.5 + 40011 * 701 + 39800 * 650.25 + 40200 * 720) / 160000 = 110444076.5 / 160000.
         # Each percentile is the maximum of the four loaders.
         "name": "four loaders",
         "records": {"loader-1": LOADER_1, "loader-2": LOADER_2, "loader-3": LOADER_3, "loader-4": LOADER_4},
-        "stage_s": 20,
+        "window_s": 20,
         "expected": Merged(
             requests=160000,
             successful=159993,
@@ -115,7 +115,7 @@ MERGE_CASES = [
     {
         "name": "no requests on any loader",
         "records": {"loader-1": record("loader-1", 0, 0, ZERO), "loader-2": record("loader-2", 0, 0, ZERO)},
-        "stage_s": 20,
+        "window_s": 20,
         "expected": Merged(
             requests=0,
             successful=0,
@@ -166,7 +166,7 @@ class MergeTest(unittest.TestCase):
     def test_merge(self):
         for case in MERGE_CASES:
             with self.subTest(name=case["name"]):
-                self.assertEqual(merge(case["records"], case["stage_s"]), case["expected"])
+                self.assertEqual(merge(case["records"], case["window_s"]), case["expected"])
 
     def test_invalid_stage(self):
         for case in MERGE_ERROR_CASES:
