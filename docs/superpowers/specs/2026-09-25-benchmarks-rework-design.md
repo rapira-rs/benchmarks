@@ -53,7 +53,7 @@ Manual runs keep `REF=<ref>` and `BASE_REF=<ref>` builds on the server, and `mak
 
 ### 3.4 Shared php.ini
 
-One `servers/php.ini` applies to every PHP runtime: `opcache.enable=1`, `opcache.enable_cli=1`, `opcache.validate_timestamps=0`, `opcache.jit=disable`, `opcache.memory_consumption=256`, `memory_limit=256M`, `realpath_cache_size=4096K`, `realpath_cache_ttl=600`, `expose_php=0`, `error_log` to stderr. It reaches rapira and FrankenPHP through the `PHPRC` environment variable and php-fpm through `-c`. The run file records the ini text.
+One `servers/php.ini` applies to every PHP runtime: `opcache.enable=1`, `opcache.enable_cli=1`, `opcache.validate_timestamps=0`, `opcache.jit=disable`, `opcache.memory_consumption=256`, `memory_limit=256M`, `realpath_cache_size=4096K`, `realpath_cache_ttl=600`, `expose_php=0`, `display_errors=0`, `log_errors=1`, `error_reporting=E_ALL & ~E_DEPRECATED`, `error_log` to stderr. The last three matter because `PHPRC` replaces the distribution ini, and the built-in defaults print notices into response bodies. It reaches rapira and FrankenPHP through the `PHPRC` environment variable and php-fpm through `-c`. The run file records the ini text.
 
 ### 3.5 FrankenPHP
 
@@ -151,7 +151,7 @@ The load side must be able to break every target. The four loaders are sized for
 1. Start the target on the server, verify the listener pid, the executable, and the worker count.
 2. From every loader, one byte-exact probe against the expected response file. A mismatch on any loader voids the cell before load.
 3. Warm-up: 10 s at the floor rate from every loader, output discarded.
-4. For each stage: take the server and loader snapshots, compute the start time as now plus 3 s, start one process per loader over ssh in parallel with a sleep until that time, collect the `RESULT` line from each, take the end snapshots, merge, evaluate the pass rule, and stop when the stage fails.
+4. For each stage: compute the start time as now plus 3 s, then start in one parallel ssh batch one load process per loader with a sleep until that time and three timed snapshot jobs per box: at the start time, at the middle of the stage, and 0.5 s after the end of the stage. The busy CPU, the ENA deltas, and the TIME-WAIT growth come from the start and end samples, so the 3 s lead and the ssh round trips stay outside the busy window. The server sample in the middle of the stage also reads the connection states and the memory. Collect the `RESULT` line from each loader, merge, evaluate the pass rule, and stop when the stage fails.
 5. After a failing stage, one byte-exact probe from one loader. A failed probe sets the `died` flag: the target stopped answering. A passing probe means the target saturated but survived.
 6. Stop the target, verify the pid tree is gone, read the server log.
 
@@ -167,7 +167,7 @@ A stage passes when `achieved_rps >= 0.95 * rate` and every error counter on eve
 
 The cell reports:
 
-- `held`: the highest passing rate with its stage index and its latency percentiles. Null when the first stage fails.
+- `held`: the highest passing rate with its stage index. Its latency percentiles are the ones of that stage record. Null when the first stage fails.
 - `peak`: `successful_rps` of the failing stage, the continuous number for regression tracking. Null when no stage failed, which happens only at the 20-stage cap; the cell then carries `ladder_exhausted`.
 - `unloaded`: the p50 and p99 of the first stage, the replacement for the old low-concurrency pass.
 
@@ -234,7 +234,7 @@ A stage:
 - `rate`: the planned total req/s.
 - `duration_s`.
 - `pass`: bool, with `fail_reason` when false.
-- `merged`: `requests`, `successful`, `bytes`, `errors` (`connect`, `read`, `write`, `status`, `timeout`), `achieved_rps`, `successful_rps`.
+- `merged`: `requests`, `successful`, `bytes`, `errors` (`connect`, `read`, `write`, `status`, `timeout`, `dropped`), `achieved_rps`, `successful_rps`.
 - `latency_us`: `p50`, `p90`, `p99`, `p999`, `max`, each the maximum over loaders.
 - `loaders`: one record per loader with its own counts, its percentiles, `busy_cpu`, and ENA deltas.
 - `server`: `busy_cpu`, `pss_kb`, `established`, `time_wait`.
@@ -315,7 +315,7 @@ runs/                  local run output, ignored
 
 ## 11. Tests
 
-- `tests/test_ladder.py`: the stage list generation, the pass rule, the stop rule, and held and peak selection, as flat case tables with names.
+- `tests/test_ladder.py`: the stage list generation, the pass rule, and held and peak selection, as flat case tables with names. The stop rule (a passing stage then a failing stage ends the cell) is a driver rule and is tested in `tests/test_bench.py`.
 - `tests/test_merge.py`: merging loader records into a stage, including a loader with missing output, a loader with errors, and the maximum-over-loaders percentiles.
 - `tests/test_flags.py`: every flag rule with values at, below, and above its threshold.
 - `tests/test_runfile.py`: the writer produces the schema, typed numbers, and the status rules.

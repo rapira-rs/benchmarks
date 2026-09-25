@@ -6744,7 +6744,7 @@ Run: `git rm k6/grpc.js`
 
 - [ ] **Step 12: Verify the k6 script with the real k6 against a closed port**
 
-A connect to port 1 fails on every call, so every iteration adds 1 to `call_failures`, `errors.status` equals `requests`, and no latency sample exists. Rate 10 for 2 s gives 20 or 21 iterations.
+A connect to port 1 fails on every call, so every iteration adds 1 to `call_failures`, `errors.status` equals `requests`, and no latency sample exists. Rate 10 for 2 s gives about 15 iterations, because the executor ramps to the rate over the first second.
 
 Run:
 
