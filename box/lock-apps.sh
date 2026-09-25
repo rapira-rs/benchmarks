@@ -36,11 +36,12 @@ lock_yii3() {
   install -m 0644 "$dir/composer.lock" "$ROOT/apps/yii3/composer.lock"
   php -S 127.0.0.1:8765 -t "$dir/public" "$dir/public/index.php" >"$WORK/php.log" 2>&1 &
   pid=$!
+  rm -f "$ROOT/apps/yii3/expect.json"
   for _ in $(seq 1 20); do
     curl -fsS -o "$ROOT/apps/yii3/expect.json" http://127.0.0.1:8765/ 2>/dev/null && break
     sleep 0.5
   done
-  kill "$pid"
+  kill "$pid" 2>/dev/null || true
   if [ ! -s "$ROOT/apps/yii3/expect.json" ]; then
     cat "$WORK/php.log" >&2
     echo "ERROR: no body from the Yii3 app" >&2
