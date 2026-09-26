@@ -10,7 +10,7 @@ Each target reports two numbers at its rate: the p99 latency and the RSS of the 
 
 ## Where the results are
 
-- The board: https://rapira.rs/benchmarks/ (two charts, p99 and RSS, one line per target, the merged pull requests on the x axis).
+- The board: https://rapira.rs/benchmarks/ (one row per target with a p99 chart and an RSS chart, the merged pull requests on the x axis).
 - The run files: `run.json` and the raw evidence of every CI run, as workflow artifacts and in the `gh-pages` branch under `data/`.
 - [NOTES.md](NOTES.md): dated records, including the numbers of the earlier methods.
 
