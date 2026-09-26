@@ -1,6 +1,6 @@
-"""Deltas of the achieved rate, the p99, and the RSS between two run files."""
+"""Deltas of the achieved rate, the p99, and the RSS between two run files, with the held state and the flags."""
 
-from rig.report import mib, ms, num, rows
+from rig.report import flag_list, held_text, mib, ms, num, rows
 
 # Run fields that must match for a fair comparison, as (section, key). An empty section is the top level.
 IDENTITY = (
@@ -9,6 +9,8 @@ IDENTITY = (
     ("rig", "loader_count"),
     ("", "processes"),
     ("suite", "rates"),
+    ("suite", "connections"),
+    ("suite", "warmup_s"),
     ("suite", "duration_s"),
 )
 
@@ -31,9 +33,13 @@ def delta(va, vb):
     return "-"
 
 
+def incomplete_runs(a: dict, b: dict) -> list[str]:
+    return [f"{run['id']} is incomplete: {'; '.join(run['reasons'])}" for run in (a, b) if run["status"] != "complete"]
+
+
 def compare(a: dict, b: dict, *, force: bool = False) -> tuple[str, int]:
-    """The delta table and the exit status: 1 when the rig identity differs and `force` is false."""
-    diffs = identity_diffs(a, b)
+    """The delta table and the exit status: 1 when `force` is false and the rig identity differs or a run is incomplete."""
+    diffs = identity_diffs(a, b) + incomplete_runs(a, b)
     if diffs and not force:
         lines = [f"refused: {d}" for d in diffs] + ["Use --force to compare anyway."]
         return "\n".join(lines) + "\n", 1
@@ -53,7 +59,9 @@ def compare(a: dict, b: dict, *, force: bool = False) -> tuple[str, int]:
             continue
         lines.append(
             f"{name:<{w}}  req/s {num(ra['achieved'])} -> {num(rb['achieved'])} {delta(ra['achieved'], rb['achieved'])}"
+            f"  held {held_text(ra)} -> {held_text(rb)}"
             f"  p99 {ms(ra['p99'])} -> {ms(rb['p99'])} {delta(ra['p99'], rb['p99'])}"
             f"  rss {mib(ra['rss_kb'])} -> {mib(rb['rss_kb'])} {delta(ra['rss_kb'], rb['rss_kb'])}"
+            f"  flags {flag_list(ra)} -> {flag_list(rb)}"
         )
     return "\n".join(lines) + "\n", 0

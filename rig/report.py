@@ -47,6 +47,14 @@ def mib(kb):
     return f"{kb / 1024:.1f}"
 
 
+def held_text(row):
+    return "yes" if row["held"] else "no"
+
+
+def flag_list(row):
+    return ",".join(row["flags"]) or "-"
+
+
 def render(run: dict) -> tuple[str, int]:
     """The report text and the exit status: 1 when the run is incomplete."""
     table = rows(run)
@@ -54,10 +62,9 @@ def render(run: dict) -> tuple[str, int]:
     hdr = f"{'target':<{w}} {'req/s':>8} {'held':>4} {'p99':>9} {'p50':>9} {'RSS MiB':>8} {'n':>3}  flags"
     lines = [hdr, "-" * len(hdr)]
     for r in table:
-        held = "yes" if r["held"] else "no"
         lines.append(
-            f"{r['name']:<{w}} {num(r['achieved']):>8} {held:>4} {ms(r['p99']):>9} {ms(r['p50']):>9} "
-            f"{mib(r['rss_kb']):>8} {r['n']:>3}  {','.join(r['flags']) or '-'}"
+            f"{r['name']:<{w}} {num(r['achieved']):>8} {held_text(r):>4} {ms(r['p99']):>9} {ms(r['p50']):>9} "
+            f"{mib(r['rss_kb']):>8} {r['n']:>3}  {flag_list(r)}"
         )
     voided = [c for c in run["cells"] if c["status"] == "void"]
     if voided:

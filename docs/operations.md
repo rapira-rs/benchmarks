@@ -88,7 +88,7 @@ The driver refuses a suite before it creates a run directory when one of these c
 - `make extend TTL=<minutes>` sets a new lifetime on every box.
 - `make sync` builds the local `../core` working tree on the server. The next `make bench` uses that binary. The rig must come from `make up REF=<ref>`, because a nightly rig has no Rust toolchain.
 - `make report` prints the tables of the newest run. `make report RUN=runs/<id>` prints another run.
-- `make compare A=runs/<a> B=runs/<b>` prints the deltas between two runs.
+- `make compare A=runs/<a> B=runs/<b>` prints the deltas between two runs, and the held state and the flags of each target.
 - `make board` copies the board files into `PAGES` and serves the directory on 127.0.0.1:8000. Fill the directory first with `python3 -m rig publish --pages-dir runs/pages runs/<id>/run.json`.
 - `make lock` creates `apps/yii3/composer.lock`, `apps/yii3/expect.json`, and `apps/grpc/composer.lock` from the pinned sources. It needs PHP 8.5, Composer, and a Valkey or Redis server on 127.0.0.1:6379 on the operator machine, for example `docker run --rm -d -p 127.0.0.1:6379:6379 valkey/valkey:9.1.2-alpine`.
 - `make test` runs the unit tests.
@@ -104,7 +104,7 @@ Each run writes `runs/<id>/`. The run id is `<UTC timestamp>-<suite>-<rapira sha
 
 `make bench` and `make report` return a nonzero status when the run is incomplete. An incomplete run has a missing, voided, or interrupted cell. The report then ends with `Do not publish these tables.`
 
-`make compare` refuses two runs with a different server type, loader type, loader count, worker count, rate, or duration. Give `--force` to `python3 -m rig compare` to compare them anyway.
+`make compare` refuses two runs with a different server type, loader type, loader count, worker count, rate, connection count, warm-up, or duration. It also refuses an incomplete run. Give `--force` to `python3 -m rig compare` to compare them anyway.
 
 `python3 -m rig publish --pages-dir <dir> runs/<id>/run.json` adds a run to a checkout of the `gh-pages` branch: it writes `data/<id>.json` and updates `data/index.json`.
 

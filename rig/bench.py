@@ -110,8 +110,10 @@ def load_cmd(target: Target, url: str, epoch: float, rate: int, plan: dict, suit
     """One load.sh call of one loader: h2load for the grpc proto, wrk2 for http1."""
     conns = plan["conns_per_loader"][target.proto]
     if target.proto == "grpc":
+        # h2load refuses fewer clients than threads:
+        # https://github.com/nghttp2/nghttp2/blob/v1.70.0/src/h2load.cc#L3454
         return box_cmd(
-            "load.sh", "h2load", f"{epoch:.3f}", rate, plan["loader_threads"], conns, suite.grpc_streams,
+            "load.sh", "h2load", f"{epoch:.3f}", rate, min(plan["loader_threads"], conns), conns, suite.grpc_streams,
             suite.warmup_s, suite.duration_s, url, target.body,
         )
     return box_cmd(

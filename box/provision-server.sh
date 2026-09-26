@@ -174,6 +174,8 @@ install_nightly() {
     echo "ERROR: $dir/bin/rapira has missing libraries"
     exit 1
   fi
+  # The binary loads the libphp of the asset.
+  record_version php "PHP $(cat "$dir/share/php/PHP_VERSION.txt") ($asset)"
   write_meta "$dir" nightly "$sha" "$version" nightly "$asset" ""
 }
 
@@ -236,6 +238,8 @@ build_server() {
   sha7=$(git -C "$CORE" rev-parse --short=7 "$sha")
   build_one "$BENCH/rapira/$sha7" "$sha" "$rustflags"
   version=$(git -C "$CORE" describe --tags --always "$sha")
+  # The build links the libphp of php-embedded, which comes from the same PHP build as php-cli.
+  record_version php "$(php -v | sed -n 1p)"
   write_meta "$BENCH/rapira/$sha7" "$REF" "$sha" "$version" server "" "$rustflags"
 }
 
@@ -289,7 +293,6 @@ if [ "$ini" != "1 0 256 0" ]; then
   echo "ERROR: effective php.ini values are $ini, expected 1 0 256 0"
   exit 1
 fi
-record_version php "$(php -v | sed -n 1p)"
 
 if [ -n "$NIGHTLY" ]; then
   echo "==> rapira nightly $NIGHTLY"

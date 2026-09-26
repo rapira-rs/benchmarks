@@ -13,7 +13,7 @@ This document defines how the rig measures a target, which numbers it reports, w
 - Run benchmarks only on the EC2 rig of this repository: one server and `LOADER_COUNT` loaders in one cluster placement group.
 - Run one target at a time on the server.
 - Send all load to the private address of the server.
-- Keep the server type, the loader type, the loader count, the Availability Zone, the AMI, the suite, the worker count, the rates, and the duration equal for one comparison. `make compare` refuses a pair with a different rig shape, worker count, rate, or duration.
+- Keep the server type, the loader type, the loader count, the Availability Zone, the AMI, the suite, the worker count, the rates, and the duration equal for one comparison. `make compare` refuses a pair with a different rig shape, worker count, rate, connection count, warm-up, or duration, and a pair with an incomplete run.
 - Every target runs `PROCESSES` workers. The default is the server CPU count. The start script verifies the worker count after the start, and a different count fails the start.
 - Every PHP process uses the shared `servers/php.ini`. The run file records its text.
 - The driver runs the cells in rotated order: round r starts at target r of the suite and wraps. No target is always first.
@@ -36,6 +36,7 @@ These wrk2 facts shape the method:
 These h2load facts shape the method:
 
 - `--rps` is the rate per connection. The driver divides the rate of a loader by its connection count. `-m` limits the streams in flight per connection.
+- h2load refuses fewer clients than threads. The driver gives h2load one thread per vCPU of the loader, and at most one thread per connection.
 - `--warm-up-time` and `-D` set the warm-up and the measured window. h2load counts only the requests that end in the measured window, and writes one line per such request to `--log-file`: the start time, the HTTP status or -1 for a failed stream, and the response time. `loader/h2load-report.py` turns that log into the `RESULT` line.
 - h2load does not read the `grpc-status` trailer. A gRPC error inside a 200 response is invisible to the counters. The probes before and after the stage are the correctness check.
 - h2load times a request from the moment it sends it, so its latency is not corrected for coordinated omission: a request that waits for a free stream does not count that wait. Compare the gRPC p99 with the wrk2 rows with this in mind.

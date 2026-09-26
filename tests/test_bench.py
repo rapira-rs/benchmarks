@@ -364,13 +364,23 @@ LOAD_CMD_CASES = [
         "name": "wrk2 gets the threads, the connections of one loader, and the request shape",
         "target": WORKER,
         "rate": 125000,
+        "plan": PLAN,
         "expected": ["bash", "bench-rig/box/load.sh", "wrk2", "100.000", "125000", "4", "2500", "10", "60", URL, "GET", "-"],
     },
     {
         "name": "h2load gets the streams and the body path under the staged rig",
         "target": GRPC,
         "rate": 50000,
+        "plan": PLAN,
         "expected": ["bash", "bench-rig/box/load.sh", "h2load", "100.000", "50000", "4", "50", "100", "10", "60", GRPC_URL, "apps/grpc/echo.grpc"],
+    },
+    {
+        # 25 loaders of 8 vCPUs: 100 gRPC connections give 4 per loader.
+        "name": "h2load gets one thread per connection when a loader has fewer connections than threads",
+        "target": GRPC,
+        "rate": 4000,
+        "plan": {"conns_per_loader": {"http1": 200, "grpc": 4}, "loader_threads": 8},
+        "expected": ["bash", "bench-rig/box/load.sh", "h2load", "100.000", "4000", "4", "4", "100", "10", "60", GRPC_URL, "apps/grpc/echo.grpc"],
     },
 ]
 
@@ -412,7 +422,7 @@ class LoadCmdTest(unittest.TestCase):
     def test_load_cmd(self):
         for case in LOAD_CMD_CASES:
             with self.subTest(name=case["name"]):
-                cmd = load_cmd(case["target"], f"http://10.0.0.1:8080{case['target'].url}", 100.0, case["rate"], PLAN, suite([WORKER, GRPC]))
+                cmd = load_cmd(case["target"], f"http://10.0.0.1:8080{case['target'].url}", 100.0, case["rate"], case["plan"], suite([WORKER, GRPC]))
                 self.assertEqual(shlex.split(cmd), case["expected"])
 
     def test_counted_s(self):
