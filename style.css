@@ -1,39 +1,74 @@
-:root {
-  --bg: #ffffff;
-  --fg: #1f2328;
-  --grid: #d0d7de;
-  --error: #b42318;
+body {
+  margin: 0;
+  padding: 1em;
+  background: #ffffff;
+  color: #000000;
+  font: 13px monospace;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d1117;
-    --fg: #e6edf3;
-    --grid: #30363d;
-    --error: #ff7b72;
+@media (min-width: 600px) {
+  body {
+    padding: 1em 4em;
   }
 }
 
-body {
-  margin: 0 auto;
-  max-width: 72rem;
-  padding: 1rem;
-  background: var(--bg);
-  color: var(--fg);
-  font: 15px/1.5 system-ui, sans-serif;
+a {
+  color: #428bca;
+  text-decoration: none;
 }
 
-a {
-  color: inherit;
+a:hover,
+a:focus {
+  color: #2a6496;
+  text-decoration: underline;
 }
 
 #error {
-  color: var(--error);
+  color: #b42318;
   font-weight: bold;
 }
 
-.chart {
+/* One row per target: its p99 chart and its RSS chart. One column on a narrow screen. */
+#charts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1.5em 10px;
+}
+
+@media (max-width: 999px) {
+  #charts {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.title {
+  margin: 0;
+  font: bold 18px/1.5 system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif;
+  text-align: center;
+}
+
+.plot {
   position: relative;
-  height: 320px;
-  margin-bottom: 1.5rem;
+  height: 300px;
+}
+
+.tooltip {
+  position: absolute;
+  z-index: 1;
+  box-sizing: border-box;
+  max-width: 100%;
+  padding: 4px;
+  border: 2px solid #000000;
+  background: #ffffff;
+  font: 10pt monospace;
+  white-space: pre-wrap;
+  pointer-events: none;
+}
+
+.tooltip .worse {
+  color: #cf222e;
+}
+
+.tooltip .better {
+  color: #1a7f37;
 }

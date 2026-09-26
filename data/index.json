@@ -29,6 +29,16 @@
    "status": "complete",
    "smoke": false,
    "pr": 144
+  },
+  {
+   "id": "20260926T210811Z-ci-ac56141",
+   "started": "2026-09-26T21:08:13Z",
+   "suite": "ci",
+   "rapira_sha": "ac56141af8c1dadf83cd750b7f522b06155d198d",
+   "rapira_version": "0.8.1-nightly.ac56141",
+   "status": "complete",
+   "smoke": false,
+   "pr": 148
   }
  ]
 }

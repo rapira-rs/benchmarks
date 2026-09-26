@@ -5,7 +5,19 @@ const RUN_SCHEMA = "rapira-bench-run/2";
 // The board loads at most this many runs, the newest ones.
 const HISTORY_RUNS = 60;
 const COMMITS = "https://github.com/rapira-rs/rapira/commit/";
-const PALETTE = ["#2f6fdf", "#d9480f", "#2b8a3e", "#ae3ec9", "#e67700", "#0c8599", "#c2255c", "#5c7cfa"];
+const INK = "#000000";
+const LINE = "#2f6fdf";
+const GRID = "rgba(0, 0, 0, 0.07)";
+const FRAME = "#cccccc";
+const CROSSHAIR = "#607d8b";
+const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
+// The distance in pixels between a point and its tooltip.
+const TIP_OFFSET = 10;
+// Every target gets one chart per measure, in this order.
+const MEASURES = [
+  { key: "p99_ms", name: "p99", axis: "p99 latency (ms)", unit: "ms" },
+  { key: "rss_mib", name: "RSS", axis: "RSS (MiB)", unit: "MiB" },
+];
 
 function median(values) {
   const sorted = values.slice().sort((a, b) => a - b);
@@ -25,7 +37,7 @@ function runLabel(run) {
   return run.rapira.pr ? "#" + run.rapira.pr.number : run.rapira.sha.slice(0, 7);
 }
 
-// The page that a click on a point opens: the pull request, or the commit on GitHub.
+// The page that a click in a chart opens: the pull request, or the commit on GitHub.
 function runLink(run) {
   return run.rapira.pr ? run.rapira.pr.url : COMMITS + run.rapira.sha;
 }
@@ -64,10 +76,41 @@ function targetSeries(runs) {
   });
   return {
     labels: runs.map(runLabel),
+    // started is an ISO 8601 UTC time, for example 2026-09-26T19:10:13Z.
+    dates: runs.map((run) => run.started.slice(0, 16).replace("T", " ") + " UTC"),
     links: runs.map(runLink),
     titles: runs.map((run) => (run.rapira.pr ? run.rapira.pr.title : "")),
     targets,
   };
+}
+
+// The change of values[i] in percent from the first value that is not null.
+function sinceStart(values, i) {
+  const start = values.find((value) => value !== null);
+  return ((values[i] - start) / start) * 100;
+}
+
+// The hover lines of the point i of one target and one measure. A lower p99 and a lower RSS are better, so the
+// value line has the tone "worse" after an increase since the start and "better" after a decrease.
+function tooltipLines(series, name, key, unit, i) {
+  const target = series.targets[name];
+  const change = sinceStart(target[key], i);
+  const lines = [{ text: series.dates[i] + " - " + series.labels[i], tone: "" }];
+  if (series.titles[i]) {
+    lines.push({ text: series.titles[i], tone: "" });
+  }
+  lines.push({
+    text: target[key][i].toFixed(2) + " " + unit + " (" + (change > 0 ? "+" : "") + change.toFixed(2) + "% since start)",
+    tone: change > 0 ? "worse" : change < 0 ? "better" : "",
+  });
+  lines.push({
+    text: Math.round(target.achieved[i]) + " of " + target.rate[i] + " req/s, held " + (target.held[i] ? "yes" : "no"),
+    tone: "",
+  });
+  if (target.flags[i].length) {
+    lines.push({ text: target.flags[i].join(", "), tone: "" });
+  }
+  return lines;
 }
 
 function el(tag, text) {
@@ -86,61 +129,112 @@ async function fetchJson(path) {
   return response.json();
 }
 
-// One chart of every target over the runs. key is p99_ms or rss_mib; scale is logarithmic or linear.
-function drawChart(parent, series, key, axis, unit, scale) {
+// A thin frame around the plot area, and a dashed vertical line at the point under the pointer.
+const plotMarks = {
+  id: "plotMarks",
+  beforeDatasetsDraw(chart) {
+    const { ctx, chartArea: area } = chart;
+    ctx.save();
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = FRAME;
+    ctx.strokeRect(area.left + 0.5, area.top + 0.5, area.width - 1, area.height - 1);
+    const active = chart.getActiveElements();
+    if (active.length) {
+      const x = Math.round(active[0].element.x) + 0.5;
+      ctx.strokeStyle = CROSSHAIR;
+      ctx.setLineDash([3, 3]);
+      ctx.beginPath();
+      ctx.moveTo(x, area.top);
+      ctx.lineTo(x, area.bottom);
+      ctx.stroke();
+    }
+    ctx.restore();
+  },
+};
+
+// One chart of one measure of one target over the runs.
+function drawChart(parent, series, name, measure) {
   const box = el("div");
-  box.className = "chart";
+  const title = el("h2", name + " · " + measure.name);
+  title.className = "title";
+  const plot = el("div");
+  plot.className = "plot";
   const canvas = el("canvas");
   canvas.setAttribute("role", "img");
-  canvas.setAttribute("aria-label", axis + " by run");
-  box.appendChild(canvas);
+  canvas.setAttribute("aria-label", measure.axis + " of " + name + " by run");
+  const tip = el("div");
+  tip.className = "tooltip";
+  tip.hidden = true;
+  plot.append(canvas, tip);
+  box.append(title, plot);
   parent.appendChild(box);
-  const names = Object.keys(series.targets);
   new Chart(canvas, {
     type: "line",
     data: {
       labels: series.labels,
-      datasets: names.map((name, i) => ({
-        label: name,
-        data: series.targets[name][key],
-        borderColor: PALETTE[i % PALETTE.length],
-        backgroundColor: PALETTE[i % PALETTE.length],
-      })),
+      datasets: [{
+        data: series.targets[name][measure.key],
+        borderColor: LINE,
+        backgroundColor: LINE,
+        borderWidth: 1,
+        pointRadius: 2,
+      }],
     },
     options: {
       animation: false,
       responsive: true,
       maintainAspectRatio: false,
-      onClick: (event, elements) => {
-        if (elements.length) {
-          window.open(series.links[elements[0].index], "_blank", "noopener");
+      interaction: { mode: "index", intersect: false },
+      // A touch screen has no hover. There, a tap in the plot shows the tooltip, and only a tap on a point opens the run.
+      onClick: (event, elements, chart) => {
+        const hits = matchMedia("(hover: none)").matches
+          ? chart.getElementsAtEventForMode(event, "nearest", { intersect: true }, false)
+          : elements;
+        if (hits.length) {
+          window.open(series.links[hits[0].index], "_blank", "noopener");
         }
       },
       scales: {
-        x: { type: "category" },
-        y: { type: scale, title: { display: true, text: axis } },
+        x: { grid: { display: false }, border: { display: false } },
+        y: {
+          min: 0,
+          grace: "20%",
+          grid: { color: GRID },
+          border: { display: false },
+          title: { display: true, text: measure.axis, font: { weight: "bold" } },
+        },
       },
       plugins: {
-        legend: { position: "top" },
+        legend: { display: false },
         tooltip: {
-          callbacks: {
-            title: (items) => {
-              const i = items[0].dataIndex;
-              return series.titles[i] ? series.labels[i] + " " + series.titles[i] : series.labels[i];
-            },
-            label: (item) => {
-              const target = series.targets[item.dataset.label];
-              const i = item.dataIndex;
-              return (
-                item.dataset.label + ": " + item.parsed.y.toFixed(2) + " " + unit + ", " +
-                Math.round(target.achieved[i]) + " of " + target.rate[i] + " req/s, held " + (target.held[i] ? "yes" : "no")
-              );
-            },
-            afterLabel: (item) => series.targets[item.dataset.label].flags[item.dataIndex].join(", "),
+          enabled: false,
+          // Shows the text right of the point and below it, or left of the point when the text does not fit on the right.
+          external: ({ chart, tooltip }) => {
+            if (!tooltip.opacity) {
+              tip.hidden = true;
+              canvas.style.cursor = "";
+              return;
+            }
+            const lines = tooltipLines(series, name, measure.key, measure.unit, tooltip.dataPoints[0].dataIndex);
+            tip.replaceChildren(...lines.map((line) => {
+              const node = el("div", line.text);
+              node.className = line.tone;
+              return node;
+            }));
+            tip.hidden = false;
+            canvas.style.cursor = "pointer";
+            // An absolute box shrinks to the space right of its left edge, so measure it at the left edge of the plot.
+            tip.style.left = "0px";
+            const width = tip.offsetWidth;
+            const right = tooltip.caretX + TIP_OFFSET;
+            const left = right + width > chart.width ? Math.max(0, tooltip.caretX - TIP_OFFSET - width) : right;
+            tip.style.left = left + "px";
+            tip.style.top = tooltip.caretY + TIP_OFFSET + "px";
           },
         },
       },
     },
+    plugins: [plotMarks],
   });
 }
 
@@ -151,21 +245,19 @@ function showError(error) {
 }
 
 async function main() {
-  const style = getComputedStyle(document.documentElement);
-  Chart.defaults.color = style.getPropertyValue("--fg").trim();
-  Chart.defaults.borderColor = style.getPropertyValue("--grid").trim();
+  Chart.defaults.color = INK;
+  Chart.defaults.font.family = SANS;
   const entries = visibleRuns((await fetchJson("data/index.json")).runs).slice(-HISTORY_RUNS);
   const loaded = await Promise.all(entries.map((entry) => fetchJson("data/" + entry.id + ".json")));
   const series = targetSeries(loaded.filter((run) => run.schema === RUN_SCHEMA));
   const root = document.getElementById("charts");
-  root.appendChild(el("h2", "p99 latency"));
-  drawChart(root, series, "p99_ms", "p99 ms", "ms", "logarithmic");
-  root.appendChild(el("h2", "RSS"));
-  drawChart(root, series, "rss_mib", "RSS MiB", "MiB", "linear");
+  Object.keys(series.targets).forEach((name) => {
+    MEASURES.forEach((measure) => drawChart(root, series, name, measure));
+  });
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { visibleRuns, runLabel, runLink, targetSeries };
+  module.exports = { visibleRuns, runLabel, runLink, targetSeries, sinceStart, tooltipLines };
 } else {
   document.addEventListener("DOMContentLoaded", () => main().catch(showError));
 }
