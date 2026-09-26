@@ -119,9 +119,10 @@ If the result depends on a response header or on a server configuration, capture
 
 The board on the `gh-pages` branch shows the newest 60 runs. One run is one nightly build of the rapira main branch, labelled with the merged pull request of its commit. Merges that land between two nightly builds share one run.
 
-- The p99 chart shows the p99 latency of every target in milliseconds on a logarithmic scale. The RSS chart shows the RSS of the rapira process tree in MiB.
-- The x axis lists the runs in order, labelled with the pull request number. A run without a pull request, for example a manual run, shows the first 7 characters of the rapira sha. A click on a point opens the pull request, or the commit.
-- The tooltip shows the achieved rate against the requested rate, whether the target held the rate, and the flags of the cell. Read the flag rules above before you draw a conclusion from a point.
+- Each target has one row with two charts: the p99 latency in milliseconds and the RSS of the rapira process tree in MiB. Both y axes are linear and start at 0.
+- The x axis lists the runs in order, labelled with the pull request number. A run without a pull request, for example a manual run, shows the first 7 characters of the rapira sha. A click in a chart opens the pull request, or the commit, of the run at the pointer. On a touch screen, a tap shows the tooltip, and a tap on a point opens the run.
+- The tooltip shows the start time of the run, the pull request title, the value, and the change of the value in percent since the first point of the chart. The change is red for an increase and green for a decrease, because a lower p99 and a lower RSS are better. The color shows only the sign of the change. It does not show whether the change is larger than the noise between runs.
+- The tooltip also shows the achieved rate against the requested rate, whether the target held the rate, and the flags of the cell. Read the flag rules above before you draw a conclusion from a point.
 - A voided cell and a run without the target give no point.
 - Smoke runs are not shown.
 

@@ -38,10 +38,12 @@ SERIES_CASES = [
         # when every cell held, the flags are the union. Run c: the hello cell is incomplete, so nulls.
         # grpc, run b: the cell is void. yii3 has a cell only in run c. The targets come in name order.
         # grpc: 1048576 / 1024 = 1024 MiB, 1150976 / 1024 = 1124 MiB, 2500 us = 2.5 ms, 9000 us = 9 ms. yii3: 524288 / 1024 = 512 MiB, 4000 us = 4 ms.
+        # A date is the UTC start of the run to the minute.
         "name": "medians over rounds, void and incomplete cells, target in one run",
         "runs": [RUN_A, RUN_B, RUN_C],
         "expected": {
             "labels": ["#101", "bbbbbbb", "#103"],
+            "dates": ["2026-09-26 01:00 UTC", "2026-09-27 01:00 UTC", "2026-09-28 01:00 UTC"],
             "links": ["https://github.com/rapira-rs/rapira/pull/101", COMMIT_B, "https://github.com/rapira-rs/rapira/pull/103"],
             "titles": ["Faster hello", "", "Fix the dispatcher drain"],
             "targets": {
@@ -78,6 +80,7 @@ SERIES_CASES = [
         "runs": [RUN_A],
         "expected": {
             "labels": ["#101"],
+            "dates": ["2026-09-26 01:00 UTC"],
             "links": ["https://github.com/rapira-rs/rapira/pull/101"],
             "titles": ["Faster hello"],
             "targets": {
@@ -98,6 +101,75 @@ VISIBLE_CASES = [
         "name": "entries in order without smoke stay the same",
         "entries": [entry(RUN_A), entry(RUN_B), entry(RUN_C)],
         "expected": [entry(RUN_A), entry(RUN_B), entry(RUN_C)],
+    },
+]
+
+# The change of a point in percent from the first point of the chart that has a value.
+SINCE_START_CASES = [
+    {"name": "first point is the start", "values": [2.5, None, 9.0], "index": 0, "expected": 0},
+    # (9 - 2.5) / 2.5 * 100 = 260.
+    {"name": "increase over a gap", "values": [2.5, None, 9.0], "index": 2, "expected": 260},
+    # (1 - 1.25) / 1.25 * 100 = -20.
+    {"name": "decrease", "values": [1.25, 1.0, None], "index": 1, "expected": -20},
+    # The target has no value in the first two runs, so the start is 4: (5 - 4) / 4 * 100 = 25.
+    {"name": "start is the first run with a value", "values": [None, None, 4.0, 5.0], "index": 3, "expected": 25},
+]
+
+# The series of runs a, b, and c, as the first series case expects it.
+SERIES_ABC = SERIES_CASES[0]["expected"]
+
+def line(text, tone=""):
+    """A tooltip line of tooltipLines."""
+    return {"text": text, "tone": tone}
+
+
+# The hover lines of one point: the run, the pull request title when the run has one, the value with its change
+# since the start, the achieved rate, and the flags when the point has any. A lower p99 and a lower RSS are better,
+# so the value line is "worse" after an increase and "better" after a decrease.
+TOOLTIP_CASES = [
+    {
+        # (9 - 2.5) / 2.5 * 100 = 260.
+        "name": "increase, pull request title, flags",
+        "target": "grpc-rapira", "key": "p99_ms", "unit": "ms", "index": 2,
+        "expected": [
+            line("2026-09-28 01:00 UTC - #103"),
+            line("Fix the dispatcher drain"),
+            line("9.00 ms (+260.00% since start)", "worse"),
+            line("85000 of 100000 req/s, held no"),
+            line("server_unsaturated"),
+        ],
+    },
+    {
+        # (1 - 1.2) / 1.2 * 100 = -16.67.
+        "name": "decrease, run without a pull request",
+        "target": "hello-rapira-worker", "key": "p99_ms", "unit": "ms", "index": 1,
+        "expected": [
+            line("2026-09-27 01:00 UTC - bbbbbbb"),
+            line("1.00 ms (-16.67% since start)", "better"),
+            line("245050 of 250000 req/s, held no"),
+            line("generator_bound"),
+        ],
+    },
+    {
+        # (205.5 - 200) / 200 * 100 = 2.75.
+        "name": "RSS increase",
+        "target": "hello-rapira-worker", "key": "rss_mib", "unit": "MiB", "index": 1,
+        "expected": [
+            line("2026-09-27 01:00 UTC - bbbbbbb"),
+            line("205.50 MiB (+2.75% since start)", "worse"),
+            line("245050 of 250000 req/s, held no"),
+            line("generator_bound"),
+        ],
+    },
+    {
+        "name": "start point without flags",
+        "target": "grpc-rapira", "key": "p99_ms", "unit": "ms", "index": 0,
+        "expected": [
+            line("2026-09-26 01:00 UTC - #101"),
+            line("Faster hello"),
+            line("2.50 ms (0.00% since start)"),
+            line("99990 of 100000 req/s, held yes"),
+        ],
     },
 ]
 
@@ -128,6 +200,24 @@ class TargetSeriesTest(unittest.TestCase):
                 self.assertEqual(series, case["expected"])
                 # Dict equality ignores the key order, and the board draws the lines in key order.
                 self.assertEqual(list(series["targets"]), list(case["expected"]["targets"]))
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class SinceStartTest(unittest.TestCase):
+    def test_since_start(self):
+        for case in SINCE_START_CASES:
+            with self.subTest(name=case["name"]):
+                change = call_js("sinceStart", case["values"], case["index"])
+                self.assertAlmostEqual(change, case["expected"], places=9)
+
+
+@unittest.skipUnless(NODE, "node is not installed")
+class TooltipLinesTest(unittest.TestCase):
+    def test_tooltip_lines(self):
+        for case in TOOLTIP_CASES:
+            with self.subTest(name=case["name"]):
+                lines = call_js("tooltipLines", SERIES_ABC, case["target"], case["key"], case["unit"], case["index"])
+                self.assertEqual(lines, case["expected"])
 
 
 @unittest.skipUnless(NODE, "node is not installed")
