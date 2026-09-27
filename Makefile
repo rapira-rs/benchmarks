@@ -4,23 +4,22 @@ SHELL := /bin/bash
 .NOTPARALLEL:
 
 REGION ?= eu-central-1
-SERVER_TYPE ?= c7a.8xlarge
-LOADER_TYPE ?= c7a.2xlarge
-LOADER_COUNT ?= 1
+SERVER_TYPE ?= c7a.2xlarge
+LOADER_TYPE ?= c7a.xlarge
+LOADER_COUNT ?= 2
 AZ ?= eu-central-1a
 TTL ?= 60
 REF ?=
 NIGHTLY ?=
+# sha7 of the base build on the binaries release of this repository.
+BASE ?=
 SUITE ?= ci
 ROUNDS ?=
-PROCESSES ?=
 AMI ?=
 TF_BACKEND ?= local
 # 1 builds rapira with frame pointers for a perf session. Server builds only.
 FRAME_POINTERS ?= 0
 RUN ?=
-A ?=
-B ?=
 PAGES ?= runs/pages
 BUF_VERSION ?= v1.73.0
 BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
@@ -28,7 +27,7 @@ BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 TF := terraform -chdir=terraform
 AWSC := aws --region $(REGION)
 
-.PHONY: preflight up provision status bench report compare extend sync lock down nuke test grpc_fixtures board
+.PHONY: preflight up provision status bench report extend sync lock down nuke test grpc_fixtures board
 
 preflight:
 	@$(AWSC) sts get-caller-identity >/dev/null 2>&1 || \
@@ -38,7 +37,8 @@ preflight:
 # operation (provision, status, down) sees the applied values.
 up: preflight
 	@python3 -m rig needs --suite $(SUITE) >/dev/null
-	@test -n "$(NIGHTLY)$(REF)" || { echo "ERROR: set NIGHTLY=<sha7> or REF=<ref>, for example: make up REF=pr/97"; exit 1; }
+	@test -n "$(NIGHTLY)$(REF)" || { echo "ERROR: set NIGHTLY=<sha7> or REF=<ref>, for example: make up REF=pr/97 BASE=<sha7>"; exit 1; }
+	@test -n "$(BASE)" || { echo "ERROR: set BASE=<sha7> of a build on the binaries release, for example: make up NIGHTLY=<sha7> BASE=<sha7>"; exit 1; }
 	@quota=$$($(AWSC) service-quotas get-service-quota --service-code ec2 --quota-code L-1216C47A --query Quota.Value --output text 2>/dev/null); \
 	test -n "$$quota" || { echo "ERROR: could not read quota L-1216C47A; check the AWS permissions"; exit 1; }; \
 	sv=$$($(AWSC) ec2 describe-instance-types --instance-types $(SERVER_TYPE) --query 'InstanceTypes[0].VCpuInfo.DefaultVCpus' --output text 2>/dev/null); \
@@ -63,7 +63,7 @@ up: preflight
 
 provision:
 	@needs=$$(python3 -m rig needs --suite $(SUITE)) && \
-	python3 -m rig provision --ttl $(TTL) --needs "$$needs" --nightly "$(NIGHTLY)" --ref "$(REF)" --frame-pointers "$(FRAME_POINTERS)"
+	python3 -m rig provision --ttl $(TTL) --needs "$$needs" --nightly "$(NIGHTLY)" --ref "$(REF)" --base "$(BASE)" --frame-pointers "$(FRAME_POINTERS)"
 
 status: preflight
 	@out=$$($(TF) output 2>/dev/null); \
@@ -75,17 +75,13 @@ status: preflight
 	@python3 -m rig ttl 2>/dev/null || true
 
 bench:
-	@python3 -m rig bench --suite $(SUITE) $(if $(ROUNDS),--rounds $(ROUNDS)) $(if $(PROCESSES),--processes $(PROCESSES))
+	@python3 -m rig bench --suite $(SUITE) $(if $(ROUNDS),--rounds $(ROUNDS))
 
 # RUN selects a run directory; the default is the newest one under runs/.
 report:
 	@d="$(RUN)"; [ -n "$$d" ] || d=$$(ls runs/*/run.json 2>/dev/null | sort | tail -1); d=$${d%/run.json}; \
 	test -n "$$d" || { echo "ERROR: no run in runs/"; exit 1; }; \
 	python3 -m rig report "$${d%/}/run.json"
-
-compare:
-	@test -n "$(A)" && test -n "$(B)" || { echo "ERROR: set A=runs/<id> and B=runs/<id>"; exit 1; }
-	@python3 -m rig compare "$(A)/run.json" "$(B)/run.json"
 
 extend:
 	@python3 -m rig ttl --set $(TTL)

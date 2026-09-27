@@ -9,6 +9,7 @@ from rig.flags import (
     ena_delta,
     keepalive_flag,
     parse_snapshot,
+    skew_flag,
     stage_flags,
     stage_void,
 )
@@ -71,46 +72,169 @@ ENA_CASES = [
 
 STAGE_FLAG_CASES = [
     {
-        "name": "a stage that held has no flags",
+        "name": "a rate stage that held has no flags",
+        "stage": "rate",
         "server_busy": 50,
-        "loader_busy": {"loader-1": 99},
+        "loader_busy": {"loader-1": 60},
         "held": True,
         "flags": {},
     },
     {
-        "name": "loader at 85 and server at 89 is generator bound",
+        # 85 is at GENERATOR_BUSY and above LOADER_BUSY.
+        "name": "rate: loader at 85 and server at 89 is generator bound",
+        "stage": "rate",
         "server_busy": 89,
         "loader_busy": {"loader-1": 40, "loader-2": 85},
         "held": False,
-        "flags": {"generator_bound": True},
+        "flags": {"generator_bound": True, "loader_busy": 85},
     },
     {
-        "name": "loader above 85 and server at 89 is generator bound",
+        "name": "rate: loader above 85 and server at 89 is generator bound",
+        "stage": "rate",
         "server_busy": 89,
         "loader_busy": {"loader-1": 97, "loader-2": 40},
         "held": False,
-        "flags": {"generator_bound": True},
+        "flags": {"generator_bound": True, "loader_busy": 97},
     },
     {
-        "name": "server at 90 with a busy loader has no flags",
+        "name": "rate: server at 90 with a loader at 85 has only loader_busy",
+        "stage": "rate",
         "server_busy": 90,
         "loader_busy": {"loader-1": 85},
         "held": False,
-        "flags": {},
+        "flags": {"loader_busy": 85},
     },
     {
-        "name": "server above 90 with idle loaders has no flags",
+        "name": "rate: server above 90 with idle loaders has no flags",
+        "stage": "rate",
         "server_busy": 99,
         "loader_busy": {"loader-1": 10},
         "held": False,
         "flags": {},
     },
     {
-        "name": "server at 89 and every loader at 84 is server unsaturated",
+        # 84 is under GENERATOR_BUSY and above LOADER_BUSY.
+        "name": "rate: server at 89 and every loader at 84 is server unsaturated",
+        "stage": "rate",
         "server_busy": 89,
         "loader_busy": {"loader-1": 84, "loader-2": 84},
         "held": False,
-        "flags": {"server_unsaturated": True},
+        "flags": {"server_unsaturated": True, "loader_busy": 84},
+    },
+    {
+        # 70 is at LOADER_BUSY, not above it.
+        "name": "rate: a loader at 70 has no flags",
+        "stage": "rate",
+        "server_busy": 50,
+        "loader_busy": {"loader-1": 70, "loader-2": 40},
+        "held": True,
+        "flags": {},
+    },
+    {
+        "name": "rate: a loader at 71 flags loader_busy with the busiest loader",
+        "stage": "rate",
+        "server_busy": 50,
+        "loader_busy": {"loader-1": 40, "loader-2": 71},
+        "held": True,
+        "flags": {"loader_busy": 71},
+    },
+    {
+        "name": "cap: a stage that held is not saturated",
+        "stage": "cap",
+        "server_busy": 25,
+        "loader_busy": {"loader-1": 60, "loader-2": 60},
+        "held": True,
+        "flags": {"not_saturated": True},
+    },
+    {
+        "name": "cap: a held stage with a loader at 80 is not saturated and loader busy",
+        "stage": "cap",
+        "server_busy": 25,
+        "loader_busy": {"loader-1": 80, "loader-2": 60},
+        "held": True,
+        "flags": {"not_saturated": True, "loader_busy": 80},
+    },
+    {
+        # A capacity stage is expected not to hold. The rate rules do not apply to it.
+        "name": "cap: a stage that did not hold with the server at 25 is not server unsaturated",
+        "stage": "cap",
+        "server_busy": 25,
+        "loader_busy": {"loader-1": 60, "loader-2": 60},
+        "held": False,
+        "flags": {},
+    },
+    {
+        "name": "cap: a loader at 70 has no flags",
+        "stage": "cap",
+        "server_busy": 25,
+        "loader_busy": {"loader-1": 70, "loader-2": 60},
+        "held": False,
+        "flags": {},
+    },
+    {
+        "name": "cap: a loader at 71 flags loader_busy",
+        "stage": "cap",
+        "server_busy": 25,
+        "loader_busy": {"loader-1": 60, "loader-2": 71},
+        "held": False,
+        "flags": {"loader_busy": 71},
+    },
+    {
+        "name": "cap: a loader at 90 with the server at 89 is not generator bound",
+        "stage": "cap",
+        "server_busy": 89,
+        "loader_busy": {"loader-1": 90},
+        "held": False,
+        "flags": {"loader_busy": 90},
+    },
+]
+
+SKEW_CASES = [
+    {
+        # The means of the real run in tests/test_merge.py. The largest ratio is 3.699 over 3.617 on loader-1, about 2%.
+        "name": "even threads have no flag",
+        "calibration_ms": {"loader-1": [3.639, 3.617, 3.699, 3.581], "loader-2": [3.753, 3.712, 3.672, 3.668]},
+        "flags": {},
+    },
+    {
+        # The median of the others is 3.6, and 3.6 x 1.15 = 4.14.
+        "name": "a thread exactly 15% above the median of the others has no flag",
+        "calibration_ms": {"loader-1": [3.6, 3.6, 3.6, 4.14]},
+        "flags": {},
+    },
+    {
+        "name": "a thread 1 us above 15% flags the loader",
+        "calibration_ms": {"loader-1": [3.6, 3.6, 3.6, 4.141]},
+        "flags": {"loader_skew": {"loader": "loader-1", "thread_ms": 4.141, "median_ms": 3.6}},
+    },
+    {
+        # For 4.0 the others are 3.0 and 3.4, with the median 3.2, and 3.2 x 1.15 = 3.68.
+        # For 3.0 and 3.4 the medians of the others are 3.7 and 3.5.
+        "name": "the median of an even count of other threads",
+        "calibration_ms": {"loader-1": [3.0, 3.4, 4.0]},
+        "flags": {"loader_skew": {"loader": "loader-1", "thread_ms": 4.0, "median_ms": 3.2}},
+    },
+    {
+        "name": "a loader with one thread has no flag",
+        "calibration_ms": {"loader-1": [9.0]},
+        "flags": {},
+    },
+    {
+        "name": "h2load loaders have no calibration and no flag",
+        "calibration_ms": {"loader-1": [], "loader-2": []},
+        "flags": {},
+    },
+    {
+        # 4.5 is above 3.6 x 1.15 = 4.14.
+        "name": "two loaders where only the second skews",
+        "calibration_ms": {"loader-1": [3.6, 3.6, 3.6, 3.6], "loader-2": [3.6, 4.5, 3.6, 3.6]},
+        "flags": {"loader_skew": {"loader": "loader-2", "thread_ms": 4.5, "median_ms": 3.6}},
+    },
+    {
+        # 4.5 and 4.8 are both above 3.6 x 1.15 = 4.14. The first thread in output order wins.
+        "name": "the first skewed thread of a loader wins",
+        "calibration_ms": {"loader-1": [3.6, 4.5, 3.6, 4.8]},
+        "flags": {"loader_skew": {"loader": "loader-1", "thread_ms": 4.5, "median_ms": 3.6}},
     },
 ]
 
@@ -188,7 +312,13 @@ class TestFlags(unittest.TestCase):
     def test_stage_flags(self):
         for case in STAGE_FLAG_CASES:
             with self.subTest(name=case["name"]):
-                self.assertEqual(stage_flags(case["server_busy"], case["loader_busy"], case["held"]), case["flags"])
+                got = stage_flags(case["stage"], case["server_busy"], case["loader_busy"], case["held"])
+                self.assertEqual(got, case["flags"])
+
+    def test_skew_flag(self):
+        for case in SKEW_CASES:
+            with self.subTest(name=case["name"]):
+                self.assertEqual(skew_flag(case["calibration_ms"]), case["flags"])
 
     def test_stage_void(self):
         for case in VOID_CASES:

@@ -2,13 +2,115 @@
 
 Dated records and the decisions the code cannot show. Methodology lives in METHOD.md, operations in docs/operations.md. Numbers from different rigs or instance sizes never mix into one table.
 
+## Method change 3, 2026-09-27
+
+- From this date each run measures two builds on the same instances: the new nightly build and the base build, which is the build of the previous board run. The rig is one c7a.2xlarge server and two c7a.xlarge loaders in eu-central-1a. The base build comes from the `binaries` release of this repository.
+- Each target runs two stage kinds for each build. The rate stage runs one rapira process per server vCPU at a rate that keeps the server at about 50% CPU, and gives the p99 latency and the RSS. The capacity stage runs 2 rapira processes at a rate above their capacity, and gives the achieved req/s. The `ci` suite has 3 rounds, 1000 HTTP connections, and 100 gRPC connections with 100 streams each.
+- A pair is the base cell and the new cell of one round, one target, and one stage kind. The two cells of a pair run one after the other. A board point is the median paired delta of one run, with the smallest and the largest paired delta as a band. A point has a color only when the change is above the noise floor of an A/A run.
+- The new flags are `loader_busy`, `loader_skew`, and `not_saturated`. A run with void cells is complete and publishes. A run where every new cell of one target is void is `broken` and does not publish.
+- `PROCESSES`, `make compare`, and `rig compare` are removed. The stage kind sets the process count, and the pairs inside one run replace the comparison of two runs.
+- Each run writes `runs/<id>/run.json` with the schema `rapira-bench-run/3`. The board draws only schema 3 runs. The numbers of the earlier runs do not compare with the numbers of this method.
+- A CI run holds the rig for about 36 minutes, which costs about 0.57 USD at on-demand prices in eu-central-1.
+- The A/A calibration run with `NIGHTLY=ac56141 BASE=ac56141` sets the rates of `suites/ci.toml` and the noise floors in `NOISE_FLOOR_PCT` and `TARGET_NOISE_FLOOR_PCT` of `board/app.js`. The next section, "A/A calibration, 2026-09-27", records its results.
+
+## A/A calibration, 2026-09-27
+
+Rig: one c7a.2xlarge server and two c7a.xlarge loaders in eu-central-1a, placement group `rapira-bench`, AMI `ami-05d038400faa82df7` with the kernel 7.2.7-200.fc44.x86_64. `NIGHTLY=ac56141 BASE=ac56141`: the two builds are the same tarball of the `binaries` release, so every paired delta is noise. The three passes ran on one rig.
+
+- Pass 1: `20260927T104446Z-ci-ac56141`, 1 round, the initial rates.
+- Check pass: `20260927T105717Z-ci-ac56141`, 1 round, the rates from pass 1.
+- Pass 2: `20260927T110949Z-ci-ac56141`, 3 rounds, the final rates of `suites/ci.toml`. The run is complete and has no void cell.
+
+The rate rule: the rate stage rate is the calibration rate x 50 / the server busy percent, rounded down to a multiple of 1000. The capacity stage rate is 2 x the achieved capacity, rounded up to a multiple of 10000. The values are the medians over the two builds. Pass 1:
+
+| target | rate | server busy | new rate | cap rate | achieved capacity | new cap rate | cap loader busy |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| hello-rapira-classic | 40000 | 21.5% | 93000 | 300000 | 132039 | 270000 | 23% |
+| hello-rapira-worker | 60000 | 28.5% | 105000 | 300000 | 295340 (held) | 600000 | 50% |
+| hello-rapira-dispatcher | 60000 | 29.0% | 103000 | 300000 | 295340 (held) | 600000 | 47% |
+| hello-rapira-dispatcher-static | 60000 | 35.5% | 84000 | 300000 | 247534 | 500000 | 40% |
+| yii3-rapira-dispatcher | 16000 | 32.0% | 25000 | 60000 | 22760 | 50000 | 5% |
+| grpc-rapira | 50000 | 18.5% | 135000 | 300000 | 168388 | 340000 | 34% |
+
+Every new rate stage rate differs from its calibration rate by more than 30%, and 2 capacity cells held. So a check pass ran with the new rates:
+
+| target | rate | server busy | rule rate | cap rate | achieved capacity | new cap rate | cap loader busy |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| hello-rapira-classic | 93000 | 42.0% | 110000 | 270000 | 133462 | 270000 | 24% |
+| hello-rapira-worker | 105000 | 24.0% | 218000 | 600000 | 371395 | 750000 | 55% |
+| hello-rapira-dispatcher | 103000 | 23.5% | 219000 | 600000 | 384091 | 770000 | 58% |
+| hello-rapira-dispatcher-static | 84000 | 26.5% | 158000 | 500000 | 252278 | 510000 | 41% |
+| yii3-rapira-dispatcher | 25000 | 42.0% | 29000 | 50000 | 22467 | 50000 | 5% |
+| grpc-rapira | 135000 | 44.0% | 153000 | 340000 | 166592 | 340000 | 34% |
+
+- All capacity cells of the check pass saturated, and the capacity loaders stayed at 58% or less. So `stages.cap.processes` stays 2. The final capacity rates are the "new cap rate" column of the check pass.
+- The final rate stage rates of hello-rapira-classic (110000), yii3-rapira-dispatcher (29000), and grpc-rapira (153000) follow the rule.
+- The final rate stage rates of hello-rapira-worker (200000), hello-rapira-dispatcher (200000), and hello-rapira-dispatcher-static (150000) are below the rule. The server CPU of these targets increases much slower than the rate: the worker is at 28% at 60000 req/s and at 24% at 105000 req/s. At the rule rate the loader busy would increase to 60 to 70%.
+
+Pass 2, per target: the server busy range of the 6 rate cells, and the median of the 6 capacity cells.
+
+| target | rate | rate server busy | rate loader max | capacity median | cap server busy | cap loader max |
+| --- | --- | --- | --- | --- | --- | --- |
+| hello-rapira-classic | 110000 | 46-66% | 28% | 132253 | 53-54% | 24% |
+| hello-rapira-worker | 200000 | 49-50% | 40% | 366073 | 73% | 55% |
+| hello-rapira-dispatcher | 200000 | 46-47% | 38% | 380001 | 66-67% | 57% |
+| hello-rapira-dispatcher-static | 150000 | 42-58% | 35% | 250670 | 63% | 41% |
+| yii3-rapira-dispatcher | 29000 | 57-60% | 11% | 22730 | 32% | 5% |
+| grpc-rapira | 153000 | 47-50% | 19% | 167199 | 72-73% | 35% |
+
+- All 36 rate cells held their rate. No capacity cell held. The largest loader busy of the run is 57%.
+- The largest `|paired delta|` of single pairs, counted pairs only, and the floors of `board/app.js`:
+
+| measure | all targets | HTTP/1.1 targets | grpc-rapira | floor |
+| --- | --- | --- | --- | --- |
+| capacity | 2.30% (dispatcher, round 1) | 2.30% | 2.14% | 2.5% |
+| p99 | 19.35% (grpc, round 2) | 2.92% (dispatcher, round 1) | 19.35% | 3.0%, grpc-rapira 19.5% |
+| RSS | 1.54% (yii3) | 1.54% | 0.74% | 2.0% |
+
+- A floor is the largest `|paired delta|` rounded up to a multiple of 0.5%. One p99 floor of 19.5% for all targets would keep a real 10% p99 regression of an HTTP/1.1 target gray. So the p99 floor of the measure leaves out grpc-rapira, and grpc-rapira gets its own p99 floor in `TARGET_NOISE_FLOOR_PCT`.
+- The median deltas (the board points) of pass 2: capacity -1.2% to +1.4%, HTTP/1.1 p99 -0.6% to +0.5%, RSS -0.1% to +0.5%, and grpc-rapira p99 +17.2% (pairs +17.2%, +19.4%, -1.3%). With these floors no point gets a color: every band crosses zero, or the delta is under the floor.
+- Two capacity bands are strictly on one side of zero in this A/A run: hello-rapira-worker at -1.7% to -1.0% (pairs -1.0%, -1.7%, -1.2%, with alternating order) and hello-rapira-dispatcher-static at +0.7% to +1.7%. Only the floor keeps these two points gray, so the band rule alone is not sufficient.
+
+The gRPC p99 noise:
+
+- The pair deltas are +17.2% (round 1, base first), +19.4% (round 2, new first), and -1.3% (round 3, base first). The two large deltas have opposite orders, so the order in the pair does not cause them.
+- The p99 of the two loaders moves together in each cell: 6815 us and 6773 us in the new cell of round 2, 5400 us and 5154 us in the base cell of round 1. The variation comes with each server start, not from one loader.
+- h2load runs 4 threads per loader with 12 or 13 clients each, at 18% loader CPU. The loader is not the limit.
+- The HTTP/1.1 targets stay at or below 2.92% per pair.
+- The 100 gRPC connections spread unevenly over the 8 server processes, and a large spread comes with a high p99. The spread does not explain all of the noise, and more connections do not lower it. The section "gRPC connection check, 2026-09-27" has the data.
+
+The `loader_skew` flags: 2 of the 30 wrk2 rate cells have the flag, both on loader-2 in round 1.
+
+- `r1-base-rate-hello-rapira-dispatcher-static`: thread 1.444 ms, median 1.203 ms, gap 0.241 ms. The p99 is 2709 us against 2613 us of its pair cell (+3.7%, above the 3.0% HTTP/1.1 p99 floor).
+- `r1-base-rate-yii3-rapira-dispatcher`: thread 3.982 ms, median 1.248 ms, gap 2.734 ms. The p99 is 8407 us against 2401 us of its pair cell (+250%).
+- In both cells the p99 is above the p99 of the pair cell by more than the p99 floor, so the flag does not trip on noise. `rig/flags.py` has no absolute floor for the skew gap. The two p99 measures have 2 counted pairs, so their points are gray.
+
+Time and cost, at 0.93704 USD/h:
+
+- `make up` ran from 10:43:02Z to 10:44:26Z (84 s), and `make down` from 11:44:22Z to 11:45:00Z (38 s). The rig ran from 10:43:02Z to 11:45:00Z: 62.0 minutes for the three passes, which cost 0.97 USD.
+- The suite time: pass 1 11.5 minutes (24 cells), the check pass 11.5 minutes (24 cells), pass 2 34.4 minutes (72 cells).
+- A CI run: the 72 cells take 34.4 minutes, 28.7 s per cell on average. The nominal time is 26 s per rate cell and 20 s per capacity cell, so the overhead is about 5.7 s per cell. `make up` and `make down` take 2.0 minutes. A CI run holds the rig for about 36.4 minutes, which costs about 0.57 USD. The EBS volumes (3 x 40 GB gp3) and the 3 public IPv4 addresses add about 0.02 USD.
+- The upper bound of a normal run, with the cells 20% longer: 34.4 x 1.2 + 2.0 = 43.3, about 43 minutes, which costs about 0.68 USD.
+
+## gRPC connection check, 2026-09-27
+
+Rig: the shape of the A/A calibration, on a new rig. Two gRPC-only A/A runs of 5 rounds at 153000 req/s, with ac56141 as both builds: `20260927T122454Z-grpc-c100-ac56141` with 100 connections and `20260927T123624Z-grpc-c800-ac56141` with 800 connections. A sampler on the server recorded once per second the established connections of each rapira process, the CPU time of each CPU, and the received packets of each ENA queue. The sampler and the two suite files are working files and are not in the repository. The rig ran for about 23.5 minutes, which cost about 0.37 USD.
+
+- With 100 connections, the busiest process held 1.5 to 2.9 times the mean of 12.5 connections, and the least busy process held 1 to 5. The three rate cells with the highest p99 (6853 us, 6709 us, 6414 us) had the largest spread (2.88, 2.88, 2.48 times the mean). Between 1.5 and 2.1 times the mean, the spread shows no relation to the p99.
+- The ENA receive queues do not explain the p99. The busiest queue got 1.21 to 1.46 times the mean packet count, and the busy time of the 8 CPUs differed by 1 to 3 points in each rate cell.
+- With 800 connections, the busiest process held 1.15 to 1.27 times the mean of 100 connections, but the p99 noise did not go down. Without round 4, the p99 standard deviation over the rate cells is 6.8% with 800 connections and 6.4% with 100 connections, and the largest pair delta is 15.6% and 16.3%. In round 4 both cells were fast (3488 us and 5173 us) at a higher server CPU (67% and 62%), so a second effect changes the latency for longer than one cell. Its cause is not known.
+- With 800 connections, most processes stopped at 114 or 115 connections. No code in rapira explains this value.
+- 800 connections cost more: the server CPU at 153000 req/s is 60 to 67% against 48 to 51%, and the loader CPU is about 2 times higher.
+- All 8 A/A pair deltas of the gRPC p99 with 100 connections (pass 2 of the A/A calibration and this check) are under 19.5%. So the `ci` suite keeps 100 gRPC connections and the gRPC p99 floor of 19.5%.
+- The code of the rapira accept path explains the spread, but no trace confirms it. During a burst of new connections, a worker that is already running accepts one connection after another, and a worker that wakes from sleep finds the queue empty. rapira spreads connections evenly only when they arrive slower than a worker wakes. With 2 processes (the capacity stage), the spread is 50/50 or 51/49.
+
 ## Method change, 2026-09-25
 
 - From this date the rig measures with the staged rate ladder of METHOD.md. wrk2 loads the HTTP/1.1 targets and k6 loads the gRPC targets, from four c7a.xlarge loaders against one c7a.8xlarge server. This method was replaced the same day, see the next section.
 - The numbers before this date come from closed-loop wrk and h2load passes and fixed-rate k6 passes from one c7a.4xlarge loader at a fixed connection count. The numbers after this date are the held rate, the peak successful rate, and the unloaded latency of the ladder. Do not compare numbers from before and after this date, and do not put them in one table.
 - Each run now writes `runs/<id>/run.json` with the schema `rapira-bench-run/1`. The directories under `results/` stay as the record of the old method.
 - FrankenPHP now runs the glibc release asset 1.12.7 with the production worker shape, and every PHP runtime uses the shared `servers/php.ini`. The FrankenPHP and php-fpm numbers before this date used other settings.
-- The fixed pair of the decisions below no longer applies. The loader count and the instance types are knobs, and the Makefile quota check adds the vCPUs of the server and all loaders.
+- The fixed c7a.8xlarge server and c7a.4xlarge loader pair no longer applies. The loader count and the instance types are knobs, and the Makefile quota check adds the vCPUs of the server and all loaders.
 
 ## Method change 2, 2026-09-25
 
@@ -183,10 +285,10 @@ Symfony (kernel-loop worker):
 
 ## Decisions and their reasons
 
-- Fixed pair, no size knobs. Measured on the null runs: wrk needs ~0.62 loader cores per saturated server core, and hello at a 32-core ceiling moves ~4.4 Gbps sustained. A c7a.2xlarge loader fails both (8 cores, 3.125 Gbps baseline); c7a.4xlarge clears both. The 8xlarge server has a fixed 12.5 Gbps link, no burst credits.
+- Loader capacity. wrk2 sends about 31000 req/s per loader vCPU at about 92% CPU with 625 connections per thread, which is about 34000 req/s per vCPU at 100% by linear scale. Measured in the runs of 2026-09-25 to 2026-09-27: 250000 req/s from one c7a.2xlarge loader of 8 vCPUs at 90 to 93% CPU. A loader above 70% busy CPU flags `loader_busy`.
 - Plain builds for published tables: the prebuilt competitors do not carry frame pointers, so a frame-pointer rapira would understate its own gap. Perf sessions rebuild with frame pointers on demand.
 - Strict voiding: a cell with resets, timeouts, or missing generator output is listed and excluded, never averaged. The v0.7.0 run shows why: averaging reset-y cells would have hidden the finding.
-- vCPU quota L-1216C47A raised 32 to 64 on 2026-08-30; the pair needs 48.
+- vCPU quota L-1216C47A raised 32 to 64 on 2026-08-30; the default rig needs 16.
 - Null-run calibrations on the c7a.xlarge pair (2026-08-30, before the sizes were fixed): dispatcher ~240k, worker ~210k, classic ~80k req/s at c=1000, null deltas within noise at one round.
 
 ## Maindev era, retired rig

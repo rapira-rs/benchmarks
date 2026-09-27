@@ -11,6 +11,10 @@ on:
         description: The nightly version of that commit. The job logs this value.
         required: false
         default: ""
+      base:
+        description: The sha7 of the base build. The binaries release must have its tarball. Empty selects the newest non-smoke board build with another sha.
+        required: false
+        default: ""
 
 # One bench at a time. A new dispatch replaces a waiting one and never cancels a running one.
 concurrency:
@@ -27,7 +31,7 @@ defaults:
 jobs:
   bench:
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 75
     permissions:
       contents: read
       id-token: write
@@ -42,12 +46,13 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Resolve the nightly commit
+      - name: Resolve the nightly and the base commits
         id: resolve
         env:
           GH_TOKEN: ${{ github.token }}
           INPUT_SHA: ${{ inputs.sha }}
           INPUT_VERSION: ${{ inputs.version }}
+          INPUT_BASE: ${{ inputs.base }}
         run: |
           set -euo pipefail
           # The core Nightly workflow deletes older assets when it moves the tag,
@@ -67,9 +72,24 @@ jobs:
           skip=$(python3 -c 'import json, sys; runs = json.load(open("index.json"))["runs"]; print(str(any(r["rapira_sha"].startswith(sys.argv[1]) and not r["smoke"] for r in runs)).lower())' "$sha7")
           if [ "$skip" = true ]; then
             echo "$sha7 is already on the board"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          echo "skip=$skip" >> "$GITHUB_OUTPUT"
           echo "sha7=$sha7" >> "$GITHUB_OUTPUT"
+          base7=$(python3 -m rig base --index index.json --new "$sha7" --base "$INPUT_BASE")
+          # The server installs the base build from the binaries release of this repository.
+          base_asset=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/binaries" --jq '.assets[].name' | grep -E -- "-nightly\.${base7}-php8\.5-linux-x86_64\.tar\.gz$" || true)
+          if [ -z "$base_asset" ]; then
+            echo "::error::the binaries release has no php8.5 linux x86_64 asset for the base $base7"
+            exit 1
+          fi
+          echo "base $base7, asset $base_asset"
+          echo "base7=$base7" >> "$GITHUB_OUTPUT"
+          # The next core nightly deletes the assets of this build, so the job keeps a copy for the binaries release.
+          # The copy is outside the checkout, so the rig does not copy it to the boxes.
+          version=${asset#rapira-v}
+          version=${version%-php8.5-linux-x86_64.tar.gz}
+          gh release download nightly -R rapira-rs/rapira -D "$RUNNER_TEMP/binary" -p "$asset" -p "rapira-v${version}-SHA256SUMS.txt"
           # The merged pull request of the commit labels the run on the board. A commit without one gets the sha.
           pr=$(gh api "repos/rapira-rs/rapira/commits/$sha/pulls" --jq '[.[] | select(.merged_at != null)][0]')
           if [ -n "$pr" ] && [ "$pr" != null ]; then
@@ -77,6 +97,17 @@ jobs:
             echo "pr_url=$(jq -r .html_url <<<"$pr")" >> "$GITHUB_OUTPUT"
             echo "pr_title=$(jq -r .title <<<"$pr")" >> "$GITHUB_OUTPUT"
           fi
+          # The later steps and the teardown run only after a full resolve.
+          echo "skip=false" >> "$GITHUB_OUTPUT"
+
+      - name: Upload the new binary
+        if: steps.resolve.outputs.skip == 'false'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: binary
+          path: ${{ runner.temp }}/binary/
+          if-no-files-found: error
+          retention-days: 1
 
       - name: Assume the CI role
         if: steps.resolve.outputs.skip == 'false'
@@ -85,7 +116,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-central-1
           mask-aws-account-id: true
-          # The credentials must last for the whole 60 minute job, the destroy included.
+          # The credentials must last for the whole 75 minute job, the destroy included.
           role-duration-seconds: 7200
 
       - name: Install terraform
@@ -101,9 +132,10 @@ jobs:
         timeout-minutes: 30
         env:
           SHA7: ${{ steps.resolve.outputs.sha7 }}
+          BASE7: ${{ steps.resolve.outputs.base7 }}
         run: |
           set -euo pipefail
-          if make up NIGHTLY="$SHA7" AZ=eu-central-1a 2>&1 | tee up.log; then
+          if make up NIGHTLY="$SHA7" BASE="$BASE7" AZ=eu-central-1a 2>&1 | tee up.log; then
             exit 0
           fi
           # A capacity error retries once in the next AZ. Other errors stop the job.
@@ -112,11 +144,11 @@ jobs:
             exit 1
           fi
           make down
-          make up NIGHTLY="$SHA7" AZ=eu-central-1b
+          make up NIGHTLY="$SHA7" BASE="$BASE7" AZ=eu-central-1b
 
       - name: Run the ci suite
         if: steps.resolve.outputs.skip == 'false'
-        timeout-minutes: 30
+        timeout-minutes: 55
         env:
           PR_NUMBER: ${{ steps.resolve.outputs.pr_number }}
           PR_URL: ${{ steps.resolve.outputs.pr_url }}
@@ -179,6 +211,20 @@ jobs:
           name: run
           path: run
 
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+        with:
+          name: binary
+          path: binary
+
+      # The cache step runs before the publish step, so every board build has its tarball in the cache.
+      - name: Cache the new binary
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # The binary artifact holds the tarball and the SHA256SUMS file of the new build.
+          gh release upload binaries binary/* --clobber -R "$GITHUB_REPOSITORY"
+
       - name: Publish the run to gh-pages
         run: |
           set -euo pipefail
@@ -193,5 +239,21 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add -A
-          git commit -s -m "chore: publish run $id"
+          # A rerun of the job writes the same files and has nothing to commit.
+          git diff --cached --quiet || git commit -s -m "chore: publish run $id"
           git push
+
+      # The prune step runs after the push, so a failed delete does not stop the publish.
+      - name: Prune the binaries release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Keep the newest 10 versions. A version is a tarball and its SHA256SUMS file.
+          old=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/binaries" --jq '[.assets[] | select(.name | endswith("-php8.5-linux-x86_64.tar.gz"))] | sort_by(.created_at) | reverse | .[10:] | .[].name')
+          for tarball in $old; do
+            version=${tarball#rapira-v}
+            version=${version%-php8.5-linux-x86_64.tar.gz}
+            gh release delete-asset binaries "$tarball" -y -R "$GITHUB_REPOSITORY"
+            gh release delete-asset binaries "rapira-v${version}-SHA256SUMS.txt" -y -R "$GITHUB_REPOSITORY"
+          done

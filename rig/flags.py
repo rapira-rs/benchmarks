@@ -1,9 +1,14 @@
 """Snapshot parsing and the flag and void rules of a stage and a cell."""
 
+import statistics
 from dataclasses import dataclass
 
 GENERATOR_BUSY = 85
 SERVER_BUSY = 90
+# A loader above this busy percent flags loader_busy.
+LOADER_BUSY = 70
+# A wrk2 thread with a calibration mean more than this percent above the median of the other threads of its loader.
+SKEW_PCT = 15
 LOG_GROWTH_BYTES = 65536
 
 
@@ -51,13 +56,36 @@ def ena_delta(before: Snapshot, after: Snapshot) -> dict[str, int]:
     return delta
 
 
-def stage_flags(server_busy: int, loader_busy: dict[str, int], held: bool) -> dict:
-    """Review flags of one stage. A stage that held its rate has no flags."""
-    if held or server_busy >= SERVER_BUSY:
-        return {}
-    if any(busy >= GENERATOR_BUSY for busy in loader_busy.values()):
-        return {"generator_bound": True}
-    return {"server_unsaturated": True}
+def stage_flags(stage: str, server_busy: int, loader_busy: dict[str, int], held: bool) -> dict:
+    """Review flags of one stage of the kind `stage`.
+
+    A rate stage that did not hold names the bottleneck. A cap stage that held is not a capacity.
+    """
+    flags = {}
+    if stage == "cap":
+        if held:
+            flags["not_saturated"] = True
+    elif not held and server_busy < SERVER_BUSY:
+        if any(busy >= GENERATOR_BUSY for busy in loader_busy.values()):
+            flags["generator_bound"] = True
+        else:
+            flags["server_unsaturated"] = True
+    busiest = max(loader_busy.values())
+    if busiest > LOADER_BUSY:
+        flags["loader_busy"] = busiest
+    return flags
+
+
+def skew_flag(calibration_ms: dict[str, list[float]]) -> dict:
+    """Flag the first wrk2 thread that calibrated more than SKEW_PCT above the median of the other threads of its loader."""
+    for loader, means in calibration_ms.items():
+        if len(means) < 2:
+            continue
+        for index, mean in enumerate(means):
+            median = statistics.median(means[:index] + means[index + 1:])
+            if mean > median * (1 + SKEW_PCT / 100):
+                return {"loader_skew": {"loader": loader, "thread_ms": mean, "median_ms": median}}
+    return {}
 
 
 def stage_void(loader_ena: dict[str, dict[str, int]]) -> str | None:

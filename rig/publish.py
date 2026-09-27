@@ -9,9 +9,11 @@ INDEX_SCHEMA = "rapira-bench-index/1"
 def index_entry(run: dict) -> dict:
     return {
         "id": run["id"],
+        "schema": run["schema"],
         "started": run["started"],
         "suite": run["suite"]["name"],
         "rapira_sha": run["rapira"]["sha"],
+        "base_sha": run["base"]["sha"],
         "rapira_version": run["rapira"]["version"],
         "status": run["status"],
         "smoke": run["smoke"],

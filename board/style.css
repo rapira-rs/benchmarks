@@ -28,10 +28,10 @@ a:focus {
   font-weight: bold;
 }
 
-/* One row per target: its p99 chart and its RSS chart. One column on a narrow screen. */
+/* One row per target: its capacity chart, its p99 chart and its RSS chart. One column on a narrow screen. */
 #charts {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-template-columns: repeat(3, minmax(0, 1fr));
   gap: 1.5em 10px;
 }
 

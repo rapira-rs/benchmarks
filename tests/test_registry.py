@@ -2,7 +2,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
-from rig.registry import Suite, SuiteError, Target, cell_key, load_suite, load_targets, plan_cells
+from rig.registry import Stage, Suite, SuiteError, Target, load_suite, load_targets, plan_cells
 
 ROOT = Path(__file__).resolve().parent.parent
 
@@ -58,91 +58,172 @@ REGISTRY = {
     "grpc-a": target("grpc-a", app="grpc", proto="grpc"),
 }
 
+RATE_STAGE = """[stages.rate]
+warmup_s = 11
+duration_s = 15
+
+[stages.rate.rates]
+hello-a = 60000
+yii3-a = 16000
+"""
+
+CAP_STAGE = """[stages.cap]
+warmup_s = 5
+duration_s = 15
+processes = 2
+
+[stages.cap.rates]
+hello-a = 300000
+yii3-a = 60000
+"""
+
 SUITE_DEFAULTS = {
     "rounds": 1,
-    "warmup_s": 10,
-    "duration_s": 60,
     "targets": '["hello-a", "yii3-a"]',
-    "rates": "hello = 250000\nyii3 = 250000",
-    "connections": "http1 = 5000\ngrpc = 100",
+    "connections": "http1 = 1000\ngrpc = 100",
     "streams": 100,
+    "stages": RATE_STAGE + "\n" + CAP_STAGE,
 }
 
 SUITE_TEMPLATE = """name = "test"
 rounds = {rounds}
-warmup_s = {warmup_s}
-duration_s = {duration_s}
 smoke = false
 targets = {targets}
-
-[rates]
-{rates}
 
 [connections]
 {connections}
 
 [grpc]
 streams = {streams}
+
+{stages}
 """
 
 SUITE_ERROR_CASES = [
     {"name": "unknown target", "fields": {"targets": '["hello-a", "hello-z"]'}, "loaders": 1, "message": "unknown target hello-z"},
     {"name": "target listed twice", "fields": {"targets": '["hello-a", "hello-a"]'}, "loaders": 1, "message": "target hello-a is listed twice"},
     {"name": "zero rounds", "fields": {"rounds": 0}, "loaders": 1, "message": "rounds 0 is under 1"},
-    {"name": "duration one second under the minimum", "fields": {"duration_s": 29}, "loaders": 1, "message": "duration_s 29 is under 30"},
-    {"name": "no rate for an app of a target", "fields": {"rates": "hello = 250000"}, "loaders": 1, "message": "no rate for app yii3"},
     {
         "name": "no connections for the proto of a target",
-        "fields": {"targets": '["hello-a", "grpc-a"]', "rates": "hello = 250000\ngrpc = 100000", "connections": "http1 = 5000"},
+        "fields": {"targets": '["hello-a", "grpc-a"]', "connections": "http1 = 1000"},
         "loaders": 1,
         "message": "no connections for proto grpc",
     },
-    # 250001 % 2 = 1.
-    {"name": "rate not a multiple of two loaders", "fields": {"rates": "hello = 250001\nyii3 = 250000"}, "loaders": 2, "message": "rate 250001 of app hello is not a multiple of 2 loaders"},
-    # 249999 % 3 = 0, and 5000 % 3 = 2.
-    {"name": "connections not a multiple of three loaders", "fields": {"rates": "hello = 249999\nyii3 = 249999"}, "loaders": 3, "message": "connections 5000 of proto http1 is not a multiple of 3 loaders"},
+    # 1000 % 3 = 1. The connection check comes before the stage checks.
+    {"name": "connections not a multiple of three loaders", "fields": {}, "loaders": 3, "message": "connections 1000 of proto http1 is not a multiple of 3 loaders"},
+    {"name": "no cap stage", "fields": {"stages": RATE_STAGE}, "loaders": 1, "message": "suite.toml: the stages are ['rate']; a suite has exactly the stages rate and cap"},
+    {
+        "name": "a third stage kind",
+        "fields": {"stages": RATE_STAGE + "\n" + CAP_STAGE + "\n[stages.warm]\nwarmup_s = 0\nduration_s = 15\n"},
+        "loaders": 1,
+        "message": "suite.toml: the stages are ['cap', 'rate', 'warm']; a suite has exactly the stages rate and cap",
+    },
+    # MIN_DURATION_S is 15.
+    {
+        "name": "rate duration one second under the minimum",
+        "fields": {"stages": RATE_STAGE.replace("duration_s = 15", "duration_s = 14") + "\n" + CAP_STAGE},
+        "loaders": 1,
+        "message": "suite.toml: stages.rate: duration_s 14 is under 15",
+    },
+    {
+        "name": "negative cap warm-up",
+        "fields": {"stages": RATE_STAGE + "\n" + CAP_STAGE.replace("warmup_s = 5", "warmup_s = -1")},
+        "loaders": 1,
+        "message": "suite.toml: stages.cap: warmup_s -1 is negative",
+    },
+    {
+        "name": "processes set in the rate stage",
+        "fields": {"stages": RATE_STAGE.replace("duration_s = 15\n", "duration_s = 15\nprocesses = 8\n") + "\n" + CAP_STAGE},
+        "loaders": 1,
+        "message": "suite.toml: stages.rate: processes is set",
+    },
+    {
+        "name": "cap stage without processes",
+        "fields": {"stages": RATE_STAGE + "\n" + CAP_STAGE.replace("processes = 2\n", "")},
+        "loaders": 1,
+        "message": "suite.toml: stages.cap: processes is missing",
+    },
+    {
+        "name": "cap stage with zero processes",
+        "fields": {"stages": RATE_STAGE + "\n" + CAP_STAGE.replace("processes = 2", "processes = 0")},
+        "loaders": 1,
+        "message": "suite.toml: stages.cap: processes 0 is under 1",
+    },
+    {
+        "name": "no rate for a target in the cap stage",
+        "fields": {"stages": RATE_STAGE + "\n" + CAP_STAGE.replace("yii3-a = 60000\n", "")},
+        "loaders": 1,
+        "message": "suite.toml: stages.cap: no rate for target yii3-a",
+    },
+    # hello-b is in the registry but not in the suite targets.
+    {
+        "name": "rate for a name that is not a suite target",
+        "fields": {"stages": RATE_STAGE + "hello-b = 60000\n\n" + CAP_STAGE},
+        "loaders": 1,
+        "message": "suite.toml: stages.rate: a rate for hello-b, which is not a suite target",
+    },
+    # 60001 % 2 = 1.
+    {
+        "name": "rate not a multiple of two loaders",
+        "fields": {"stages": RATE_STAGE.replace("hello-a = 60000", "hello-a = 60001") + "\n" + CAP_STAGE},
+        "loaders": 2,
+        "message": "suite.toml: stages.rate: rate 60001 of target hello-a is not a multiple of 2 loaders",
+    },
 ]
 
 SUITE_OK_CASES = [
     {
-        "name": "minimum duration, a rate for an app no target uses, and two loaders",
-        "fields": {"duration_s": 30, "targets": '["yii3-a", "hello-a"]', "rates": "hello = 250000\nyii3 = 250000\ngrpc = 100000"},
+        # 15 s is MIN_DURATION_S, a warm-up of 0 s is valid, and every rate and connection count divides by 2 loaders.
+        "name": "minimum duration, zero warm-up, and two loaders",
+        "fields": {"targets": '["yii3-a", "hello-a"]', "stages": RATE_STAGE.replace("warmup_s = 11", "warmup_s = 0") + "\n" + CAP_STAGE},
         "loaders": 2,
         "expected": Suite(
             name="test",
             rounds=1,
-            warmup_s=10,
-            duration_s=30,
             smoke=False,
-            rates={"hello": 250000, "yii3": 250000, "grpc": 100000},
-            connections={"http1": 5000, "grpc": 100},
+            connections={"http1": 1000, "grpc": 100},
             grpc_streams=100,
             targets=(REGISTRY["yii3-a"], REGISTRY["hello-a"]),
+            stages={
+                "rate": Stage(warmup_s=0, duration_s=15, processes=None, rates={"hello-a": 60000, "yii3-a": 16000}),
+                "cap": Stage(warmup_s=5, duration_s=15, processes=2, rates={"hello-a": 300000, "yii3-a": 60000}),
+            },
         ),
     },
 ]
 
 PLAN_CASES = [
     {
-        "name": "one round keeps the suite order",
+        # Round 1 runs base then new. The rate pair of a target runs before its cap pair.
+        "name": "one round of two targets",
         "rounds": 1,
-        "targets": ("hello-a", "hello-b", "yii3-a"),
-        "expected": ["r1-hello-a", "r1-hello-b", "r1-yii3-a"],
+        "targets": ("a", "b"),
+        "expected": [
+            "r1-base-rate-a", "r1-new-rate-a", "r1-base-cap-a", "r1-new-cap-a",
+            "r1-base-rate-b", "r1-new-rate-b", "r1-base-cap-b", "r1-new-cap-b",
+        ],
     },
     {
-        # Round r starts at index (r - 1) % 4: a, then b, then c.
-        "name": "three rounds of four targets rotate by one",
+        # Round r starts at target index (r - 1) % 3: a, then b, then c.
+        # Odd rounds run base then new, even rounds new then base.
+        "name": "three rounds of three targets rotate the targets and alternate the builds",
         "rounds": 3,
-        "targets": ("a", "b", "c", "d"),
+        "targets": ("a", "b", "c"),
         "expected": [
-            "r1-a", "r1-b", "r1-c", "r1-d",
-            "r2-b", "r2-c", "r2-d", "r2-a",
-            "r3-c", "r3-d", "r3-a", "r3-b",
+            "r1-base-rate-a", "r1-new-rate-a", "r1-base-cap-a", "r1-new-cap-a",
+            "r1-base-rate-b", "r1-new-rate-b", "r1-base-cap-b", "r1-new-cap-b",
+            "r1-base-rate-c", "r1-new-rate-c", "r1-base-cap-c", "r1-new-cap-c",
+            "r2-new-rate-b", "r2-base-rate-b", "r2-new-cap-b", "r2-base-cap-b",
+            "r2-new-rate-c", "r2-base-rate-c", "r2-new-cap-c", "r2-base-cap-c",
+            "r2-new-rate-a", "r2-base-rate-a", "r2-new-cap-a", "r2-base-cap-a",
+            "r3-base-rate-c", "r3-new-rate-c", "r3-base-cap-c", "r3-new-cap-c",
+            "r3-base-rate-a", "r3-new-rate-a", "r3-base-cap-a", "r3-new-cap-a",
+            "r3-base-rate-b", "r3-new-rate-b", "r3-base-cap-b", "r3-new-cap-b",
         ],
     },
 ]
 
-# The ci row set of spec section 4, in suite order.
+# The ci row set of the spec, in suite order.
 CI_TARGETS = (
     "hello-rapira-classic",
     "hello-rapira-worker",
@@ -151,6 +232,36 @@ CI_TARGETS = (
     "yii3-rapira-dispatcher",
     "grpc-rapira",
 )
+
+# The stages of suites/ci.toml in the spec.
+CI_STAGES = {
+    "rate": Stage(
+        warmup_s=11,
+        duration_s=15,
+        processes=None,
+        rates={
+            "hello-rapira-classic": 110000,
+            "hello-rapira-worker": 200000,
+            "hello-rapira-dispatcher": 200000,
+            "hello-rapira-dispatcher-static": 150000,
+            "yii3-rapira-dispatcher": 29000,
+            "grpc-rapira": 153000,
+        },
+    ),
+    "cap": Stage(
+        warmup_s=5,
+        duration_s=15,
+        processes=2,
+        rates={
+            "hello-rapira-classic": 270000,
+            "hello-rapira-worker": 750000,
+            "hello-rapira-dispatcher": 770000,
+            "hello-rapira-dispatcher-static": 510000,
+            "yii3-rapira-dispatcher": 50000,
+            "grpc-rapira": 340000,
+        },
+    ),
+}
 
 
 class LoadTargetsTest(unittest.TestCase):
@@ -217,22 +328,24 @@ class LoadSuiteTest(unittest.TestCase):
 
 
 class PlanCellsTest(unittest.TestCase):
-    def test_rotation(self):
+    def test_order(self):
         for case in PLAN_CASES:
             with self.subTest(name=case["name"]):
+                targets = tuple(target(name) for name in case["targets"])
+                rates = {name: 1000 for name in case["targets"]}
                 suite = Suite(
                     name="test",
                     rounds=case["rounds"],
-                    warmup_s=10,
-                    duration_s=60,
                     smoke=False,
-                    rates={"hello": 250000},
-                    connections={"http1": 5000},
+                    connections={"http1": 1000},
                     grpc_streams=100,
-                    targets=tuple(target(name) for name in case["targets"]),
+                    targets=targets,
+                    stages={
+                        "rate": Stage(warmup_s=11, duration_s=15, processes=None, rates=rates),
+                        "cap": Stage(warmup_s=5, duration_s=15, processes=2, rates=rates),
+                    },
                 )
-                got = [cell_key(round_no, t) for round_no, t in plan_cells(suite)]
-                self.assertEqual(got, case["expected"])
+                self.assertEqual([cell.key for cell in plan_cells(suite)], case["expected"])
 
 
 class ShippedSuitesTest(unittest.TestCase):
@@ -240,12 +353,13 @@ class ShippedSuitesTest(unittest.TestCase):
         self.registry = load_targets(ROOT / "suites/targets.toml")
 
     def test_ci_rows_match_the_spec(self):
-        suite = load_suite(ROOT / "suites/ci.toml", self.registry, 1)
+        # The rig has 2 loaders.
+        suite = load_suite(ROOT / "suites/ci.toml", self.registry, 2)
         self.assertEqual(tuple(t.name for t in suite.targets), CI_TARGETS)
-        self.assertEqual((suite.rounds, suite.warmup_s, suite.duration_s), (1, 10, 60))
-        self.assertEqual(suite.rates, {"hello": 250000, "yii3": 250000, "grpc": 100000})
-        self.assertEqual(suite.connections, {"http1": 5000, "grpc": 100})
+        self.assertEqual(suite.rounds, 3)
+        self.assertEqual(suite.connections, {"http1": 1000, "grpc": 100})
         self.assertEqual(suite.grpc_streams, 100)
+        self.assertEqual(suite.stages, CI_STAGES)
 
     def test_every_registry_target_is_in_the_ci_suite(self):
         suite = load_suite(ROOT / "suites/ci.toml", self.registry, 1)

@@ -1,6 +1,6 @@
 import unittest
 
-from rig.merge import LateLoader, LoaderRecord, Merged, MissingLoader, merge, parse_result
+from rig.merge import LateLoader, LoaderRecord, Merged, MissingLoader, merge, parse_calibration, parse_result
 
 # The RESULT line of the contract.
 CONTRACT_LINE = (
@@ -16,6 +16,31 @@ WRK2_TEXT = (
     "  Thread calibration: mean lat.: 0.702ms, rate sampling interval: 10ms\n"
     "Requests/sec:   1999.36\n"
     "Transfer/sec:    246.01KB\n"
+)
+
+# The head of a wrk2 output of CI run 36202429033 (r1-hello-rapira-worker, loader-1): one calibration line per thread.
+WRK2_RUN_TEXT = (
+    "Running 1m test @ http://172.31.17.205:8080/?name=you\n"
+    "  8 threads and 5000 connections\n"
+    "  Thread calibration: mean lat.: 3.639ms, rate sampling interval: 10ms\n"
+    "  Thread calibration: mean lat.: 3.617ms, rate sampling interval: 10ms\n"
+    "  Thread calibration: mean lat.: 3.699ms, rate sampling interval: 10ms\n"
+    "  Thread calibration: mean lat.: 3.581ms, rate sampling interval: 10ms\n"
+    "  Thread calibration: mean lat.: 3.753ms, rate sampling interval: 10ms\n"
+    "  Thread calibration: mean lat.: 3.712ms, rate sampling interval: 10ms\n"
+    "  Thread calibration: mean lat.: 3.672ms, rate sampling interval: 10ms\n"
+    "  Thread calibration: mean lat.: 3.668ms, rate sampling interval: 10ms\n"
+    "  Thread Stats   Avg      Stdev     Max   +/- Stdev\n"
+    "    Latency     3.87ms    1.25ms  12.89ms   75.05%\n"
+)
+
+# The head and the tail of an h2load output of the same run (r1-grpc-rapira, loader-1).
+H2LOAD_TEXT = (
+    "starting benchmark...\n"
+    "spawning thread #0: 13 total client(s). Timing-based test with 10s of warm-up time and 60s of main duration for measurements.\n"
+    "Warm-up started for thread #0.\n"
+    "time for request:      125us      2.27ms       598us       252us    67.58%\n"
+    "req/s           :     999.96     1000.01      999.99        0.01    67.00%\n"
 )
 
 NO_ERRORS = {"connect": 0, "read": 0, "write": 0, "status": 0, "timeout": 0, "dropped": 0}
@@ -56,6 +81,22 @@ PARSE_CASES = [
     },
     {"name": "no RESULT line", "text": WRK2_TEXT, "expected": None},
     {"name": "RESULT inside a line is not a RESULT line", "text": "log: RESULT {}\n", "expected": None},
+]
+
+CALIBRATION_CASES = [
+    {"name": "one wrk2 thread", "text": WRK2_TEXT + CONTRACT_LINE + "\n", "expected": [0.702]},
+    {
+        "name": "eight wrk2 threads in output order",
+        "text": WRK2_RUN_TEXT,
+        "expected": [3.639, 3.617, 3.699, 3.581, 3.753, 3.712, 3.672, 3.668],
+    },
+    {
+        "name": "a calibration line of a 2026-09-27 run",
+        "text": "  Thread calibration: mean lat.: 3.563ms, rate sampling interval: 10ms\n",
+        "expected": [3.563],
+    },
+    {"name": "h2load prints no calibration line", "text": H2LOAD_TEXT, "expected": []},
+    {"name": "a loader without output", "text": "", "expected": []},
 ]
 
 PARSE_ERROR_CASES = [
@@ -144,6 +185,13 @@ class ParseResultTest(unittest.TestCase):
             with self.subTest(name=case["name"]):
                 with self.assertRaises(ValueError):
                     parse_result(case["text"], "loader-1")
+
+
+class ParseCalibrationTest(unittest.TestCase):
+    def test_parse_calibration(self):
+        for case in CALIBRATION_CASES:
+            with self.subTest(name=case["name"]):
+                self.assertEqual(parse_calibration(case["text"]), case["expected"])
 
 
 class MergeTest(unittest.TestCase):

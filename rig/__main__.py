@@ -9,7 +9,6 @@ from pathlib import Path
 
 from rig import ssh
 from rig.bench import BENCH_DIR, SshBoxes, app_hashes, run_suite, server_versions
-from rig.compare import compare
 from rig.publish import publish
 from rig.registry import load_suite, load_targets, suite_needs
 from rig.report import render
@@ -37,20 +36,23 @@ def cmd_bench(args: argparse.Namespace) -> int:
         ssh.wait_ssh(host)
     ssh.stage_tree(rig.hosts)
     boxes = SshBoxes()
-    processes = args.processes or int(boxes.run(rig.server, "nproc"))
+    server_vcpus = int(boxes.run(rig.server, "nproc"))
     loader_threads = int(boxes.run(rig.loaders[0], "nproc"))
     meta = json.loads(boxes.run(rig.server, f"cat {BENCH_DIR}/meta.json"))
+    if "base" not in meta:
+        raise ValueError("the server has no base build; provision it with BASE=<sha7>")
     # The merged pull request of the commit labels the run on the board. A manual run has none.
     pr = None
     if args.pr_number is not None:
         pr = {"number": args.pr_number, "url": args.pr_url, "title": args.pr_title}
-    rapira = {**meta["rapira"], "pr": pr}
-    run_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{suite.name}-{rapira['sha'][:7]}"
+    builds = {"new": {**meta["new"], "pr": pr}, "base": meta["base"]}
+    run_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{suite.name}-{builds['new']['sha'][:7]}"
     path = Path(args.out) / run_id / "run.json"
     try:
         run_suite(
-            rig, suite, boxes, Path(args.out), suite_path=suite_path, processes=processes, run_id=run_id, rapira=rapira,
-            servers=server_versions(boxes, rig.server), apps=app_hashes(Path(".")), loader_threads=loader_threads,
+            rig, suite, boxes, Path(args.out), suite_path=suite_path, run_id=run_id, builds=builds,
+            servers=server_versions(boxes, rig.server), apps=app_hashes(Path(".")), server_vcpus=server_vcpus,
+            loader_threads=loader_threads,
         )
     except KeyboardInterrupt:
         print(f"ERROR: interrupted; the run file is {path}", file=sys.stderr)
@@ -67,14 +69,19 @@ def cmd_report(args: argparse.Namespace) -> int:
     return status
 
 
-def cmd_compare(args: argparse.Namespace) -> int:
-    text, status = compare(load_json(args.a), load_json(args.b), force=args.force)
-    print(text, end="")
-    return status
-
-
 def cmd_publish(args: argparse.Namespace) -> int:
     print(publish(load_json(args.run), Path(args.pages_dir)))
+    return 0
+
+
+def cmd_base(args: argparse.Namespace) -> int:
+    if args.base:
+        print(args.base)
+        return 0
+    runs = [r for r in load_json(args.index)["runs"] if not r["smoke"] and not r["rapira_sha"].startswith(args.new)]
+    if not runs:
+        raise ValueError("no base build: the index has no other non-smoke run; pass the base input")
+    print(max(runs, key=lambda r: r["started"])["rapira_sha"][:7])
     return 0
 
 
@@ -87,10 +94,13 @@ def cmd_needs(args: argparse.Namespace) -> int:
 
 def cmd_provision(args: argparse.Namespace) -> int:
     if not args.nightly and not args.ref:
-        raise ValueError("set NIGHTLY=<sha7> or REF=<ref>, for example: make up REF=pr/97")
+        raise ValueError("set NIGHTLY=<sha7> or REF=<ref>, for example: make up REF=pr/97 BASE=<sha7>")
+    if not args.base:
+        raise ValueError("set BASE=<sha7> of a build on the binaries release, for example: make up NIGHTLY=<sha7> BASE=<sha7>")
     env = {
         "NIGHTLY": args.nightly,
         "REF": args.ref,
+        "BASE": args.base,
         "NEEDS": args.needs,
         "FRAME_POINTERS": args.frame_pointers,
     }
@@ -125,7 +135,6 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("bench", help="run a suite on the rig")
     p.add_argument("--suite", required=True)
     p.add_argument("--rounds", type=int)
-    p.add_argument("--processes", type=int)
     p.add_argument("--smoke", action="store_true")
     p.add_argument("--out", default="runs")
     p.add_argument("--pr-number", type=int)
@@ -133,20 +142,20 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--pr-title", default="")
     p.set_defaults(func=cmd_bench)
 
-    p = sub.add_parser("report", help="print the tables of one run file")
+    p = sub.add_parser("report", help="print the summary table of one run file")
     p.add_argument("run")
     p.set_defaults(func=cmd_report)
-
-    p = sub.add_parser("compare", help="print the deltas between two run files")
-    p.add_argument("a")
-    p.add_argument("b")
-    p.add_argument("--force", action="store_true")
-    p.set_defaults(func=cmd_compare)
 
     p = sub.add_parser("publish", help="add one run file to a gh-pages checkout")
     p.add_argument("--pages-dir", required=True)
     p.add_argument("run")
     p.set_defaults(func=cmd_publish)
+
+    p = sub.add_parser("base", help="print the sha7 of the base build for a new build")
+    p.add_argument("--index", required=True)
+    p.add_argument("--new", required=True)
+    p.add_argument("--base", default="")
+    p.set_defaults(func=cmd_base)
 
     p = sub.add_parser("needs", help="print the server kinds and apps of a suite")
     p.add_argument("--suite", required=True)
@@ -157,6 +166,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--needs", required=True)
     p.add_argument("--nightly", default="")
     p.add_argument("--ref", default="")
+    p.add_argument("--base", required=True)
     p.add_argument("--frame-pointers", default="0", choices=("0", "1"))
     p.set_defaults(func=cmd_provision)
 

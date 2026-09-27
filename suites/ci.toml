@@ -1,28 +1,39 @@
 # The per-merge suite. CI runs it after every nightly build of the rapira main branch.
-# Every target runs one stage: warmup_s seconds of warm-up, then duration_s seconds measured,
-# at the rate of its app, with the connections of its proto.
+# Every target runs a pair of rate cells and a pair of cap cells in each round: one cell of the base build and one of the new build.
+# A rate is the total req/s of a target over all loaders. The cap stage runs stages.cap.processes processes, the rate stage one process per server vCPU.
 name = "ci"
-rounds = 1
-warmup_s = 10
-duration_s = 60
+rounds = 3
 smoke = false
-targets = [
-  "hello-rapira-classic",
-  "hello-rapira-worker",
-  "hello-rapira-dispatcher",
-  "hello-rapira-dispatcher-static",
-  "yii3-rapira-dispatcher",
-  "grpc-rapira",
-]
-
-[rates]
-hello = 250000
-yii3 = 250000
-grpc = 100000
+targets = ["hello-rapira-classic", "hello-rapira-worker", "hello-rapira-dispatcher", "hello-rapira-dispatcher-static", "yii3-rapira-dispatcher", "grpc-rapira"]
 
 [connections]
-http1 = 5000
+http1 = 1000
 grpc = 100
 
 [grpc]
 streams = 100
+
+[stages.rate]
+warmup_s = 11
+duration_s = 15
+
+[stages.rate.rates]
+hello-rapira-classic = 110000
+hello-rapira-worker = 200000
+hello-rapira-dispatcher = 200000
+hello-rapira-dispatcher-static = 150000
+yii3-rapira-dispatcher = 29000
+grpc-rapira = 153000
+
+[stages.cap]
+warmup_s = 5
+duration_s = 15
+processes = 2
+
+[stages.cap.rates]
+hello-rapira-classic = 270000
+hello-rapira-worker = 750000
+hello-rapira-dispatcher = 770000
+hello-rapira-dispatcher-static = 510000
+yii3-rapira-dispatcher = 50000
+grpc-rapira = 340000

@@ -1,7 +1,7 @@
 #!/bin/bash
 set -u
 
-outer=180
+outer=75
 shutdown -h "+$outer" "rapira-bench outer TTL"
 date -u -d "+$outer minutes" +%s > /etc/rapira-bench-deadline
 

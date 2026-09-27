@@ -1,3 +1,5 @@
+import contextlib
+import io
 import json
 import os
 import subprocess
@@ -8,7 +10,8 @@ from unittest import mock
 
 from rig import rig as rigmod
 from rig import ssh
-from rig.registry import Suite, Target, suite_needs
+from rig.__main__ import main
+from rig.registry import Stage, Suite, Target, suite_needs
 from rig.rig import Rig
 from rig.ssh import Host, SshError
 
@@ -145,17 +148,52 @@ NEEDS_CASES = [
 PROVISION_CASES = [
     {
         "name": "nightly with a quoted needs list",
-        "env": {"NIGHTLY": "abc1234", "REF": "", "NEEDS": "rapira hello yii3"},
+        "env": {"NIGHTLY": "abc1234", "REF": "", "BASE": "abc1234", "NEEDS": "rapira hello yii3"},
         "results": ["ok", "ok", "ok"],
-        "server_cmd": "NIGHTLY=abc1234 REF='' NEEDS='rapira hello yii3' bash bench-rig/box/provision-server.sh",
+        "server_cmd": "NIGHTLY=abc1234 REF='' BASE=abc1234 NEEDS='rapira hello yii3' bash bench-rig/box/provision-server.sh",
         "error": None,
     },
     {
         "name": "a failed loader fails the provisioning",
-        "env": {"NIGHTLY": "", "REF": "pr/97", "NEEDS": "rapira hello"},
+        "env": {"NIGHTLY": "", "REF": "pr/97", "BASE": "def5678", "NEEDS": "rapira hello"},
         "results": ["ok", "ok", SshError("loader-2: exit 1: bash bench-rig/box/provision-loader.sh")],
-        "server_cmd": "NIGHTLY='' REF=pr/97 NEEDS='rapira hello' bash bench-rig/box/provision-server.sh",
+        "server_cmd": "NIGHTLY='' REF=pr/97 BASE=def5678 NEEDS='rapira hello' bash bench-rig/box/provision-server.sh",
         "error": "loader-2: exit 1",
+    },
+]
+
+PROVISION_CLI_CASES = [
+    {
+        # An A/A run: the base build is the nightly itself.
+        "name": "the nightly and the base go to the server env",
+        "argv": ["provision", "--ttl", "60", "--needs", "rapira hello", "--nightly", "abc1234", "--base", "abc1234"],
+        "status": 0,
+        "server_env": {"NIGHTLY": "abc1234", "REF": "", "BASE": "abc1234", "NEEDS": "rapira hello", "FRAME_POINTERS": "0"},
+        "stderr": "",
+    },
+    {
+        # A REF build on the box and a base tarball from the cache: the spec allows BASE next to REF.
+        "name": "a ref build gets a base from the binaries release",
+        "argv": ["provision", "--ttl", "60", "--needs", "rapira hello", "--ref", "pr/97", "--base", "def5678", "--frame-pointers", "1"],
+        "status": 0,
+        "server_env": {"NIGHTLY": "", "REF": "pr/97", "BASE": "def5678", "NEEDS": "rapira hello", "FRAME_POINTERS": "1"},
+        "stderr": "",
+    },
+    {
+        # make provision passes --base "" when BASE is not set.
+        "name": "an empty base is refused",
+        "argv": ["provision", "--ttl", "60", "--needs", "rapira hello", "--nightly", "abc1234", "--base", ""],
+        "status": 1,
+        "server_env": None,
+        "stderr": "ERROR: set BASE=<sha7>",
+    },
+    {
+        # argparse exits with the status 2 when a required option is missing.
+        "name": "a missing base is refused",
+        "argv": ["provision", "--ttl", "60", "--needs", "rapira hello", "--nightly", "abc1234"],
+        "status": 2,
+        "server_env": None,
+        "stderr": "the following arguments are required: --base",
     },
 ]
 
@@ -269,8 +307,12 @@ class NeedsTest(unittest.TestCase):
         for case in NEEDS_CASES:
             with self.subTest(name=case["name"]):
                 suite = Suite(
-                    name="t", rounds=1, warmup_s=10, duration_s=60, smoke=False, rates={}, connections={}, grpc_streams=1,
+                    name="t", rounds=1, smoke=False, connections={}, grpc_streams=1,
                     targets=tuple(target(app, server) for app, server in case["targets"]),
+                    stages={
+                        "rate": Stage(warmup_s=11, duration_s=15, processes=None, rates={}),
+                        "cap": Stage(warmup_s=5, duration_s=15, processes=2, rates={}),
+                    },
                 )
                 self.assertEqual(suite_needs(suite), case["expected"])
 
@@ -302,3 +344,23 @@ class ProvisionTest(unittest.TestCase):
                     ("loader-1", "bash bench-rig/box/provision-loader.sh"),
                     ("loader-2", "bash bench-rig/box/provision-loader.sh"),
                 ])
+
+
+class ProvisionCommandTest(unittest.TestCase):
+    def test_provision_command(self):
+        for case in PROVISION_CLI_CASES:
+            with self.subTest(name=case["name"]):
+                err = io.StringIO()
+                with mock.patch("rig.__main__.from_terraform", return_value=mock.sentinel.rig), \
+                        mock.patch("rig.__main__.provision") as provision, \
+                        contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(err):
+                    try:
+                        status = main(case["argv"])
+                    except SystemExit as exc:
+                        status = exc.code
+                self.assertEqual(case["status"], status)
+                self.assertIn(case["stderr"], err.getvalue())
+                if case["server_env"] is None:
+                    provision.assert_not_called()
+                else:
+                    provision.assert_called_once_with(mock.sentinel.rig, ttl_min=60, server_env=case["server_env"])

@@ -10,21 +10,21 @@ variable "az" {
 }
 
 variable "server_instance_type" {
-  description = "The measured box. c7a has no SMT: one vCPU is one physical core; the 8xlarge network is a fixed 12.5 Gbps, no burst credits."
+  description = "The measured box. c7a has no SMT: one vCPU is one physical core. A c7a.2xlarge has 8 vCPUs: the rate stage runs 8 rapira processes, and the capacity stage runs the process count of the suite."
   type        = string
-  default     = "c7a.8xlarge"
+  default     = "c7a.2xlarge"
 }
 
 variable "loader_instance_type" {
-  description = "One load generator. A c7a.2xlarge has 8 vCPUs and a 3.125 Gbps baseline for the 250000 req/s HTTP rows with 5000 connections and the 100000 req/s gRPC row."
+  description = "One load generator. A c7a.xlarge has 4 vCPUs and runs one wrk2 or h2load thread per vCPU. The ci suite rates keep each loader below 70% busy CPU."
   type        = string
-  default     = "c7a.2xlarge"
+  default     = "c7a.xlarge"
 }
 
 variable "loader_count" {
   description = "The number of loaders. The rate and the connection count of a stage are split evenly over them."
   type        = number
-  default     = 1
+  default     = 2
 
   validation {
     condition     = var.loader_count >= 1
