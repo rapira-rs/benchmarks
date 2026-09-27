@@ -2,13 +2,24 @@
 
 Dated records and the decisions the code cannot show. Methodology lives in METHOD.md, operations in docs/operations.md. Numbers from different rigs or instance sizes never mix into one table.
 
+## Method change 3, 2026-09-27
+
+- From this date each run measures two builds on the same instances: the new nightly build and the base build, which is the build of the previous board run. The rig is one c7a.2xlarge server and two c7a.xlarge loaders in eu-central-1a. The base build comes from the `binaries` release of this repository.
+- Each target runs two stage kinds for each build. The rate stage runs one rapira process per server vCPU at a rate that keeps the server at about 50% CPU, and gives the p99 latency and the RSS. The capacity stage runs 2 rapira processes at a rate above their capacity, and gives the achieved req/s. The `ci` suite has 3 rounds, 1000 HTTP connections, and 100 gRPC connections with 100 streams each.
+- A pair is the base cell and the new cell of one round, one target, and one stage kind. The two cells of a pair run one after the other. A board point is the median paired delta of one run, with the smallest and the largest paired delta as a band. A point has a color only when the change is above the noise floor of an A/A run.
+- The new flags are `loader_busy`, `loader_skew`, and `not_saturated`. A run with void cells is complete and publishes. A run where every new cell of one target is void is `broken` and does not publish.
+- `PROCESSES`, `make compare`, and `rig compare` are removed. The stage kind sets the process count, and the pairs inside one run replace the comparison of two runs.
+- Each run writes `runs/<id>/run.json` with the schema `rapira-bench-run/3`. The board draws only schema 3 runs. The numbers of the earlier runs do not compare with the numbers of this method.
+- A CI run holds the rig for about 41 minutes, which costs about 0.65 USD at on-demand prices in eu-central-1.
+- The A/A calibration run with `NIGHTLY=ac56141 BASE=ac56141` sets the rates of `suites/ci.toml` and the noise floors in `NOISE_FLOOR_PCT` of `board/app.js`. The next section, "A/A calibration, 2026-09-27", records its results.
+
 ## Method change, 2026-09-25
 
 - From this date the rig measures with the staged rate ladder of METHOD.md. wrk2 loads the HTTP/1.1 targets and k6 loads the gRPC targets, from four c7a.xlarge loaders against one c7a.8xlarge server. This method was replaced the same day, see the next section.
 - The numbers before this date come from closed-loop wrk and h2load passes and fixed-rate k6 passes from one c7a.4xlarge loader at a fixed connection count. The numbers after this date are the held rate, the peak successful rate, and the unloaded latency of the ladder. Do not compare numbers from before and after this date, and do not put them in one table.
 - Each run now writes `runs/<id>/run.json` with the schema `rapira-bench-run/1`. The directories under `results/` stay as the record of the old method.
 - FrankenPHP now runs the glibc release asset 1.12.7 with the production worker shape, and every PHP runtime uses the shared `servers/php.ini`. The FrankenPHP and php-fpm numbers before this date used other settings.
-- The fixed pair of the decisions below no longer applies. The loader count and the instance types are knobs, and the Makefile quota check adds the vCPUs of the server and all loaders.
+- The fixed c7a.8xlarge server and c7a.4xlarge loader pair no longer applies. The loader count and the instance types are knobs, and the Makefile quota check adds the vCPUs of the server and all loaders.
 
 ## Method change 2, 2026-09-25
 
@@ -183,10 +194,10 @@ Symfony (kernel-loop worker):
 
 ## Decisions and their reasons
 
-- Fixed pair, no size knobs. Measured on the null runs: wrk needs ~0.62 loader cores per saturated server core, and hello at a 32-core ceiling moves ~4.4 Gbps sustained. A c7a.2xlarge loader fails both (8 cores, 3.125 Gbps baseline); c7a.4xlarge clears both. The 8xlarge server has a fixed 12.5 Gbps link, no burst credits.
+- Loader capacity. wrk2 sends about 31000 req/s per loader vCPU at about 92% CPU with 625 connections per thread, which is about 34000 req/s per vCPU at 100% by linear scale. Measured in the runs of 2026-09-25 to 2026-09-27: 250000 req/s from one c7a.2xlarge loader of 8 vCPUs at 90 to 93% CPU. A loader above 70% busy CPU flags `loader_busy`.
 - Plain builds for published tables: the prebuilt competitors do not carry frame pointers, so a frame-pointer rapira would understate its own gap. Perf sessions rebuild with frame pointers on demand.
 - Strict voiding: a cell with resets, timeouts, or missing generator output is listed and excluded, never averaged. The v0.7.0 run shows why: averaging reset-y cells would have hidden the finding.
-- vCPU quota L-1216C47A raised 32 to 64 on 2026-08-30; the pair needs 48.
+- vCPU quota L-1216C47A raised 32 to 64 on 2026-08-30; the default rig needs 16.
 - Null-run calibrations on the c7a.xlarge pair (2026-08-30, before the sizes were fixed): dispatcher ~240k, worker ~210k, classic ~80k req/s at c=1000, null deltas within noise at one round.
 
 ## Maindev era, retired rig
