@@ -17,9 +17,13 @@ const TONE_COLORS = { better: "#1a7f37", worse: "#cf222e", "": "#8c959f" };
 const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
 // The distance in pixels between a point and its tooltip.
 const TIP_OFFSET = 10;
-// The noise floor of each measure in percent: the largest |paired delta| of the measure over all targets of an A/A
-// run, rounded up to 0.5%. These are initial values. NOTES.md holds the A/A results.
-const NOISE_FLOOR_PCT = { capacity: 3, p99: 10, rss: 1 };
+// The noise floor of each measure in percent: the largest |paired delta| of the measure over all targets of the A/A
+// run of 2026-09-27, rounded up to 0.5%. The p99 floor leaves out grpc-rapira, which has its own floor. NOTES.md
+// holds the A/A results.
+const NOISE_FLOOR_PCT = { capacity: 2.5, p99: 3, rss: 2 };
+// The floors of one target that replace the floor of the measure: the largest |paired delta| of the target in the
+// same A/A run, rounded up to 0.5%.
+const TARGET_NOISE_FLOOR_PCT = { "grpc-rapira": { p99: 19.5 } };
 // Every target gets one chart per measure, in this order. The chart shows the paired delta in percent. The tooltip
 // shows the base and new medians in the unit: the value in the run file times the scale, with the given digits.
 const MEASURES = [
@@ -67,15 +71,16 @@ function targetSeries(runs) {
   };
 }
 
-// The tone of a point of the measure with the given key: "better", "worse", or "" (gray). A point has a color only
-// when it has one pair per round, its band is strictly on one side of zero, and |delta_pct| is at least the noise
-// floor of the measure.
-function tone(point, measure, rounds) {
+// The tone of a point of the target and the measure with the given key: "better", "worse", or "" (gray). A point has
+// a color only when it has one pair per round, its band is strictly on one side of zero, and |delta_pct| is at least
+// the noise floor: the floor of the target for the measure, or else the floor of the measure.
+function tone(point, target, measure, rounds) {
   if (!point || point.pairs < rounds) {
     return "";
   }
   const up = point.min_pct > 0;
-  if (!(up || point.max_pct < 0) || Math.abs(point.delta_pct) < NOISE_FLOOR_PCT[measure]) {
+  const floor = TARGET_NOISE_FLOOR_PCT[target]?.[measure] ?? NOISE_FLOOR_PCT[measure];
+  if (!(up || point.max_pct < 0) || Math.abs(point.delta_pct) < floor) {
     return "";
   }
   return up === MEASURES.find((m) => m.key === measure).higherIsBetter ? "better" : "worse";
@@ -100,7 +105,7 @@ function tooltipLines(series, name, measure, i) {
   lines.push({
     text: "delta " + percent(point.delta_pct) + " (min " + percent(point.min_pct) + ", max " + percent(point.max_pct) +
       ", " + point.pairs + (point.pairs === 1 ? " pair)" : " pairs)"),
-    tone: tone(point, measure, series.rounds[i]),
+    tone: tone(point, name, measure, series.rounds[i]),
   });
   if (point.flags.length) {
     lines.push({ text: point.flags.join(", "), tone: "" });
@@ -157,7 +162,7 @@ const plotMarks = {
 function drawChart(parent, series, name, measure) {
   const points = series.targets[name][measure.key];
   const field = (key) => points.map((point) => (point ? point[key] : null));
-  const colors = points.map((point, i) => TONE_COLORS[tone(point, measure.key, series.rounds[i])]);
+  const colors = points.map((point, i) => TONE_COLORS[tone(point, name, measure.key, series.rounds[i])]);
   const box = el("div");
   const title = el("h2", name + " · " + measure.name);
   title.className = "title";

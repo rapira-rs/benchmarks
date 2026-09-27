@@ -96,39 +96,50 @@ def point(pairs, delta_pct, min_pct, max_pct):
 
 
 # A point is "better" or "worse" only when it has one pair per round, its band is strictly on one side of zero,
-# and |delta_pct| is at least the noise floor. The floors of board/app.js: capacity 3, p99 10, rss 1 (percent).
-# A higher capacity is better. A lower p99 and a lower RSS are better. All other points are "" (gray).
+# and |delta_pct| is at least the noise floor. The floors of board/app.js: capacity 2.5, p99 3, rss 2 (percent), and
+# p99 19.5 for grpc-rapira. A higher capacity is better. A lower p99 and a lower RSS are better. All other points are
+# "" (gray).
+# The target of the rows that do not test a per-target floor.
+HELLO = "hello-rapira-worker"
 TONE_CASES = [
-    # 3 of 3 pairs, band 3.5 to 4.6 above zero, 4.0 >= 3.
-    {"name": "capacity up above the floor is better", "point": point(3, 4.0, 3.5, 4.6), "measure": "capacity", "rounds": 3, "expected": "better"},
-    # 3 of 3 pairs, band -6.0 to -4.0 below zero, 5.0 >= 3.
-    {"name": "capacity down above the floor is worse", "point": point(3, -5.0, -6.0, -4.0), "measure": "capacity", "rounds": 3, "expected": "worse"},
-    # 3 of 3 pairs, band -14.0 to -11.0 below zero, 12.5 >= 10.
-    {"name": "p99 down above the floor is better", "point": point(3, -12.5, -14.0, -11.0), "measure": "p99", "rounds": 3, "expected": "better"},
-    # 3 of 3 pairs, band 11.0 to 14.0 above zero, 12.5 >= 10.
-    {"name": "p99 up above the floor is worse", "point": point(3, 12.5, 11.0, 14.0), "measure": "p99", "rounds": 3, "expected": "worse"},
-    # 3 of 3 pairs, band 1.5 to 2.5 above zero, 2.0 >= 1.
-    {"name": "rss up above the floor is worse", "point": point(3, 2.0, 1.5, 2.5), "measure": "rss", "rounds": 3, "expected": "worse"},
-    # 3 of 3 pairs, band -2.5 to -1.5 below zero, 2.0 >= 1.
-    {"name": "rss down above the floor is better", "point": point(3, -2.0, -2.5, -1.5), "measure": "rss", "rounds": 3, "expected": "better"},
+    # 3 of 3 pairs, band 3.5 to 4.6 above zero, 4.0 >= 2.5.
+    {"name": "capacity up above the floor is better", "point": point(3, 4.0, 3.5, 4.6), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": "better"},
+    # 3 of 3 pairs, band -6.0 to -4.0 below zero, 5.0 >= 2.5.
+    {"name": "capacity down above the floor is worse", "point": point(3, -5.0, -6.0, -4.0), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": "worse"},
+    # 3 of 3 pairs, band -14.0 to -11.0 below zero, 12.5 >= 3.
+    {"name": "p99 down above the floor is better", "point": point(3, -12.5, -14.0, -11.0), "target": HELLO, "measure": "p99", "rounds": 3, "expected": "better"},
+    # 3 of 3 pairs, band 11.0 to 14.0 above zero, 12.5 >= 3.
+    {"name": "p99 up above the floor is worse", "point": point(3, 12.5, 11.0, 14.0), "target": HELLO, "measure": "p99", "rounds": 3, "expected": "worse"},
+    # 3 of 3 pairs, band 2.0 to 4.0 above zero, 3.0 >= 3: a delta equal to the p99 floor counts.
+    {"name": "hello p99 at the p99 floor is worse", "point": point(3, 3.0, 2.0, 4.0), "target": HELLO, "measure": "p99", "rounds": 3, "expected": "worse"},
+    # 3 of 3 pairs, band 2.0 to 3.0 above zero, 2.5 >= 2.
+    {"name": "rss up above the floor is worse", "point": point(3, 2.5, 2.0, 3.0), "target": HELLO, "measure": "rss", "rounds": 3, "expected": "worse"},
+    # 3 of 3 pairs, band -3.0 to -2.0 below zero, 2.5 >= 2.
+    {"name": "rss down above the floor is better", "point": point(3, -2.5, -3.0, -2.0), "target": HELLO, "measure": "rss", "rounds": 3, "expected": "better"},
     # 2 pairs of 3 rounds: one pair was void or dropped, so the point is gray although the band is above zero.
-    {"name": "2 pairs of 3 rounds", "point": point(2, 4.0, 3.5, 4.6), "measure": "capacity", "rounds": 3, "expected": ""},
+    {"name": "2 pairs of 3 rounds", "point": point(2, 4.0, 3.5, 4.6), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": ""},
     # min_pct 0 is not strictly above zero.
-    {"name": "band touches zero from above", "point": point(3, 4.0, 0.0, 6.0), "measure": "capacity", "rounds": 3, "expected": ""},
+    {"name": "band touches zero from above", "point": point(3, 4.0, 0.0, 6.0), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": ""},
     # max_pct 0 is not strictly below zero.
-    {"name": "band touches zero from below", "point": point(3, -12.0, -15.0, 0.0), "measure": "p99", "rounds": 3, "expected": ""},
+    {"name": "band touches zero from below", "point": point(3, -12.0, -15.0, 0.0), "target": HELLO, "measure": "p99", "rounds": 3, "expected": ""},
     # The band -0.5 to 2.0 crosses zero.
-    {"name": "band crosses zero", "point": point(3, 1.5, -0.5, 2.0), "measure": "rss", "rounds": 3, "expected": ""},
-    # 2.5 < 3, the capacity floor, although the band 2.0 to 2.9 is above zero.
-    {"name": "delta under the floor", "point": point(3, 2.5, 2.0, 2.9), "measure": "capacity", "rounds": 3, "expected": ""},
-    # 3.0 >= 3: a delta equal to the floor counts.
-    {"name": "delta at the floor", "point": point(3, 3.0, 2.0, 3.5), "measure": "capacity", "rounds": 3, "expected": "better"},
-    # 1 of 1 pairs in a suite of 1 round, band -11.0 to -11.0 below zero, 11.0 >= 10.
-    {"name": "1 pair in a suite of 1 round", "point": point(1, -11.0, -11.0, -11.0), "measure": "p99", "rounds": 1, "expected": "better"},
+    {"name": "band crosses zero", "point": point(3, 1.5, -0.5, 2.0), "target": HELLO, "measure": "rss", "rounds": 3, "expected": ""},
+    # 2.4 < 2.5, the capacity floor, although the band 2.0 to 2.9 is above zero.
+    {"name": "delta under the floor", "point": point(3, 2.4, 2.0, 2.9), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": ""},
+    # 2.5 >= 2.5: a delta equal to the floor counts.
+    {"name": "delta at the floor", "point": point(3, 2.5, 2.0, 3.5), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": "better"},
+    # 19.4 < 19.5, the p99 floor of grpc-rapira, although 19.4 is above the p99 floor 3 and the band is above zero.
+    {"name": "grpc p99 under the grpc floor", "point": point(3, 19.4, 17.0, 21.0), "target": "grpc-rapira", "measure": "p99", "rounds": 3, "expected": ""},
+    # 19.5 >= 19.5, band 17.0 to 21.0 above zero, and a higher p99 is worse.
+    {"name": "grpc p99 at the grpc floor is worse", "point": point(3, 19.5, 17.0, 21.0), "target": "grpc-rapira", "measure": "p99", "rounds": 3, "expected": "worse"},
+    # grpc-rapira has its own p99 floor only, so its capacity uses the capacity floor: 2.5 >= 2.5.
+    {"name": "grpc capacity uses the capacity floor", "point": point(3, 2.5, 2.0, 3.5), "target": "grpc-rapira", "measure": "capacity", "rounds": 3, "expected": "better"},
+    # 1 of 1 pairs in a suite of 1 round, band -11.0 to -11.0 below zero, 11.0 >= 3.
+    {"name": "1 pair in a suite of 1 round", "point": point(1, -11.0, -11.0, -11.0), "target": HELLO, "measure": "p99", "rounds": 1, "expected": "better"},
     # Every pair of the measure was void, so the summary numbers are null.
-    {"name": "0 pairs", "point": {"pairs": 0, "delta_pct": None, "min_pct": None, "max_pct": None, "base": None, "new": None, "flags": []}, "measure": "capacity", "rounds": 3, "expected": ""},
+    {"name": "0 pairs", "point": {"pairs": 0, "delta_pct": None, "min_pct": None, "max_pct": None, "base": None, "new": None, "flags": []}, "target": HELLO, "measure": "capacity", "rounds": 3, "expected": ""},
     # A target that the run does not have.
-    {"name": "null point", "point": None, "measure": "p99", "rounds": 3, "expected": ""},
+    {"name": "null point", "point": None, "target": HELLO, "measure": "p99", "rounds": 3, "expected": ""},
 ]
 
 
@@ -142,7 +153,7 @@ def line(text, tone=""):
 # the point has any. The units: capacity in req/s, p99 in ms from us, RSS in MiB from KiB.
 TOOLTIP_CASES = [
     {
-        # Run a, hello capacity: base 100000, new 104000 req/s. 3 of 3 pairs, band above zero, 4.0 >= 3.
+        # Run a, hello capacity: base 100000, new 104000 req/s. 3 of 3 pairs, band above zero, 4.0 >= 2.5.
         "name": "capacity, pull request title, better",
         "target": "hello-rapira-worker", "measure": "capacity", "index": 0,
         "expected": [
@@ -164,7 +175,7 @@ TOOLTIP_CASES = [
     },
     {
         # Run a, hello RSS: 208896 / 1024 = 204.0 MiB, 204800 / 1024 = 200.0 MiB. 3 of 3 pairs, band above zero,
-        # 2.0 >= 1, and a higher RSS is worse.
+        # 2.0 >= 2, and a higher RSS is worse.
         "name": "RSS, worse, one flag",
         "target": "hello-rapira-worker", "measure": "rss", "index": 0,
         "expected": [
@@ -252,7 +263,7 @@ class ToneTest(unittest.TestCase):
     def test_tone(self):
         for case in TONE_CASES:
             with self.subTest(name=case["name"]):
-                self.assertEqual(call_js("tone", case["point"], case["measure"], case["rounds"]), case["expected"])
+                self.assertEqual(call_js("tone", case["point"], case["target"], case["measure"], case["rounds"]), case["expected"])
 
 
 @unittest.skipUnless(NODE, "node is not installed")
