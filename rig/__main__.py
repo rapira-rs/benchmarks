@@ -83,10 +83,13 @@ def cmd_needs(args: argparse.Namespace) -> int:
 
 def cmd_provision(args: argparse.Namespace) -> int:
     if not args.nightly and not args.ref:
-        raise ValueError("set NIGHTLY=<sha7> or REF=<ref>, for example: make up REF=pr/97")
+        raise ValueError("set NIGHTLY=<sha7> or REF=<ref>, for example: make up REF=pr/97 BASE=<sha7>")
+    if not args.base:
+        raise ValueError("set BASE=<sha7> of a build on the binaries release, for example: make up NIGHTLY=<sha7> BASE=<sha7>")
     env = {
         "NIGHTLY": args.nightly,
         "REF": args.ref,
+        "BASE": args.base,
         "NEEDS": args.needs,
         "FRAME_POINTERS": args.frame_pointers,
     }
@@ -146,6 +149,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--needs", required=True)
     p.add_argument("--nightly", default="")
     p.add_argument("--ref", default="")
+    p.add_argument("--base", required=True)
     p.add_argument("--frame-pointers", default="0", choices=("0", "1"))
     p.set_defaults(func=cmd_provision)
 

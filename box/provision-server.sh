@@ -4,24 +4,28 @@
 # Environment:
 #   NIGHTLY         sha7 of a build on the nightly release of the core repository. REF is then ignored.
 #   REF             a ref to build on the box when NIGHTLY is empty: a branch, a tag, a sha, or pr/N.
+#   BASE            sha7 of the base build on the binaries release of this repository. Required.
 #   NEEDS           the server kinds and apps of the suite, space separated, from python3 -m rig needs.
 #   FRAME_POINTERS  1 builds rapira with frame pointers for a perf session.
 #
 # Results:
-#   /opt/bench/rapira/<sha7>/bin/rapira   the rapira under test
-#   /opt/bench/meta.json                  the rapira identity for the run file
-#   /opt/bench/versions.json              one version line per runtime
-#   /opt/bench/php.ini                    the shared php.ini
-#   /opt/bench/apps/yii3                  the Yii3 app with its vendor tree
-#   /opt/bench/apps/grpc/vendor           the PHP protobuf runtime of the gRPC app
+#   /opt/bench/rapira/<sha7>/bin/rapira        the new build
+#   /opt/bench/rapira/base-<sha7>/bin/rapira   the base build, with the sha7 of BASE
+#   /opt/bench/meta.json                       the new and the base record for the run file
+#   /opt/bench/versions.json                   one version line per runtime
+#   /opt/bench/php.ini                         the shared php.ini
+#   /opt/bench/apps/yii3                       the Yii3 app with its vendor tree
+#   /opt/bench/apps/grpc/vendor                the PHP protobuf runtime of the gRPC app
 set -euo pipefail
 
 NIGHTLY=${NIGHTLY:-}
 REF=${REF:-}
+BASE=${BASE:-}
 NEEDS=${NEEDS:-}
 FRAME_POINTERS=${FRAME_POINTERS:-0}
 CORE_SLUG=${CORE_SLUG:-rapira-rs/rapira}
 CORE_REPO=${CORE_REPO:-https://github.com/$CORE_SLUG}
+CACHE_SLUG=rapira-rs/benchmarks
 
 BENCH=/opt/bench
 RIG=$HOME/bench-rig
@@ -38,10 +42,10 @@ needs() {
 
 install_packages() {
   local pkgs="php-cli php-opcache ethtool curl tar diffutils python3 chrony"
-  if [ -n "$NIGHTLY" ]; then
-    # The runtime libraries of the nightly build: the rpm depends list in nfpm.yaml of the core repository.
-    pkgs="$pkgs libpq openssl-libs libcurl libxml2 sqlite-libs oniguruma zlib"
-  else
+  # The runtime libraries of the nightly tarballs: the rpm depends list in nfpm.yaml of the core repository.
+  # The base build is a nightly tarball in every run.
+  pkgs="$pkgs libpq openssl-libs libcurl libxml2 sqlite-libs oniguruma zlib"
+  if [ -z "$NIGHTLY" ]; then
     pkgs="$pkgs php-devel php-embedded clang clang-devel gcc make cmake git perf"
   fi
   if needs yii3 || needs grpc; then
@@ -100,27 +104,29 @@ with open(path, "w") as f:
 PY
 }
 
-# write_meta DIR REF SHA VERSION BUILD ASSET RUSTFLAGS writes /opt/bench/meta.json with the rapira under test.
+# write_meta ROLE DIR REF SHA VERSION BUILD ASSET RUSTFLAGS writes the ROLE record, new or base, to /opt/bench/meta.json.
 write_meta() {
   python3 - "$@" <<'PY'
-import hashlib, json, platform, sys
+import hashlib, json, os, platform, sys
 
-directory, ref, sha, version, build, asset, rustflags = sys.argv[1:8]
+role, directory, ref, sha, version, build, asset, rustflags = sys.argv[1:9]
+meta = {}
+if os.path.exists("/opt/bench/meta.json"):
+    with open("/opt/bench/meta.json") as f:
+        meta = json.load(f)
 with open(directory + "/bin/rapira", "rb") as f:
     digest = hashlib.sha256(f.read()).hexdigest()
-meta = {
-    "rapira": {
-        "ref": ref,
-        "sha": sha,
-        "version": version,
-        "build": build,
-        "asset": asset or None,
-        "binary_sha256": digest,
-        "rustflags": rustflags if build == "server" else None,
-        "dir": directory,
-    },
-    "kernel": platform.release(),
+meta[role] = {
+    "ref": ref,
+    "sha": sha,
+    "version": version,
+    "build": build,
+    "asset": asset or None,
+    "binary_sha256": digest,
+    "rustflags": rustflags if build == "server" else None,
+    "dir": directory,
 }
+meta["kernel"] = platform.release()
 with open("/opt/bench/meta.json", "w") as f:
     json.dump(meta, f, indent=1)
     f.write("\n")
@@ -159,24 +165,72 @@ print(sha, version, found[0].group(0), sums)
 PY
 }
 
-install_nightly() {
-  local resolved sha version asset sums
-  local dir=$BENCH/rapira/$NIGHTLY dl=$HOME/nightly
-  resolved=$(resolve_nightly)
-  read -r sha version asset sums <<<"$resolved"
+# resolve_base prints the full sha, the version, the tarball name, and the checksum file name
+# of the BASE build on the binaries release of this repository.
+resolve_base() {
+  python3 - "$CORE_SLUG" "$CACHE_SLUG" "$BASE" <<'PY'
+import json, re, sys, urllib.request
+
+core, cache, sha7 = sys.argv[1:4]
+
+
+def get(path):
+    request = urllib.request.Request("https://api.github.com/repos/" + path, headers={"Accept": "application/vnd.github+json"})
+    with urllib.request.urlopen(request, timeout=30) as response:
+        return json.load(response)
+
+
+# The binaries release keeps the nightly tarballs and the checksum files under their core names.
+names = [asset["name"] for asset in get(cache + "/releases/tags/binaries")["assets"]]
+tarball = re.compile(r"rapira-v(.+-nightly\." + re.escape(sha7) + r")-php8\.5-linux-x86_64\.tar\.gz")
+found = [m for m in map(tarball.fullmatch, names) if m]
+if len(found) != 1:
+    sys.exit(f"ERROR: expected one php8.5 linux x86_64 tarball for {sha7} on the binaries release, found {len(found)}")
+version = found[0].group(1)
+sums = f"rapira-v{version}-SHA256SUMS.txt"
+if sums not in names:
+    sys.exit(f"ERROR: {sums} is missing on the binaries release")
+sha = get(core + "/commits/" + sha7)["sha"]
+print(sha, version, found[0].group(0), sums)
+PY
+}
+
+# install_asset DIR URL ASSET SUMS downloads ASSET and SUMS from the release URL, checks ASSET
+# against SUMS, and unpacks ASSET into DIR.
+install_asset() {
+  local dir=$1 url=$2 asset=$3 sums=$4
+  local dl=$HOME/download
   rm -rf "$dl" "$dir"
   install -d "$dl" "$dir"
-  curl -fsSL --retry 3 -o "$dl/$asset" "https://github.com/$CORE_SLUG/releases/download/nightly/$asset"
-  curl -fsSL --retry 3 -o "$dl/$sums" "https://github.com/$CORE_SLUG/releases/download/nightly/$sums"
+  curl -fsSL --retry 3 -o "$dl/$asset" "$url/$asset"
+  curl -fsSL --retry 3 -o "$dl/$sums" "$url/$sums"
   (cd "$dl" && awk -v name="$asset" '$2 == name' "$sums" | sha256sum -c -)
   tar -xzf "$dl/$asset" -C "$dir" --strip-components=1
   if ldd "$dir/bin/rapira" 2>/dev/null | grep -F 'not found'; then
     echo "ERROR: $dir/bin/rapira has missing libraries"
     exit 1
   fi
+}
+
+install_nightly() {
+  local resolved sha version asset sums
+  local dir=$BENCH/rapira/$NIGHTLY
+  resolved=$(resolve_nightly)
+  read -r sha version asset sums <<<"$resolved"
+  install_asset "$dir" "https://github.com/$CORE_SLUG/releases/download/nightly" "$asset" "$sums"
   # The binary loads the libphp of the asset.
   record_version php "PHP $(cat "$dir/share/php/PHP_VERSION.txt") ($asset)"
-  write_meta "$dir" nightly "$sha" "$version" nightly "$asset" ""
+  write_meta new "$dir" nightly "$sha" "$version" nightly "$asset" ""
+}
+
+# install_base installs the BASE tarball under base-<sha7>, so the two builds have separate binaries also when BASE equals NIGHTLY.
+install_base() {
+  local resolved sha version asset sums
+  local dir=$BENCH/rapira/base-$BASE
+  resolved=$(resolve_base)
+  read -r sha version asset sums <<<"$resolved"
+  install_asset "$dir" "https://github.com/$CACHE_SLUG/releases/download/binaries" "$asset" "$sums"
+  write_meta base "$dir" cache "$sha" "$version" cache "$asset" ""
 }
 
 resolve_ref() {
@@ -240,7 +294,7 @@ build_server() {
   version=$(git -C "$CORE" describe --tags --always "$sha")
   # The build links the libphp of php-embedded, which comes from the same PHP build as php-cli.
   record_version php "$(php -v | sed -n 1p)"
-  write_meta "$BENCH/rapira/$sha7" "$REF" "$sha" "$version" server "" "$rustflags"
+  write_meta new "$BENCH/rapira/$sha7" "$REF" "$sha" "$version" server "" "$rustflags"
 }
 
 # source_value KEY prints the value of KEY in apps/yii3/source.toml.
@@ -275,6 +329,10 @@ if [ -z "$NIGHTLY" ] && [ -z "$REF" ]; then
   echo "ERROR: set NIGHTLY=<sha7> or REF=<branch, tag, sha, or pr/N>"
   exit 1
 fi
+if [ -z "$BASE" ]; then
+  echo "ERROR: set BASE=<sha7> of a build on the binaries release"
+  exit 1
+fi
 
 echo "==> packages"
 install_packages
@@ -284,7 +342,7 @@ echo "==> clock"
 check_clock
 
 sudo install -d -o fedora -g fedora "$BENCH" "$BENCH/run" "$BENCH/log" "$BENCH/apps" "$BENCH/rapira"
-rm -f "$BENCH/versions.json"
+rm -f "$BENCH/versions.json" "$BENCH/meta.json"
 install -m 0644 "$RIG/servers/php.ini" "$BENCH/php.ini"
 # Fedora PHP reads /etc/php.d after PHPRC, and its 10-opcache.ini there sets other opcache values.
 sudo install -m 0644 "$RIG/servers/php.ini" /etc/php.d/99-bench.ini
@@ -294,6 +352,9 @@ if [ "$ini" != "1 0 256 0" ]; then
   exit 1
 fi
 
+# The base comes first, so a base that is not in the cache fails before a long server build.
+echo "==> rapira base $BASE"
+install_base
 if [ -n "$NIGHTLY" ]; then
   echo "==> rapira nightly $NIGHTLY"
   install_nightly
@@ -312,4 +373,4 @@ if needs yii3; then
 fi
 
 echo "==> server provisioned: needs=$NEEDS"
-python3 -c 'import json; print(json.dumps(json.load(open("/opt/bench/meta.json"))["rapira"]))'
+python3 -c 'import json; meta = json.load(open("/opt/bench/meta.json")); print(json.dumps(meta["new"])); print(json.dumps(meta["base"]))'

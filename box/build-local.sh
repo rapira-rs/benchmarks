@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Build the tree that `make sync` staged in ~/core-sync and install it as the
-# rapira binary of the next bench run.
+# new build of the next bench run. The base build stays.
 set -euo pipefail
 
 SRC=$HOME/core-sync
@@ -27,7 +27,8 @@ fi
 install -d "$DEST/bin"
 install -m 0755 "$HOME/core-target/release/rapira" "$DEST/bin/rapira"
 
-# The driver reads the install directory from "dir" in /opt/bench/meta.json, so the next run uses DEST.
+# The driver reads the install directory of the new build from "dir" of the new record in
+# /opt/bench/meta.json, so the next run uses DEST.
 python3 - "$META" "$DEST" <<'PY'
 import hashlib
 import json
@@ -38,7 +39,7 @@ with open(meta_path) as f:
     meta = json.load(f)
 with open(dest + "/bin/rapira", "rb") as f:
     digest = hashlib.sha256(f.read()).hexdigest()
-meta["rapira"] = {
+meta["new"] = {
     "ref": "local",
     "sha": "local",
     "version": "local",

@@ -30,6 +30,8 @@ PROCS = 2
 TAG = "t1"
 ASSET_URL = os.environ.get("RAPIRA_ASSET_URL", "")
 ASSET_DIR = Path("/tmp/rapira-asset")
+# Provisioning unpacks the new build and the base build into two dirs, also when both have the same sha.
+ASSET_DIRS = {"abc1234": ASSET_DIR, "base-abc1234": Path("/tmp/rapira-asset-base")}
 STARTED = BENCH / "run/stub-started"
 HELLO = {"path": "/?name=you", "expect": "apps/hello/expect.txt"}
 
@@ -135,6 +137,7 @@ while True:
 LIFECYCLE_CASES = [
     {
         "name": "rapira worker",
+        "bindir": "abc1234",
         "args": ["worker", "@RIG@/apps/hello/worker.php"],
         "configs": {"toml": ['listen = ":8080"', f'entrypoint = "{RIG}/apps/hello/worker.php"', 'mode = "worker"', "processes = 2"]},
         "probe": HELLO,
@@ -144,6 +147,7 @@ LIFECYCLE_CASES = [
     },
     {
         "name": "rapira classic",
+        "bindir": "abc1234",
         "args": ["classic", "@RIG@/apps/hello/classic.php"],
         "configs": {"toml": ['mode = "classic"', f'entrypoint = "{RIG}/apps/hello/classic.php"']},
         "probe": HELLO,
@@ -152,6 +156,7 @@ LIFECYCLE_CASES = [
     },
     {
         "name": "rapira dispatcher",
+        "bindir": "abc1234",
         "args": ["dispatcher", "@RIG@/apps/hello/dispatcher.php"],
         "configs": {"toml": ['mode = "dispatcher"', f'entrypoint = "{RIG}/apps/hello/dispatcher.php"']},
         "probe": HELLO,
@@ -160,6 +165,7 @@ LIFECYCLE_CASES = [
     },
     {
         "name": "rapira dispatcher with the static middleware misses the root and reaches PHP",
+        "bindir": "abc1234",
         "args": ["dispatcher", "@RIG@/apps/hello/dispatcher.php", "servers/rapira/static.toml.tpl"],
         "configs": {"toml": ['middleware = ["static"]', f'root = "{RIG}/apps/hello"', 'mode = "dispatcher"']},
         "probe": HELLO,
@@ -168,6 +174,7 @@ LIFECYCLE_CASES = [
     },
     {
         "name": "rapira grpc",
+        "bindir": "abc1234",
         "args": ["grpc", "@RIG@/apps/grpc/php/dispatcher.php"],
         "configs": {"toml": ["[grpc]", f'descriptor_set = "{RIG}/apps/grpc/bench.binpb"', f'entrypoint = "{RIG}/apps/grpc/php/dispatcher.php"']},
         "probe": None,
@@ -175,11 +182,22 @@ LIFECYCLE_CASES = [
         # The real gRPC dispatcher needs the protobuf runtime that provisioning installs.
         "stub_only": True,
     },
+    {
+        # The base build of an A/A run has the sha of the new build and its own dir.
+        "name": "rapira worker from the base build dir",
+        "bindir": "base-abc1234",
+        "args": ["worker", "@RIG@/apps/hello/worker.php"],
+        "configs": {"toml": ['listen = ":8080"', f'entrypoint = "{RIG}/apps/hello/worker.php"', 'mode = "worker"', "processes = 2"]},
+        "probe": HELLO,
+        "workers": PROCS,
+        "stub_only": False,
+    },
 ]
 
 FAIL_CASES = [
     {
         "name": "rapira worker count differs",
+        "bindir": "abc1234",
         "args": ["worker", "@RIG@/apps/hello/worker.php"],
         "env": {"BOX_STUB_SHORT": "1"},
         "hold_before": None,
@@ -190,6 +208,7 @@ FAIL_CASES = [
     },
     {
         "name": "rapira target port busy",
+        "bindir": "abc1234",
         "args": ["worker", "@RIG@/apps/hello/worker.php"],
         "env": {},
         "hold_before": 8080,
@@ -199,6 +218,7 @@ FAIL_CASES = [
     },
     {
         "name": "rapira unknown mode",
+        "bindir": "abc1234",
         "args": ["fast", "@RIG@/apps/hello/worker.php"],
         "env": {},
         "hold_before": None,
@@ -239,6 +259,7 @@ class BoxLifecycleTests(unittest.TestCase):
                     member.name = member.name.partition("/")[2]
                     if member.name:
                         tar.extract(member, ASSET_DIR, filter="tar")
+            shutil.copytree(ASSET_DIR, ASSET_DIRS["base-abc1234"], symlinks=True)
 
     def setUp(self):
         self.addCleanup(self.force_cleanup)
@@ -258,11 +279,12 @@ class BoxLifecycleTests(unittest.TestCase):
             (BENCH / directory).mkdir()
         shutil.copy2(REPO / "servers/php.ini", BENCH / "php.ini")
         (BENCH / "run/serve").write_text(STUB)
-        if ASSET_URL:
-            (BENCH / "rapira/pr").symlink_to(ASSET_DIR)
-        else:
-            (BENCH / "rapira/pr/bin").mkdir(parents=True)
-            shutil.copy2(os.path.realpath("/usr/bin/python3"), BENCH / "rapira/pr/bin/rapira")
+        for name, asset_dir in ASSET_DIRS.items():
+            if ASSET_URL:
+                (BENCH / "rapira" / name).symlink_to(asset_dir)
+            else:
+                (BENCH / "rapira" / name / "bin").mkdir(parents=True)
+                shutil.copy2(os.path.realpath("/usr/bin/python3"), BENCH / "rapira" / name / "bin/rapira")
         (BENCH / "apps/grpc/vendor").mkdir(parents=True)
         (BENCH / "apps/grpc/vendor/autoload.php").write_text("<?php\n")
 
@@ -285,7 +307,7 @@ class BoxLifecycleTests(unittest.TestCase):
         )
 
     def start_arguments(self, case):
-        return ["start", TAG, "rapira", PROCS, BENCH / "rapira/pr", *case["args"]]
+        return ["start", TAG, "rapira", PROCS, BENCH / "rapira" / case["bindir"], *case["args"]]
 
     def assert_success(self, result):
         self.assertEqual(0, result.returncode, f"stdout:\n{result.stdout}\nstderr:\n{result.stderr}")
@@ -308,6 +330,8 @@ class BoxLifecycleTests(unittest.TestCase):
                 self.assert_success(started)
                 lines = started.stdout.splitlines()
                 pid = int(next(line for line in lines if line.startswith("pid="))[4:])
+                # The master runs the binary of the build dir of the case, not the binary of the other build.
+                self.assertEqual(os.path.realpath(BENCH / "rapira" / case["bindir"] / "bin/rapira"), os.readlink(f"/proc/{pid}/exe"))
                 configs = sorted(line[7:] for line in lines if line.startswith("config="))
                 self.assertEqual(sorted(str(BENCH / f"run/{TAG}.{suffix}") for suffix in case["configs"]), configs)
                 for suffix, parts in case["configs"].items():
