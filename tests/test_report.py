@@ -10,140 +10,123 @@ from pathlib import Path
 from rig.__main__ import main
 from rig.report import render
 
-VOIDED_TITLE = "VOIDED cells (excluded from every number above):"
+VOIDED_TITLE = "VOIDED cells (their pairs do not count):"
 FOOTER = "Do not publish these tables."
+HELLO = "hello-rapira-worker"
+YII3 = "yii3-rapira-dispatcher"
 
 
-def ok_cell(name, round_no, *, achieved, held, p50, p99, rss_kb, flags=None):
-    return {
-        "key": f"r{round_no}-{name}",
-        "target": {"name": name},
-        "round": round_no,
-        "status": "ok",
-        "flags": flags or {},
-        "rate": 250000,
-        "achieved_rps": achieved,
-        "successful_rps": achieved,
-        "errors": {"connect": 0, "read": 0, "write": 0, "status": 0, "timeout": 0, "dropped": 0},
-        "latency_us": {"p50": p50, "p90": p99, "p99": p99, "p999": p99, "max": p99},
-        "rss_kb": rss_kb,
-        "held": held,
-        "cpu": {"server_busy": 60, "loader_busy": 70},
-        "loaders": [],
-    }
+def entry(pairs, delta_pct, min_pct, max_pct, base, new, flags=()):
+    return {"pairs": pairs, "delta_pct": delta_pct, "min_pct": min_pct, "max_pct": max_pct, "base": base, "new": new, "flags": list(flags)}
 
 
-def void_cell(name, round_no, reason):
-    return {
-        "key": f"r{round_no}-{name}",
-        "target": {"name": name},
-        "round": round_no,
-        "status": "void",
-        "reason": reason,
-        "flags": {},
-        "rate": None,
-        "achieved_rps": None,
-        "successful_rps": None,
-        "errors": None,
-        "latency_us": None,
-        "rss_kb": None,
-        "held": None,
-        "cpu": None,
-        "loaders": [],
-    }
+NULL = entry(0, None, None, None, None, None)
 
 
-def run_doc(cells, status="complete", reasons=()):
-    return {"id": "20260925T120000Z-ci-0a1b2c3", "cells": cells, "status": status, "reasons": list(reasons)}
+def void_cell(key, reason):
+    return {"key": key, "status": "void", "reason": reason}
 
 
-HELLO = ok_cell("hello-rapira-worker", 1, achieved=249996.6, held=True, p50=689, p99=1264, rss_kb=204800)
-# 249996.6 prints as 249997; 1264 us is 1.26 ms, 689 us is 0.69 ms; 204800 KiB is 200.0 MiB.
-HELLO_ROW = ["hello-rapira-worker", "249997", "yes", "1.26ms", "0.69ms", "200.0", "1", "-"]
+def run_doc(summary, cells=(), status="complete", reasons=()):
+    return {"id": "20260927T120000Z-ci-0a1b2c3", "cells": list(cells), "summary": summary, "status": status, "reasons": list(reasons)}
 
-# width is the longest target name of the rows plus 2: hello-rapira-worker has 19 characters,
-# hello-rapira-classic 20, and yii3-rapira-dispatcher 22.
+
+HELLO_SUMMARY = {
+    "capacity": entry(3, 2.0, -1.0, 3.0, 100000.0, 103000.0, ["loader_busy", "not_saturated"]),
+    "p99": entry(3, 10.0, -5.0, 10.0, 2000, 1900, ["server_unsaturated"]),
+    "rss": entry(3, 1.0, 0.0, 2.0, 102400, 104448),
+}
+# capacity: 100000.0 and 103000.0 req/s print as 100000 and 103000.
+# p99: 2000 us is 2.00 ms, 1900 us is 1.90 ms. rss: 102400 KiB is 100.0 MiB, 104448 KiB is 102.0 MiB.
+HELLO_ROWS = [
+    [HELLO, "capacity", "3", "+2.0%", "-1.0%", "+3.0%", "100000", "103000", "req/s", "loader_busy,not_saturated"],
+    [HELLO, "p99", "3", "+10.0%", "-5.0%", "+10.0%", "2.00", "1.90", "ms", "server_unsaturated"],
+    [HELLO, "rss", "3", "+1.0%", "+0.0%", "+2.0%", "100.0", "102.0", "MiB", "-"],
+]
+NULL_ROWS = [
+    [YII3, "capacity", "0", "-", "-", "-", "-", "-", "req/s", "-"],
+    [YII3, "p99", "0", "-", "-", "-", "-", "-", "ms", "-"],
+    [YII3, "rss", "0", "-", "-", "-", "-", "-", "MiB", "-"],
+]
+BASE_VOID = [
+    void_cell("r1-base-rate-yii3-rapira-dispatcher", "server log: 3 warn or error lines"),
+    void_cell("r1-base-cap-yii3-rapira-dispatcher", "server log: 3 warn or error lines"),
+]
+
+# width is the longest target name plus 2: hello-rapira-worker has 19 characters, yii3-rapira-dispatcher 22.
 CASES = [
     {
-        "name": "single round",
+        "name": "a complete run with three pairs",
         "width": 21,
-        "run": run_doc([HELLO]),
-        "rows": [HELLO_ROW],
+        "run": run_doc({HELLO: HELLO_SUMMARY}),
+        "rows": HELLO_ROWS,
         "voided": [],
         "footer": [],
         "status": 0,
     },
     {
-        # 1048576 KiB is 1024.0 MiB, 2500 us is 2.50ms, 400 us is 0.40ms.
-        "name": "rows keep the cell order",
-        "width": 21,
-        "run": run_doc([
-            ok_cell("grpc-rapira", 1, achieved=99990.0, held=True, p50=400, p99=2500, rss_kb=1048576),
-            HELLO,
-        ]),
-        "rows": [["grpc-rapira", "99990", "yes", "2.50ms", "0.40ms", "1024.0", "1", "-"], HELLO_ROW],
-        "voided": [],
-        "footer": [],
-        "status": 0,
-    },
-    {
-        # 228571.4 prints as 228571, 250000 us is 250.00ms, 9000 us is 9.00ms, 307200 KiB is 300.0 MiB.
-        "name": "a row that did not hold",
-        "width": 22,
-        "run": run_doc([ok_cell("hello-rapira-classic", 1, achieved=228571.4, held=False, p50=9000, p99=250000, rss_kb=307200, flags={"generator_bound": True})]),
-        "rows": [["hello-rapira-classic", "228571", "no", "250.00ms", "9.00ms", "300.0", "1", "generator_bound"]],
-        "voided": [],
-        "footer": [],
-        "status": 0,
-    },
-    {
-        "name": "three rounds with a void",
+        # The rows keep the target order of the summary. A measure with 0 pairs prints dashes.
+        # A complete run with void cells lists them and exits 0.
+        "name": "a complete run with every base cell of a target void",
         "width": 24,
-        "run": run_doc(
-            [
-                ok_cell("yii3-rapira-dispatcher", 1, achieved=250000.0, held=True, p50=900, p99=5000, rss_kb=204800, flags={"worker_churn": True}),
-                void_cell("yii3-rapira-dispatcher", 2, "probe mismatch on loader-1"),
-                ok_cell("yii3-rapira-dispatcher", 3, achieved=240000.0, held=False, p50=1100, p99=7000, rss_kb=210944),
-            ],
-            "incomplete",
-            ["r2-yii3-rapira-dispatcher: void: probe mismatch on loader-1"],
-        ),
-        # Two rounds survive: req/s median 245000, held no because round 3 did not hold, p99 median 6000 us,
-        # p50 median 1000 us, RSS median (204800 + 210944) / 2 = 207872 KiB = 203.0 MiB.
-        "rows": [["yii3-rapira-dispatcher", "245000", "no", "6.00ms", "1.00ms", "203.0", "2", "worker_churn"]],
-        "voided": ["r2-yii3-rapira-dispatcher: probe mismatch on loader-1"],
-        "footer": ["INCOMPLETE RUN: r2-yii3-rapira-dispatcher: void: probe mismatch on loader-1.", FOOTER],
+        "run": run_doc({YII3: {"capacity": NULL, "p99": NULL, "rss": NULL}, HELLO: HELLO_SUMMARY}, BASE_VOID),
+        "rows": NULL_ROWS + HELLO_ROWS,
+        "voided": [
+            "r1-base-rate-yii3-rapira-dispatcher: server log: 3 warn or error lines",
+            "r1-base-cap-yii3-rapira-dispatcher: server log: 3 warn or error lines",
+        ],
+        "footer": [],
+        "status": 0,
+    },
+    {
+        # 1 pair: the band is the delta. 250000 us is 250.00 ms. -12.5 prints as -12.5%.
+        "name": "one pair and a large p99",
+        "width": 21,
+        "run": run_doc({HELLO: {
+            "capacity": entry(1, -12.5, -12.5, -12.5, 80000.0, 70000.0),
+            "p99": entry(1, 25.0, 25.0, 25.0, 200000, 250000),
+            "rss": entry(1, 0.0, 0.0, 0.0, 102400, 102400),
+        }}),
+        "rows": [
+            [HELLO, "capacity", "1", "-12.5%", "-12.5%", "-12.5%", "80000", "70000", "req/s", "-"],
+            [HELLO, "p99", "1", "+25.0%", "+25.0%", "+25.0%", "200.00", "250.00", "ms", "-"],
+            [HELLO, "rss", "1", "+0.0%", "+0.0%", "+0.0%", "100.0", "100.0", "MiB", "-"],
+        ],
+        "voided": [],
+        "footer": [],
+        "status": 0,
+    },
+    {
+        "name": "an incomplete run",
+        "width": 21,
+        "run": run_doc({HELLO: HELLO_SUMMARY}, status="incomplete", reasons=["r1-new-cap-grpc-rapira: missing"]),
+        "rows": HELLO_ROWS,
+        "voided": [],
+        "footer": ["INCOMPLETE RUN: r1-new-cap-grpc-rapira: missing.", FOOTER],
         "status": 1,
     },
     {
-        "name": "value flags",
-        "width": 21,
-        "run": run_doc([ok_cell(
-            "hello-rapira-worker", 1, achieved=249996.6, held=True, p50=689, p99=1264, rss_kb=204800,
-            flags={"log_growth": 70000, "ena_throttled": {"pps_allowance_exceeded": 946}},
-        )]),
-        "rows": [HELLO_ROW[:7] + ["ena_throttled(pps_allowance_exceeded=946),log_growth(70000)"]],
-        "voided": [],
-        "footer": [],
-        "status": 0,
-    },
-    {
-        "name": "incomplete run with a missing cell",
-        "width": 21,
-        "run": run_doc([HELLO], "incomplete", ["r1-grpc-rapira: missing"]),
-        "rows": [HELLO_ROW],
-        "voided": [],
-        "footer": ["INCOMPLETE RUN: r1-grpc-rapira: missing.", FOOTER],
+        "name": "a broken run",
+        "width": 24,
+        "run": run_doc(
+            {YII3: {"capacity": NULL, "p99": NULL, "rss": NULL}},
+            [void_cell("r1-new-rate-yii3-rapira-dispatcher", "stop failed: timeout"), void_cell("r1-new-cap-yii3-rapira-dispatcher", "stop failed: timeout")],
+            "broken",
+            ["yii3-rapira-dispatcher: every new cell is void"],
+        ),
+        "rows": NULL_ROWS,
+        "voided": ["r1-new-rate-yii3-rapira-dispatcher: stop failed: timeout", "r1-new-cap-yii3-rapira-dispatcher: stop failed: timeout"],
+        "footer": ["BROKEN RUN: yii3-rapira-dispatcher: every new cell is void.", FOOTER],
         "status": 1,
     },
 ]
 
 
 def parse(text):
-    """The table rows split into 8 fields, the voided lines, and the footer lines."""
+    """The table rows split into 10 fields, the voided lines, and the footer lines."""
     lines = text.splitlines()
     end = lines.index("") if "" in lines else len(lines)
-    table = [line.split(None, 7) for line in lines[2:end]]
+    table = [line.split(None, 9) for line in lines[2:end]]
     voided = []
     if VOIDED_TITLE in lines:
         start = lines.index(VOIDED_TITLE) + 1
@@ -162,7 +145,8 @@ class TestReport(unittest.TestCase):
                 text, status = render(case["run"])
                 self.assertEqual(
                     text.splitlines()[0],
-                    f"{'target':<{case['width']}} {'req/s':>8} {'held':>4} {'p99':>9} {'p50':>9} {'RSS MiB':>8} {'n':>3}  flags",
+                    f"{'target':<{case['width']}} {'measure':<8} {'pairs':>5} {'delta':>7} {'min':>7} {'max':>7} "
+                    f"{'base':>9} {'new':>9} {'unit':<5}  flags",
                 )
                 table, voided, footer = parse(text)
                 self.assertEqual(table, case["rows"])
@@ -170,8 +154,8 @@ class TestReport(unittest.TestCase):
                 self.assertEqual(footer, case["footer"])
                 self.assertEqual(status, case["status"])
 
-    def test_cli_exit_status_of_an_incomplete_run(self):
-        run = run_doc([HELLO], "incomplete", ["r1-grpc-rapira: missing"])
+    def test_cli_exit_status_of_a_broken_run(self):
+        run = run_doc({HELLO: HELLO_SUMMARY}, status="broken", reasons=["hello-rapira-worker: every new cell is void"])
         with tempfile.TemporaryDirectory() as tmp:
             path = Path(tmp) / "run.json"
             path.write_text(json.dumps(run))

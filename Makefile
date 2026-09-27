@@ -18,8 +18,6 @@ TF_BACKEND ?= local
 # 1 builds rapira with frame pointers for a perf session. Server builds only.
 FRAME_POINTERS ?= 0
 RUN ?=
-A ?=
-B ?=
 PAGES ?= runs/pages
 BUF_VERSION ?= v1.73.0
 BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
@@ -27,7 +25,7 @@ BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 TF := terraform -chdir=terraform
 AWSC := aws --region $(REGION)
 
-.PHONY: preflight up provision status bench report compare extend sync lock down nuke test grpc_fixtures board
+.PHONY: preflight up provision status bench report extend sync lock down nuke test grpc_fixtures board
 
 preflight:
 	@$(AWSC) sts get-caller-identity >/dev/null 2>&1 || \
@@ -81,10 +79,6 @@ report:
 	@d="$(RUN)"; [ -n "$$d" ] || d=$$(ls runs/*/run.json 2>/dev/null | sort | tail -1); d=$${d%/run.json}; \
 	test -n "$$d" || { echo "ERROR: no run in runs/"; exit 1; }; \
 	python3 -m rig report "$${d%/}/run.json"
-
-compare:
-	@test -n "$(A)" && test -n "$(B)" || { echo "ERROR: set A=runs/<id> and B=runs/<id>"; exit 1; }
-	@python3 -m rig compare "$(A)/run.json" "$(B)/run.json"
 
 extend:
 	@python3 -m rig ttl --set $(TTL)

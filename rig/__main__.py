@@ -9,7 +9,6 @@ from pathlib import Path
 
 from rig import ssh
 from rig.bench import BENCH_DIR, SshBoxes, app_hashes, run_suite, server_versions
-from rig.compare import compare
 from rig.publish import publish
 from rig.registry import load_suite, load_targets, suite_needs
 from rig.report import render
@@ -66,12 +65,6 @@ def cmd_bench(args: argparse.Namespace) -> int:
 
 def cmd_report(args: argparse.Namespace) -> int:
     text, status = render(load_json(args.run))
-    print(text, end="")
-    return status
-
-
-def cmd_compare(args: argparse.Namespace) -> int:
-    text, status = compare(load_json(args.a), load_json(args.b), force=args.force)
     print(text, end="")
     return status
 
@@ -135,15 +128,9 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--pr-title", default="")
     p.set_defaults(func=cmd_bench)
 
-    p = sub.add_parser("report", help="print the tables of one run file")
+    p = sub.add_parser("report", help="print the summary table of one run file")
     p.add_argument("run")
     p.set_defaults(func=cmd_report)
-
-    p = sub.add_parser("compare", help="print the deltas between two run files")
-    p.add_argument("a")
-    p.add_argument("b")
-    p.add_argument("--force", action="store_true")
-    p.set_defaults(func=cmd_compare)
 
     p = sub.add_parser("publish", help="add one run file to a gh-pages checkout")
     p.add_argument("--pages-dir", required=True)

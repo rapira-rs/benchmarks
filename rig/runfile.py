@@ -4,27 +4,37 @@ import json
 from pathlib import Path
 
 from rig import VERSION
+from rig.summary import summarize
 
 SCHEMA = "rapira-bench-run/3"
 
 
 def run_status(plan: list[str], cells: list[dict]) -> tuple[str, list[str]]:
-    """The run status and one reason per missing, void, incomplete, or unplanned cell."""
+    """The run status and its reasons.
+
+    A missing, incomplete or unplanned cell makes the run incomplete. Else a target whose every new cell is void makes it broken.
+    """
     by_key = {cell["key"]: cell for cell in cells}
     reasons = []
     for key in plan:
         cell = by_key.get(key)
         if cell is None:
             reasons.append(f"{key}: missing")
-        elif cell["status"] == "void":
-            reasons.append(f"{key}: void: {cell['reason']}")
-        elif cell["status"] != "ok":
+        elif cell["status"] not in ("ok", "void"):
             reasons.append(f"{key}: {cell['status']}")
     for cell in cells:
         if cell["key"] not in plan:
             reasons.append(f"{cell['key']}: unplanned cell")
     if reasons:
         return "incomplete", reasons
+    new_void = {}
+    for cell in cells:
+        if cell["build"] == "new":
+            name = cell["target"]["name"]
+            new_void[name] = new_void.get(name, True) and cell["status"] == "void"
+    reasons = [f"{name}: every new cell is void" for name, void in new_void.items() if void]
+    if reasons:
+        return "broken", reasons
     return "complete", []
 
 
@@ -49,6 +59,7 @@ class RunFile:
             "cells": [],
             "status": "incomplete",
             "reasons": [],
+            "summary": {},
             "reporter": VERSION,
         }
 
@@ -57,9 +68,10 @@ class RunFile:
         self.doc["cells"].append(cell)
 
     def finish(self, finished: str) -> dict:
-        """Set the end time and the status, and return the document."""
+        """Set the end time, the status and the summary, and return the document."""
         self.doc["finished"] = finished
         self.doc["status"], self.doc["reasons"] = run_status(self.doc["plan"], self.doc["cells"])
+        self.doc["summary"] = summarize(self.doc["cells"])
         return self.doc
 
     def write(self, path: Path) -> None:

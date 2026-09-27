@@ -417,7 +417,8 @@ class RunSuiteTest(unittest.TestCase):
                 self.assertEqual(cell["flags"], case["flags"])
                 self.assertEqual(sum(1 for _, cmd in boxes.calls if label(cmd) == "load"), case["loads"])
                 self.assertEqual([label(cmd) for _, cmd in boxes.calls][-2:], ["stop", "log"])
-                self.assertEqual(run["status"], "complete" if case["status"] == "ok" else "incomplete")
+                # A void row overrides the reply of every cell, so every new cell of the target is void.
+                self.assertEqual(run["status"], "complete" if case["status"] == "ok" else "broken")
 
     def test_cell_plan(self):
         for case in RUN_CELLS_CASES:
