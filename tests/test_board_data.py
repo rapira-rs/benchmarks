@@ -1,6 +1,6 @@
 """Data transforms of board/app.js, run under node.
 
-The fixture holds four run files reduced to the fields the board reads.
+The fixture holds three schema 3 run files reduced to the fields the board reads.
 """
 
 import json
@@ -22,154 +22,199 @@ CALL = (
     "process.stdout.write(JSON.stringify(board[process.argv[2]](...args)));"
 )
 
-RUN_A, RUN_B, RUN_C, RUN_S = json.loads(FIXTURE.read_text())
+RUN_A, RUN_B, RUN_S = json.loads(FIXTURE.read_text())
+SUMMARY_A = RUN_A["summary"]
+SUMMARY_B = RUN_B["summary"]
 COMMIT_B = "https://github.com/rapira-rs/rapira/commit/bbbbbbb0000000000000000000000000000000b2"
+
+# An index entry of a run file from before schema 3: it has no schema key.
+OLD_ENTRY = {
+    "id": "20260925T010000Z-ci-ac56141",
+    "started": "2026-09-25T01:00:00Z",
+    "suite": "ci",
+    "rapira_sha": "ac56141000000000000000000000000000000000",
+    "rapira_version": "0.8.1-nightly.ac56141",
+    "status": "complete",
+    "smoke": False,
+    "pr": None,
+}
 
 
 def entry(run):
     """The manifest entry of a run, reduced to the fields that visibleRuns reads."""
-    return {"id": run["id"], "started": run["started"], "smoke": run["smoke"]}
+    return {"id": run["id"], "started": run["started"], "smoke": run["smoke"], "schema": run["schema"]}
 
 
 SERIES_CASES = [
     {
-        # hello, run b: two ok cells, so a value is the median of r1 and r2: p99 (900 + 1100) / 2 = 1000 us,
-        # RSS (210944 + 209920) / 2 = 210432 KiB = 205.5 MiB, req/s (240000 + 250100) / 2 = 245050, held only
-        # when every cell held, the flags are the union. Run c: the hello cell is incomplete, so nulls.
-        # grpc, run b: the cell is void. yii3 has a cell only in run c. The targets come in name order.
-        # grpc: 1048576 / 1024 = 1024 MiB, 1150976 / 1024 = 1124 MiB, 2500 us = 2.5 ms, 9000 us = 9 ms. yii3: 524288 / 1024 = 512 MiB, 4000 us = 4 ms.
-        # A date is the UTC start of the run to the minute.
-        "name": "medians over rounds, void and incomplete cells, target in one run",
-        "runs": [RUN_A, RUN_B, RUN_C],
+        # A point is the summary record of one target and one measure in one run, as the run file holds it.
+        # grpc-rapira has 0 pairs in run b, so its records there hold nulls and the chart draws gaps.
+        # yii3-rapira-dispatcher is only in run b, so its points in run a are null.
+        # The targets come in name order. A date is the UTC start of the run to the minute.
+        "name": "series from the summary with 0 pairs and a target in one run",
+        "runs": [RUN_A, RUN_B],
         "expected": {
-            "labels": ["#101", "bbbbbbb", "#103"],
-            "dates": ["2026-09-26 01:00 UTC", "2026-09-27 01:00 UTC", "2026-09-28 01:00 UTC"],
-            "links": ["https://github.com/rapira-rs/rapira/pull/101", COMMIT_B, "https://github.com/rapira-rs/rapira/pull/103"],
-            "titles": ["Faster hello", "", "Fix the dispatcher drain"],
+            "labels": ["#101", "bbbbbbb"],
+            "dates": ["2026-09-26 01:00 UTC", "2026-09-27 01:00 UTC"],
+            "links": ["https://github.com/rapira-rs/rapira/pull/101", COMMIT_B],
+            "titles": ["Faster hello", ""],
+            "rounds": [3, 3],
             "targets": {
                 "grpc-rapira": {
-                    "p99_ms": [2.5, None, 9.0],
-                    "rss_mib": [1024.0, None, 1124.0],
-                    "achieved": [99990, None, 85000],
-                    "rate": [100000, None, 100000],
-                    "held": [True, None, False],
-                    "flags": [[], None, ["server_unsaturated"]],
+                    "capacity": [SUMMARY_A["grpc-rapira"]["capacity"], SUMMARY_B["grpc-rapira"]["capacity"]],
+                    "p99": [SUMMARY_A["grpc-rapira"]["p99"], SUMMARY_B["grpc-rapira"]["p99"]],
+                    "rss": [SUMMARY_A["grpc-rapira"]["rss"], SUMMARY_B["grpc-rapira"]["rss"]],
                 },
                 "hello-rapira-worker": {
-                    "p99_ms": [1.2, 1.0, None],
-                    "rss_mib": [200.0, 205.5, None],
-                    "achieved": [249800.5, 245050, None],
-                    "rate": [250000, 250000, None],
-                    "held": [True, False, None],
-                    "flags": [[], ["generator_bound"], None],
+                    "capacity": [SUMMARY_A["hello-rapira-worker"]["capacity"], SUMMARY_B["hello-rapira-worker"]["capacity"]],
+                    "p99": [SUMMARY_A["hello-rapira-worker"]["p99"], SUMMARY_B["hello-rapira-worker"]["p99"]],
+                    "rss": [SUMMARY_A["hello-rapira-worker"]["rss"], SUMMARY_B["hello-rapira-worker"]["rss"]],
                 },
                 "yii3-rapira-dispatcher": {
-                    "p99_ms": [None, None, 4.0],
-                    "rss_mib": [None, None, 512.0],
-                    "achieved": [None, None, 250000],
-                    "rate": [None, None, 250000],
-                    "held": [None, None, True],
-                    "flags": [None, None, []],
+                    "capacity": [None, SUMMARY_B["yii3-rapira-dispatcher"]["capacity"]],
+                    "p99": [None, SUMMARY_B["yii3-rapira-dispatcher"]["p99"]],
+                    "rss": [None, SUMMARY_B["yii3-rapira-dispatcher"]["rss"]],
                 },
             },
         },
     },
     {
-        # hello: 204800 / 1024 = 200 MiB, 1200 us = 1.2 ms; grpc as above.
-        "name": "one run",
-        "runs": [RUN_A],
-        "expected": {
-            "labels": ["#101"],
-            "dates": ["2026-09-26 01:00 UTC"],
-            "links": ["https://github.com/rapira-rs/rapira/pull/101"],
-            "titles": ["Faster hello"],
-            "targets": {
-                "grpc-rapira": {"p99_ms": [2.5], "rss_mib": [1024.0], "achieved": [99990], "rate": [100000], "held": [True], "flags": [[]]},
-                "hello-rapira-worker": {"p99_ms": [1.2], "rss_mib": [200.0], "achieved": [249800.5], "rate": [250000], "held": [True], "flags": [[]]},
-            },
-        },
+        # An index without schema 3 runs gives an empty board: no labels and no targets.
+        "name": "no runs",
+        "runs": [],
+        "expected": {"labels": [], "dates": [], "links": [], "titles": [], "rounds": [], "targets": {}},
     },
 ]
 
-VISIBLE_CASES = [
-    {
-        "name": "smoke entry dropped, sorted by started",
-        "entries": [entry(RUN_B), entry(RUN_S), entry(RUN_A), entry(RUN_C)],
-        "expected": [entry(RUN_A), entry(RUN_B), entry(RUN_C)],
-    },
-    {
-        "name": "entries in order without smoke stay the same",
-        "entries": [entry(RUN_A), entry(RUN_B), entry(RUN_C)],
-        "expected": [entry(RUN_A), entry(RUN_B), entry(RUN_C)],
-    },
+# The series of runs a and b, as the first series case expects it.
+SERIES_AB = SERIES_CASES[0]["expected"]
+
+
+def point(pairs, delta_pct, min_pct, max_pct):
+    """A summary record of one measure. tone does not read base, new and flags."""
+    return {"pairs": pairs, "delta_pct": delta_pct, "min_pct": min_pct, "max_pct": max_pct, "base": 100.0, "new": 104.0, "flags": []}
+
+
+# A point is "better" or "worse" only when it has one pair per round, its band is strictly on one side of zero,
+# and |delta_pct| is at least the noise floor. The floors of board/app.js: capacity 3, p99 10, rss 1 (percent).
+# A higher capacity is better. A lower p99 and a lower RSS are better. All other points are "" (gray).
+TONE_CASES = [
+    # 3 of 3 pairs, band 3.5 to 4.6 above zero, 4.0 >= 3.
+    {"name": "capacity up above the floor is better", "point": point(3, 4.0, 3.5, 4.6), "measure": "capacity", "rounds": 3, "expected": "better"},
+    # 3 of 3 pairs, band -6.0 to -4.0 below zero, 5.0 >= 3.
+    {"name": "capacity down above the floor is worse", "point": point(3, -5.0, -6.0, -4.0), "measure": "capacity", "rounds": 3, "expected": "worse"},
+    # 3 of 3 pairs, band -14.0 to -11.0 below zero, 12.5 >= 10.
+    {"name": "p99 down above the floor is better", "point": point(3, -12.5, -14.0, -11.0), "measure": "p99", "rounds": 3, "expected": "better"},
+    # 3 of 3 pairs, band 11.0 to 14.0 above zero, 12.5 >= 10.
+    {"name": "p99 up above the floor is worse", "point": point(3, 12.5, 11.0, 14.0), "measure": "p99", "rounds": 3, "expected": "worse"},
+    # 3 of 3 pairs, band 1.5 to 2.5 above zero, 2.0 >= 1.
+    {"name": "rss up above the floor is worse", "point": point(3, 2.0, 1.5, 2.5), "measure": "rss", "rounds": 3, "expected": "worse"},
+    # 3 of 3 pairs, band -2.5 to -1.5 below zero, 2.0 >= 1.
+    {"name": "rss down above the floor is better", "point": point(3, -2.0, -2.5, -1.5), "measure": "rss", "rounds": 3, "expected": "better"},
+    # 2 pairs of 3 rounds: one pair was void or dropped, so the point is gray although the band is above zero.
+    {"name": "2 pairs of 3 rounds", "point": point(2, 4.0, 3.5, 4.6), "measure": "capacity", "rounds": 3, "expected": ""},
+    # min_pct 0 is not strictly above zero.
+    {"name": "band touches zero from above", "point": point(3, 4.0, 0.0, 6.0), "measure": "capacity", "rounds": 3, "expected": ""},
+    # max_pct 0 is not strictly below zero.
+    {"name": "band touches zero from below", "point": point(3, -12.0, -15.0, 0.0), "measure": "p99", "rounds": 3, "expected": ""},
+    # The band -0.5 to 2.0 crosses zero.
+    {"name": "band crosses zero", "point": point(3, 1.5, -0.5, 2.0), "measure": "rss", "rounds": 3, "expected": ""},
+    # 2.5 < 3, the capacity floor, although the band 2.0 to 2.9 is above zero.
+    {"name": "delta under the floor", "point": point(3, 2.5, 2.0, 2.9), "measure": "capacity", "rounds": 3, "expected": ""},
+    # 3.0 >= 3: a delta equal to the floor counts.
+    {"name": "delta at the floor", "point": point(3, 3.0, 2.0, 3.5), "measure": "capacity", "rounds": 3, "expected": "better"},
+    # 1 of 1 pairs in a suite of 1 round, band -11.0 to -11.0 below zero, 11.0 >= 10.
+    {"name": "1 pair in a suite of 1 round", "point": point(1, -11.0, -11.0, -11.0), "measure": "p99", "rounds": 1, "expected": "better"},
+    # Every pair of the measure was void, so the summary numbers are null.
+    {"name": "0 pairs", "point": {"pairs": 0, "delta_pct": None, "min_pct": None, "max_pct": None, "base": None, "new": None, "flags": []}, "measure": "capacity", "rounds": 3, "expected": ""},
+    # A target that the run does not have.
+    {"name": "null point", "point": None, "measure": "p99", "rounds": 3, "expected": ""},
 ]
 
-# The change of a point in percent from the first point of the chart that has a value.
-SINCE_START_CASES = [
-    {"name": "first point is the start", "values": [2.5, None, 9.0], "index": 0, "expected": 0},
-    # (9 - 2.5) / 2.5 * 100 = 260.
-    {"name": "increase over a gap", "values": [2.5, None, 9.0], "index": 2, "expected": 260},
-    # (1 - 1.25) / 1.25 * 100 = -20.
-    {"name": "decrease", "values": [1.25, 1.0, None], "index": 1, "expected": -20},
-    # The target has no value in the first two runs, so the start is 4: (5 - 4) / 4 * 100 = 25.
-    {"name": "start is the first run with a value", "values": [None, None, 4.0, 5.0], "index": 3, "expected": 25},
-]
-
-# The series of runs a, b, and c, as the first series case expects it.
-SERIES_ABC = SERIES_CASES[0]["expected"]
 
 def line(text, tone=""):
     """A tooltip line of tooltipLines."""
     return {"text": text, "tone": tone}
 
 
-# The hover lines of one point: the run, the pull request title when the run has one, the value with its change
-# since the start, the achieved rate, and the flags when the point has any. A lower p99 and a lower RSS are better,
-# so the value line is "worse" after an increase and "better" after a decrease.
+# The hover lines of one point: the run, the pull request title when the run has one, the new and the base median
+# in the unit of the measure, the delta with its band and pair count in the tone of the point, and the flags when
+# the point has any. The units: capacity in req/s, p99 in ms from us, RSS in MiB from KiB.
 TOOLTIP_CASES = [
     {
-        # (9 - 2.5) / 2.5 * 100 = 260.
-        "name": "increase, pull request title, flags",
-        "target": "grpc-rapira", "key": "p99_ms", "unit": "ms", "index": 2,
-        "expected": [
-            line("2026-09-28 01:00 UTC - #103"),
-            line("Fix the dispatcher drain"),
-            line("9.00 ms (+260.00% since start)", "worse"),
-            line("85000 of 100000 req/s, held no"),
-            line("server_unsaturated"),
-        ],
-    },
-    {
-        # (1 - 1.2) / 1.2 * 100 = -16.67.
-        "name": "decrease, run without a pull request",
-        "target": "hello-rapira-worker", "key": "p99_ms", "unit": "ms", "index": 1,
-        "expected": [
-            line("2026-09-27 01:00 UTC - bbbbbbb"),
-            line("1.00 ms (-16.67% since start)", "better"),
-            line("245050 of 250000 req/s, held no"),
-            line("generator_bound"),
-        ],
-    },
-    {
-        # (205.5 - 200) / 200 * 100 = 2.75.
-        "name": "RSS increase",
-        "target": "hello-rapira-worker", "key": "rss_mib", "unit": "MiB", "index": 1,
-        "expected": [
-            line("2026-09-27 01:00 UTC - bbbbbbb"),
-            line("205.50 MiB (+2.75% since start)", "worse"),
-            line("245050 of 250000 req/s, held no"),
-            line("generator_bound"),
-        ],
-    },
-    {
-        "name": "start point without flags",
-        "target": "grpc-rapira", "key": "p99_ms", "unit": "ms", "index": 0,
+        # Run a, hello capacity: base 100000, new 104000 req/s. 3 of 3 pairs, band above zero, 4.0 >= 3.
+        "name": "capacity, pull request title, better",
+        "target": "hello-rapira-worker", "measure": "capacity", "index": 0,
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
-            line("2.50 ms (0.00% since start)"),
-            line("99990 of 100000 req/s, held yes"),
+            line("new 104000 vs base 100000 req/s"),
+            line("delta +4.0% (min +3.5%, max +4.6%, 3 pairs)", "better"),
         ],
+    },
+    {
+        # Run b, hello p99: 1050 us = 1.05 ms, 1200 us = 1.20 ms. 2 of 3 pairs, so the tone is gray.
+        "name": "p99, run without a pull request, 2 pairs",
+        "target": "hello-rapira-worker", "measure": "p99", "index": 1,
+        "expected": [
+            line("2026-09-27 01:00 UTC - bbbbbbb"),
+            line("new 1.05 vs base 1.20 ms"),
+            line("delta -12.5% (min -14.0%, max -11.0%, 2 pairs)"),
+        ],
+    },
+    {
+        # Run a, hello RSS: 208896 / 1024 = 204.0 MiB, 204800 / 1024 = 200.0 MiB. 3 of 3 pairs, band above zero,
+        # 2.0 >= 1, and a higher RSS is worse.
+        "name": "RSS, worse, one flag",
+        "target": "hello-rapira-worker", "measure": "rss", "index": 0,
+        "expected": [
+            line("2026-09-26 01:00 UTC - #101"),
+            line("Faster hello"),
+            line("new 204.0 vs base 200.0 MiB"),
+            line("delta +2.0% (min +1.5%, max +2.5%, 3 pairs)", "worse"),
+            line("loader_skew"),
+        ],
+    },
+    {
+        # Run a, grpc capacity: the band -0.8 to 1.2 crosses zero, so the tone is gray.
+        "name": "capacity, band across zero, two flags",
+        "target": "grpc-rapira", "measure": "capacity", "index": 0,
+        "expected": [
+            line("2026-09-26 01:00 UTC - #101"),
+            line("Faster hello"),
+            line("new 150750 vs base 150000 req/s"),
+            line("delta +0.5% (min -0.8%, max +1.2%, 3 pairs)"),
+            line("loader_busy, not_saturated"),
+        ],
+    },
+    {
+        # Run b, yii3 capacity: 1 of 3 pairs, so the tone is gray.
+        "name": "capacity, 1 pair",
+        "target": "yii3-rapira-dispatcher", "measure": "capacity", "index": 1,
+        "expected": [
+            line("2026-09-27 01:00 UTC - bbbbbbb"),
+            line("new 24000 vs base 25000 req/s"),
+            line("delta -4.0% (min -4.0%, max -4.0%, 1 pair)"),
+        ],
+    },
+]
+
+VISIBLE_CASES = [
+    {
+        # The board fetches only schema 3 run files, so an entry without the schema key and a smoke entry drop out.
+        "name": "old entry and smoke entry dropped, sorted by started",
+        "entries": [entry(RUN_B), OLD_ENTRY, entry(RUN_S), entry(RUN_A)],
+        "expected": [entry(RUN_A), entry(RUN_B)],
+    },
+    {
+        "name": "only old entries",
+        "entries": [OLD_ENTRY],
+        "expected": [],
+    },
+    {
+        "name": "schema 3 entries in order stay the same",
+        "entries": [entry(RUN_A), entry(RUN_B)],
+        "expected": [entry(RUN_A), entry(RUN_B)],
     },
 ]
 
@@ -198,17 +243,16 @@ class TargetSeriesTest(unittest.TestCase):
             with self.subTest(name=case["name"]):
                 series = call_js("targetSeries", case["runs"])
                 self.assertEqual(series, case["expected"])
-                # Dict equality ignores the key order, and the board draws the lines in key order.
+                # Dict equality ignores the key order, and the board draws the rows in key order.
                 self.assertEqual(list(series["targets"]), list(case["expected"]["targets"]))
 
 
 @unittest.skipUnless(NODE, "node is not installed")
-class SinceStartTest(unittest.TestCase):
-    def test_since_start(self):
-        for case in SINCE_START_CASES:
+class ToneTest(unittest.TestCase):
+    def test_tone(self):
+        for case in TONE_CASES:
             with self.subTest(name=case["name"]):
-                change = call_js("sinceStart", case["values"], case["index"])
-                self.assertAlmostEqual(change, case["expected"], places=9)
+                self.assertEqual(call_js("tone", case["point"], case["measure"], case["rounds"]), case["expected"])
 
 
 @unittest.skipUnless(NODE, "node is not installed")
@@ -216,7 +260,7 @@ class TooltipLinesTest(unittest.TestCase):
     def test_tooltip_lines(self):
         for case in TOOLTIP_CASES:
             with self.subTest(name=case["name"]):
-                lines = call_js("tooltipLines", SERIES_ABC, case["target"], case["key"], case["unit"], case["index"])
+                lines = call_js("tooltipLines", SERIES_AB, case["target"], case["measure"], case["index"])
                 self.assertEqual(lines, case["expected"])
 
 

@@ -1,47 +1,62 @@
 [
  {
-  "schema": "rapira-bench-run/2",
+  "schema": "rapira-bench-run/3",
   "id": "20260926T010000Z-ci-aaaaaaa",
   "started": "2026-09-26T01:00:00Z",
   "smoke": false,
+  "suite": {"name": "ci", "rounds": 3},
   "rapira": {"sha": "aaaaaaa0000000000000000000000000000000a1", "version": "0.8.1-nightly.aaaaaaa", "pr": {"number": 101, "url": "https://github.com/rapira-rs/rapira/pull/101", "title": "Faster hello"}},
-  "cells": [
-   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker"}, "status": "ok", "flags": {}, "rate": 250000, "achieved_rps": 249800.5, "latency_us": {"p50": 300, "p90": 500, "p99": 1200, "p999": 1500, "max": 4000}, "rss_kb": 204800, "held": true},
-   {"key": "r1-grpc-rapira", "target": {"name": "grpc-rapira"}, "status": "ok", "flags": {}, "rate": 100000, "achieved_rps": 99990, "latency_us": {"p50": 400, "p90": 900, "p99": 2500, "p999": 5000, "max": 12000}, "rss_kb": 1048576, "held": true}
-  ]
+  "summary": {
+   "hello-rapira-worker": {
+    "capacity": {"pairs": 3, "delta_pct": 4.0, "min_pct": 3.5, "max_pct": 4.6, "base": 100000.0, "new": 104000.0, "flags": []},
+    "p99": {"pairs": 3, "delta_pct": -12.5, "min_pct": -14.0, "max_pct": -11.0, "base": 1200.0, "new": 1050.0, "flags": []},
+    "rss": {"pairs": 3, "delta_pct": 2.0, "min_pct": 1.5, "max_pct": 2.5, "base": 204800.0, "new": 208896.0, "flags": ["loader_skew"]}
+   },
+   "grpc-rapira": {
+    "capacity": {"pairs": 3, "delta_pct": 0.5, "min_pct": -0.8, "max_pct": 1.2, "base": 150000.0, "new": 150750.0, "flags": ["loader_busy", "not_saturated"]},
+    "p99": {"pairs": 3, "delta_pct": 1.0, "min_pct": -2.0, "max_pct": 3.0, "base": 2500.0, "new": 2525.0, "flags": []},
+    "rss": {"pairs": 3, "delta_pct": 0.0, "min_pct": -0.1, "max_pct": 0.1, "base": 1048576.0, "new": 1048576.0, "flags": []}
+   }
+  }
  },
  {
-  "schema": "rapira-bench-run/2",
+  "schema": "rapira-bench-run/3",
   "id": "20260927T010000Z-ci-bbbbbbb",
   "started": "2026-09-27T01:00:00Z",
   "smoke": false,
+  "suite": {"name": "ci", "rounds": 3},
   "rapira": {"sha": "bbbbbbb0000000000000000000000000000000b2", "version": "v0.8.1-130-gbbbbbbb", "pr": null},
-  "cells": [
-   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker"}, "status": "ok", "flags": {"generator_bound": true}, "rate": 250000, "achieved_rps": 240000, "latency_us": {"p50": 320, "p90": 550, "p99": 900, "p999": 1600, "max": 4200}, "rss_kb": 210944, "held": false},
-   {"key": "r2-hello-rapira-worker", "target": {"name": "hello-rapira-worker"}, "status": "ok", "flags": {}, "rate": 250000, "achieved_rps": 250100, "latency_us": {"p50": 340, "p90": 600, "p99": 1100, "p999": 1900, "max": 4500}, "rss_kb": 209920, "held": true},
-   {"key": "r1-grpc-rapira", "target": {"name": "grpc-rapira"}, "status": "void", "reason": "probe mismatch on loader-1", "flags": {}, "rate": null, "achieved_rps": null, "latency_us": null, "rss_kb": null, "held": null}
-  ]
+  "summary": {
+   "hello-rapira-worker": {
+    "capacity": {"pairs": 3, "delta_pct": -0.5, "min_pct": -1.0, "max_pct": 0.2, "base": 104000.0, "new": 103480.0, "flags": []},
+    "p99": {"pairs": 2, "delta_pct": -12.5, "min_pct": -14.0, "max_pct": -11.0, "base": 1200.0, "new": 1050.0, "flags": []},
+    "rss": {"pairs": 3, "delta_pct": 0.2, "min_pct": 0.0, "max_pct": 0.4, "base": 208896.0, "new": 209305.6, "flags": ["loader_skew"]}
+   },
+   "yii3-rapira-dispatcher": {
+    "capacity": {"pairs": 1, "delta_pct": -4.0, "min_pct": -4.0, "max_pct": -4.0, "base": 25000.0, "new": 24000.0, "flags": []},
+    "p99": {"pairs": 3, "delta_pct": 2.0, "min_pct": 1.0, "max_pct": 3.0, "base": 4000.0, "new": 4080.0, "flags": []},
+    "rss": {"pairs": 3, "delta_pct": 0.0, "min_pct": -0.2, "max_pct": 0.2, "base": 524288.0, "new": 524288.0, "flags": []}
+   },
+   "grpc-rapira": {
+    "capacity": {"pairs": 0, "delta_pct": null, "min_pct": null, "max_pct": null, "base": null, "new": null, "flags": []},
+    "p99": {"pairs": 0, "delta_pct": null, "min_pct": null, "max_pct": null, "base": null, "new": null, "flags": []},
+    "rss": {"pairs": 0, "delta_pct": null, "min_pct": null, "max_pct": null, "base": null, "new": null, "flags": []}
+   }
+  }
  },
  {
-  "schema": "rapira-bench-run/2",
-  "id": "20260928T010000Z-ci-ccccccc",
-  "started": "2026-09-28T01:00:00Z",
-  "smoke": false,
-  "rapira": {"sha": "ccccccc0000000000000000000000000000000c3", "version": "0.8.1-nightly.ccccccc", "pr": {"number": 103, "url": "https://github.com/rapira-rs/rapira/pull/103", "title": "Fix the dispatcher drain"}},
-  "cells": [
-   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker"}, "status": "incomplete", "reason": "interrupted", "flags": {}, "rate": null, "achieved_rps": null, "latency_us": null, "rss_kb": null, "held": null},
-   {"key": "r1-grpc-rapira", "target": {"name": "grpc-rapira"}, "status": "ok", "flags": {"server_unsaturated": true}, "rate": 100000, "achieved_rps": 85000, "latency_us": {"p50": 2000, "p90": 6000, "p99": 9000, "p999": 20000, "max": 50000}, "rss_kb": 1150976, "held": false},
-   {"key": "r1-yii3-rapira-dispatcher", "target": {"name": "yii3-rapira-dispatcher"}, "status": "ok", "flags": {}, "rate": 250000, "achieved_rps": 250000, "latency_us": {"p50": 1800, "p90": 2800, "p99": 4000, "p999": 7000, "max": 15000}, "rss_kb": 524288, "held": true}
-  ]
- },
- {
-  "schema": "rapira-bench-run/2",
-  "id": "20260928T020000Z-ci-sssssss",
-  "started": "2026-09-28T02:00:00Z",
+  "schema": "rapira-bench-run/3",
+  "id": "20260927T020000Z-smoke-sssssss",
+  "started": "2026-09-27T02:00:00Z",
   "smoke": true,
+  "suite": {"name": "smoke", "rounds": 1},
   "rapira": {"sha": "sssssss0000000000000000000000000000000s4", "version": "0.8.1-nightly.sssssss", "pr": null},
-  "cells": [
-   {"key": "r1-hello-rapira-worker", "target": {"name": "hello-rapira-worker"}, "status": "ok", "flags": {}, "rate": 250000, "achieved_rps": 250000, "latency_us": {"p50": 200, "p90": 350, "p99": 500, "p999": 900, "max": 2500}, "rss_kb": 204800, "held": true}
-  ]
+  "summary": {
+   "hello-rapira-worker": {
+    "capacity": {"pairs": 1, "delta_pct": 0.1, "min_pct": 0.1, "max_pct": 0.1, "base": 100000.0, "new": 100100.0, "flags": []},
+    "p99": {"pairs": 1, "delta_pct": 0.0, "min_pct": 0.0, "max_pct": 0.0, "base": 1200.0, "new": 1200.0, "flags": []},
+    "rss": {"pairs": 1, "delta_pct": 0.0, "min_pct": 0.0, "max_pct": 0.0, "base": 204800.0, "new": 204800.0, "flags": []}
+   }
+  }
  }
 ]
