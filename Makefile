@@ -13,7 +13,6 @@ REF ?=
 NIGHTLY ?=
 SUITE ?= ci
 ROUNDS ?=
-PROCESSES ?=
 AMI ?=
 TF_BACKEND ?= local
 # 1 builds rapira with frame pointers for a perf session. Server builds only.
@@ -75,7 +74,7 @@ status: preflight
 	@python3 -m rig ttl 2>/dev/null || true
 
 bench:
-	@python3 -m rig bench --suite $(SUITE) $(if $(ROUNDS),--rounds $(ROUNDS)) $(if $(PROCESSES),--processes $(PROCESSES))
+	@python3 -m rig bench --suite $(SUITE) $(if $(ROUNDS),--rounds $(ROUNDS))
 
 # RUN selects a run directory; the default is the newest one under runs/.
 report:

@@ -8,7 +8,7 @@ from unittest import mock
 
 from rig import rig as rigmod
 from rig import ssh
-from rig.registry import Suite, Target, suite_needs
+from rig.registry import Stage, Suite, Target, suite_needs
 from rig.rig import Rig
 from rig.ssh import Host, SshError
 
@@ -269,8 +269,12 @@ class NeedsTest(unittest.TestCase):
         for case in NEEDS_CASES:
             with self.subTest(name=case["name"]):
                 suite = Suite(
-                    name="t", rounds=1, warmup_s=10, duration_s=60, smoke=False, rates={}, connections={}, grpc_streams=1,
+                    name="t", rounds=1, smoke=False, connections={}, grpc_streams=1,
                     targets=tuple(target(app, server) for app, server in case["targets"]),
+                    stages={
+                        "rate": Stage(kind="rate", warmup_s=11, duration_s=15, processes=None, rates={}),
+                        "cap": Stage(kind="cap", warmup_s=5, duration_s=15, processes=2, rates={}),
+                    },
                 )
                 self.assertEqual(suite_needs(suite), case["expected"])
 

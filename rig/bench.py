@@ -1,4 +1,4 @@
-"""The cell sequence of one suite run: one constant-rate stage per target."""
+"""The cell sequence of one suite run: a rate pair and a cap pair of cells per target and round."""
 
 import hashlib
 import json
@@ -11,7 +11,7 @@ from typing import Protocol
 from rig import ssh
 from rig.flags import cell_flags, cpu_pct, ena_delta, keepalive_flag, parse_snapshot, stage_flags, stage_void
 from rig.merge import merge, parse_result
-from rig.registry import Suite, SuiteError, Target, cell_key, plan_cells
+from rig.registry import PlannedCell, Stage, Suite, SuiteError, Target, plan_cells
 from rig.rig import Rig, ensure_ttl
 from rig.runfile import RunFile
 from rig.ssh import Host, SshError
@@ -26,7 +26,7 @@ BENCH_DIR = "/opt/bench"
 LOAD_SLACK_S = 60
 SNAPSHOT_TIMEOUT_S = 30
 # The start, the probes, the stop, and the drain of one cell, for the TTL estimate.
-CELL_OVERHEAD_S = 60
+CELL_OVERHEAD_S = 20
 TTL_MARGIN_S = 300
 # Sleep until the wall clock time in argv[1].
 WAIT_PY = "import sys, time; time.sleep(max(0.0, float(sys.argv[1]) - time.time()))"
@@ -71,8 +71,8 @@ class CellVoid(Exception):
     """The cell is excluded from every number. The message is the reason."""
 
 
-def plan_run(rig: Rig, suite: Suite, *, processes: int, loader_threads: int) -> dict:
-    """Check the suite against the rig and return the cells, the keys, and the load shape."""
+def plan_run(rig: Rig, suite: Suite, *, server_vcpus: int, loader_threads: int) -> dict:
+    """Check the suite against the rig and return the cells, the keys, the load shape, and the processes per stage kind."""
     loaders = len(rig.loaders)
     http1 = suite.connections["http1"]
     # wrk2 divides the connections of a process over its threads and drops the remainder.
@@ -81,11 +81,17 @@ def plan_run(rig: Rig, suite: Suite, *, processes: int, loader_threads: int) -> 
     cells = plan_cells(suite)
     return {
         "cells": cells,
-        "keys": [cell_key(round_no, target) for round_no, target in cells],
+        "keys": [cell.key for cell in cells],
         "conns_per_loader": {proto: count // loaders for proto, count in suite.connections.items()},
         "loader_threads": loader_threads,
-        "processes": processes,
+        "processes": {"rate": server_vcpus, "cap": suite.stages["cap"].processes},
     }
+
+
+def ttl_needed_s(suite: Suite, cells: list[PlannedCell]) -> int:
+    """The seconds that the boxes must stay up for the cells."""
+    per_cell = (suite.stages[cell.stage] for cell in cells)
+    return sum(stage.warmup_s + stage.duration_s + CELL_OVERHEAD_S for stage in per_cell) + TTL_MARGIN_S
 
 
 def utc_now() -> str:
@@ -106,7 +112,7 @@ def probe_cmd(target: Target, url: str) -> str:
     return box_cmd("probe.sh", url, target.expect, target.proto, *request_args(target))
 
 
-def load_cmd(target: Target, url: str, epoch: float, rate: int, plan: dict, suite: Suite) -> str:
+def load_cmd(target: Target, url: str, epoch: float, rate: int, plan: dict, suite: Suite, stage: Stage) -> str:
     """One load.sh call of one loader: h2load for the grpc proto, wrk2 for http1."""
     conns = plan["conns_per_loader"][target.proto]
     if target.proto == "grpc":
@@ -114,19 +120,19 @@ def load_cmd(target: Target, url: str, epoch: float, rate: int, plan: dict, suit
         # https://github.com/nghttp2/nghttp2/blob/v1.70.0/src/h2load.cc#L3454
         return box_cmd(
             "load.sh", "h2load", f"{epoch:.3f}", rate, min(plan["loader_threads"], conns), conns, suite.grpc_streams,
-            suite.warmup_s, suite.duration_s, url, target.body,
+            stage.warmup_s, stage.duration_s, url, target.body,
         )
     return box_cmd(
-        "load.sh", "wrk2", f"{epoch:.3f}", rate, plan["loader_threads"], conns, suite.warmup_s, suite.duration_s, url,
+        "load.sh", "wrk2", f"{epoch:.3f}", rate, plan["loader_threads"], conns, stage.warmup_s, stage.duration_s, url,
         *request_args(target),
     )
 
 
-def counted_s(target: Target, suite: Suite) -> int:
+def counted_s(target: Target, stage: Stage) -> int:
     """The seconds that the requests count of the tool covers: wrk2 counts the whole run, h2load the measured window."""
     if target.proto == "grpc":
-        return suite.duration_s
-    return suite.warmup_s + suite.duration_s
+        return stage.duration_s
+    return stage.warmup_s + stage.duration_s
 
 
 def parse_facts(text: str) -> dict:
@@ -171,10 +177,11 @@ def suite_record(suite: Suite, path: Path) -> dict:
         "name": suite.name,
         "file_sha256": digest,
         "rounds": suite.rounds,
-        "warmup_s": suite.warmup_s,
-        "duration_s": suite.duration_s,
-        "rates": dict(suite.rates),
         "connections": dict(suite.connections),
+        "stages": {
+            kind: {"warmup_s": stage.warmup_s, "duration_s": stage.duration_s, "processes": stage.processes, "rates": dict(stage.rates)}
+            for kind, stage in suite.stages.items()
+        },
     }
 
 
@@ -199,16 +206,18 @@ def sample_jobs(rig: Rig, epoch: float, duration_s: int) -> list[tuple[str, Host
     return jobs
 
 
-def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, target: Target, cell: dict, cell_dir: Path) -> None:
-    """Run the load from every loader, read the RSS, and fill the numbers of the cell."""
+def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, planned: PlannedCell, cell: dict, cell_dir: Path) -> None:
+    """Run the load of the cell stage from every loader, read the RSS, and fill the numbers of the cell."""
     server = rig.server
+    target = planned.target
+    stage = suite.stages[planned.stage]
     url = f"http://{server.private_ip}:{PORT}{target.url}"
-    rate = suite.rates[target.app]
+    rate = stage.rates[target.name]
     per_loader = rate // len(rig.loaders)
     epoch = time.time() + LEAD_S
-    loads = [(loader, load_cmd(target, url, epoch, per_loader, plan, suite)) for loader in rig.loaders]
-    samples = sample_jobs(rig, epoch + suite.warmup_s, suite.duration_s)
-    timeout = LEAD_S + suite.warmup_s + suite.duration_s + LOAD_SLACK_S
+    loads = [(loader, load_cmd(target, url, epoch, per_loader, plan, suite, stage)) for loader in rig.loaders]
+    samples = sample_jobs(rig, epoch + stage.warmup_s, stage.duration_s)
+    timeout = LEAD_S + stage.warmup_s + stage.duration_s + LOAD_SLACK_S
     results = boxes.run_many(loads + [(host, cmd) for _, host, cmd in samples], timeout=timeout)
 
     taken = {}
@@ -230,7 +239,7 @@ def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, target: Target, 
         except ValueError as exc:
             raise CellVoid(f"{loader.name}: {exc}") from exc
     try:
-        merged = merge(records, counted_s(target, suite))
+        merged = merge(records, counted_s(target, stage))
     except ValueError as exc:
         raise CellVoid(str(exc)) from exc
     loader_ena = {loader.name: ena_delta(before[loader.name], after[loader.name]) for loader in rig.loaders}
@@ -281,9 +290,9 @@ def worker_probe(boxes: Boxes, rig: Rig, cell: dict, target: Target) -> tuple[li
     return [int(pid) for pid in lines[0].split()], int(lines[1])
 
 
-def start_target(boxes: Boxes, rig: Rig, target: Target, cell: dict, cell_dir: Path, processes: int, rapira: dict) -> None:
-    """Start the target and copy its rendered configs."""
-    cmd = box_cmd("target.sh", "start", cell["key"], target.server, processes, rapira["dir"], *target.start)
+def start_target(boxes: Boxes, rig: Rig, target: Target, cell: dict, cell_dir: Path, processes: int, binary_dir: str) -> None:
+    """Start the target from the rapira binary in binary_dir and copy its rendered configs."""
+    cmd = box_cmd("target.sh", "start", cell["key"], target.server, processes, binary_dir, *target.start)
     try:
         out = boxes.run(rig.server, cmd)
     except SshError as exc:
@@ -296,16 +305,17 @@ def start_target(boxes: Boxes, rig: Rig, target: Target, cell: dict, cell_dir: P
             boxes.copy_from(rig.server, remote, cell_dir / f"config.{suffix}")
 
 
-def measure(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, target: Target, cell: dict, cell_dir: Path, rapira: dict) -> None:
+def measure(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, planned: PlannedCell, cell: dict, cell_dir: Path, binary_dir: str) -> None:
     """Run the cell sequence of spec section 5.1 from the start of the target to the probe after the stage."""
-    start_target(boxes, rig, target, cell, cell_dir, plan["processes"], rapira)
+    target = planned.target
+    start_target(boxes, rig, target, cell, cell_dir, cell["processes"], binary_dir)
     pids_before, log_before = worker_probe(boxes, rig, cell, target)
     url = f"http://{rig.server.private_ip}:{PORT}{target.url}"
     results = boxes.run_many([(loader, probe_cmd(target, url)) for loader in rig.loaders], timeout=SNAPSHOT_TIMEOUT_S)
     for loader, out in zip(rig.loaders, results):
         if isinstance(out, SshError):
             raise CellVoid(f"probe mismatch on {loader.name}: {str(out).splitlines()[-1]}")
-    run_stage(boxes, rig, suite, plan, target, cell, cell_dir)
+    run_stage(boxes, rig, suite, plan, planned, cell, cell_dir)
     try:
         boxes.run(rig.loaders[0], probe_cmd(target, url), timeout=SNAPSHOT_TIMEOUT_S)
     except SshError:
@@ -341,30 +351,43 @@ def stop_target(boxes: Boxes, rig: Rig, target: Target, cell: dict, cell_dir: Pa
         void(cell, f"server log: {count} warn or error lines")
 
 
-def run_cell(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, target: Target, cell: dict, cell_dir: Path, rapira: dict) -> None:
+def run_cell(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, planned: PlannedCell, cell: dict, cell_dir: Path, binary_dir: str) -> None:
     cell_dir.mkdir(parents=True)
     try:
-        measure(boxes, rig, suite, plan, target, cell, cell_dir, rapira)
+        measure(boxes, rig, suite, plan, planned, cell, cell_dir, binary_dir)
     except CellVoid as exc:
         void(cell, str(exc))
     except SshError as exc:
         void(cell, f"ssh: {str(exc).splitlines()[0]}")
     finally:
-        stop_target(boxes, rig, target, cell, cell_dir)
+        stop_target(boxes, rig, planned.target, cell, cell_dir)
 
 
-def new_cell(key: str, target: Target, round_no: int) -> dict:
-    cell = {"key": key, "target": target_record(target), "round": round_no, "status": "ok", "flags": {}}
+def new_cell(planned: PlannedCell, processes: int) -> dict:
+    cell = {
+        "key": planned.key,
+        "target": target_record(planned.target),
+        "round": planned.round_no,
+        "build": planned.build,
+        "stage": planned.stage,
+        "processes": processes,
+        "status": "ok",
+        "flags": {},
+    }
     clear_numbers(cell)
     cell["loaders"] = []
     return cell
 
 
-def run_suite(rig: Rig, suite: Suite, boxes: Boxes, out_dir: Path, *, suite_path: Path, processes: int, run_id: str,
-              rapira: dict, servers: dict, apps: dict, loader_threads: int) -> Path:
-    """Run every planned cell and write run.json. Returns the run.json path."""
-    plan = plan_run(rig, suite, processes=processes, loader_threads=loader_threads)
-    ensure_ttl(rig.hosts, len(plan["cells"]) * (suite.warmup_s + suite.duration_s + CELL_OVERHEAD_S) + TTL_MARGIN_S)
+def run_suite(rig: Rig, suite: Suite, boxes: Boxes, out_dir: Path, *, suite_path: Path, run_id: str,
+              builds: dict[str, dict], servers: dict, apps: dict, server_vcpus: int, loader_threads: int) -> Path:
+    """Run every planned cell and write run.json. Returns the run.json path.
+
+    builds["new"] is the record of the new build with the pull request, builds["base"] the record of the base build.
+    A cell starts the rapira binary in the "dir" of the record of its build.
+    """
+    plan = plan_run(rig, suite, server_vcpus=server_vcpus, loader_threads=loader_threads)
+    ensure_ttl(rig.hosts, ttl_needed_s(suite, plan["cells"]))
     run_dir = out_dir / run_id
     (run_dir / "raw").mkdir(parents=True)
     facts = host_facts(boxes, rig)
@@ -382,7 +405,8 @@ def run_suite(rig: Rig, suite: Suite, boxes: Boxes, out_dir: Path, *, suite_path
             "placement_group": server_facts.get("placement_group"),
             "server_instance_id": server_facts.get("instance_id"),
         },
-        rapira=rapira,
+        rapira=builds["new"],
+        base=builds["base"],
         servers=servers,
         apps=apps,
         loaders=[
@@ -396,18 +420,17 @@ def run_suite(rig: Rig, suite: Suite, boxes: Boxes, out_dir: Path, *, suite_path
             }
             for loader in rig.loaders
         ],
-        processes=processes,
         plan=plan["keys"],
         smoke=suite.smoke,
         started=utc_now(),
     )
     path = run_dir / "run.json"
     try:
-        for (round_no, target), key in zip(plan["cells"], plan["keys"]):
-            print(f"==> {key}")
-            cell = new_cell(key, target, round_no)
+        for planned in plan["cells"]:
+            print(f"==> {planned.key}")
+            cell = new_cell(planned, plan["processes"][planned.stage])
             try:
-                run_cell(boxes, rig, suite, plan, target, cell, run_dir / "raw" / key, rapira)
+                run_cell(boxes, rig, suite, plan, planned, cell, run_dir / "raw" / planned.key, builds[planned.build]["dir"])
             except BaseException:
                 if cell["status"] == "ok":
                     cell["status"] = "incomplete"

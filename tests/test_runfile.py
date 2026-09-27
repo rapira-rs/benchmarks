@@ -61,16 +61,19 @@ STATUS_CASES = [
     },
 ]
 
-# The top-level keys in the order of spec section 6.1, with `reasons` after `status`.
+# The top-level keys of schema 3: `base` after `rapira`, and no top-level `processes`.
 TOP_KEYS = [
-    "schema", "id", "suite", "smoke", "started", "finished", "rig", "rapira", "servers", "apps",
-    "loaders", "processes", "plan", "cells", "status", "reasons", "reporter",
+    "schema", "id", "suite", "smoke", "started", "finished", "rig", "rapira", "base", "servers", "apps",
+    "loaders", "plan", "cells", "status", "reasons", "reporter",
 ]
 
 CELL = {
-    "key": "r1-hello-rapira-worker",
+    "key": "r1-new-rate-hello-rapira-worker",
     "target": {"name": "hello-rapira-worker", "app": "hello", "mode": "worker", "proto": "http1"},
     "round": 1,
+    "build": "new",
+    "stage": "rate",
+    "processes": 8,
     "status": "ok",
     "flags": {},
     "rate": 250000,
@@ -90,14 +93,20 @@ PR = {"number": 59, "url": "https://github.com/rapira-rs/rapira/pull/59", "title
 def new_run_file():
     return RunFile(
         run_id="20260925T120000Z-ci-0a1b2c3",
-        suite={"name": "ci", "file_sha256": "ab" * 32, "rounds": 1, "warmup_s": 10, "duration_s": 60, "rates": {"hello": 250000}, "connections": {"http1": 5000, "grpc": 100}},
-        rig={"server_type": "c7a.8xlarge", "loader_type": "c7a.2xlarge", "loader_count": 1, "az": "eu-central-1a"},
+        suite={
+            "name": "ci", "file_sha256": "ab" * 32, "rounds": 1, "connections": {"http1": 1000, "grpc": 100},
+            "stages": {
+                "rate": {"warmup_s": 11, "duration_s": 15, "processes": None, "rates": {"hello-rapira-worker": 60000}},
+                "cap": {"warmup_s": 5, "duration_s": 15, "processes": 2, "rates": {"hello-rapira-worker": 300000}},
+            },
+        },
+        rig={"server_type": "c7a.2xlarge", "loader_type": "c7a.xlarge", "loader_count": 2, "az": "eu-central-1a"},
         rapira={"ref": "nightly", "sha": "0a1b2c3d", "version": "0.9.0", "build": "nightly", "pr": PR},
+        base={"ref": "cache", "sha": "0f0f0f0a", "version": "0.8.1", "build": "cache"},
         servers={"php": "PHP 8.5.10 (cli)"},
         apps={"apps/hello/worker.php": "cd" * 32},
         loaders=[{"name": "loader-1", "private_ip": "10.0.1.11", "wrk2": "44a94c1", "h2load": "h2load nghttp2/1.68.0"}],
-        processes=32,
-        plan=["r1-hello-rapira-worker"],
+        plan=["r1-new-rate-hello-rapira-worker"],
         smoke=False,
         started="2026-09-25T12:00:00Z",
     )
@@ -125,22 +134,22 @@ class TestRunFile(unittest.TestCase):
         self.assertEqual(loaded["schema"], SCHEMA)
         self.assertEqual((loaded["status"], loaded["reasons"]), ("complete", []))
         self.assertEqual(loaded["rapira"]["pr"], PR)
+        self.assertEqual(loaded["base"]["build"], "cache")
         # indent=1 puts one space before each top-level key.
-        self.assertEqual(text.splitlines()[1], ' "schema": "rapira-bench-run/2",')
+        self.assertEqual(text.splitlines()[1], ' "schema": "rapira-bench-run/3",')
         self.assertTrue(text.endswith("}\n"))
         cell = loaded["cells"][0]
         self.assertIsInstance(cell["rate"], int)
         self.assertIsInstance(cell["achieved_rps"], float)
         self.assertIsInstance(cell["held"], bool)
-        self.assertIsInstance(loaded["processes"], int)
 
     def test_finish_with_a_void_cell_is_incomplete(self):
         run = new_run_file()
-        run.add_cell({"key": "r1-hello-rapira-worker", "status": "void", "reason": "loader loader-1 throttled: pps_allowance_exceeded=5"})
+        run.add_cell({"key": "r1-new-rate-hello-rapira-worker", "status": "void", "reason": "loader loader-1 throttled: pps_allowance_exceeded=5"})
         doc = run.finish("2026-09-25T12:40:00Z")
         self.assertEqual(doc["finished"], "2026-09-25T12:40:00Z")
         self.assertEqual(doc["status"], "incomplete")
-        self.assertEqual(doc["reasons"], ["r1-hello-rapira-worker: void: loader loader-1 throttled: pps_allowance_exceeded=5"])
+        self.assertEqual(doc["reasons"], ["r1-new-rate-hello-rapira-worker: void: loader loader-1 throttled: pps_allowance_exceeded=5"])
 
 
 if __name__ == "__main__":

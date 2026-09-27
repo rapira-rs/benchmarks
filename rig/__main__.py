@@ -37,20 +37,23 @@ def cmd_bench(args: argparse.Namespace) -> int:
         ssh.wait_ssh(host)
     ssh.stage_tree(rig.hosts)
     boxes = SshBoxes()
-    processes = args.processes or int(boxes.run(rig.server, "nproc"))
+    server_vcpus = int(boxes.run(rig.server, "nproc"))
     loader_threads = int(boxes.run(rig.loaders[0], "nproc"))
     meta = json.loads(boxes.run(rig.server, f"cat {BENCH_DIR}/meta.json"))
+    if "base" not in meta:
+        raise ValueError("the server has no base build; provision it with BASE=<sha7>")
     # The merged pull request of the commit labels the run on the board. A manual run has none.
     pr = None
     if args.pr_number is not None:
         pr = {"number": args.pr_number, "url": args.pr_url, "title": args.pr_title}
-    rapira = {**meta["rapira"], "pr": pr}
-    run_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{suite.name}-{rapira['sha'][:7]}"
+    builds = {"new": {**meta["new"], "pr": pr}, "base": meta["base"]}
+    run_id = f"{time.strftime('%Y%m%dT%H%M%SZ', time.gmtime())}-{suite.name}-{builds['new']['sha'][:7]}"
     path = Path(args.out) / run_id / "run.json"
     try:
         run_suite(
-            rig, suite, boxes, Path(args.out), suite_path=suite_path, processes=processes, run_id=run_id, rapira=rapira,
-            servers=server_versions(boxes, rig.server), apps=app_hashes(Path(".")), loader_threads=loader_threads,
+            rig, suite, boxes, Path(args.out), suite_path=suite_path, run_id=run_id, builds=builds,
+            servers=server_versions(boxes, rig.server), apps=app_hashes(Path(".")), server_vcpus=server_vcpus,
+            loader_threads=loader_threads,
         )
     except KeyboardInterrupt:
         print(f"ERROR: interrupted; the run file is {path}", file=sys.stderr)
@@ -125,7 +128,6 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("bench", help="run a suite on the rig")
     p.add_argument("--suite", required=True)
     p.add_argument("--rounds", type=int)
-    p.add_argument("--processes", type=int)
     p.add_argument("--smoke", action="store_true")
     p.add_argument("--out", default="runs")
     p.add_argument("--pr-number", type=int)
