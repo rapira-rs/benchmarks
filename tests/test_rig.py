@@ -310,8 +310,8 @@ class NeedsTest(unittest.TestCase):
                     name="t", rounds=1, smoke=False, connections={}, grpc_streams=1,
                     targets=tuple(target(app, server) for app, server in case["targets"]),
                     stages={
-                        "rate": Stage(kind="rate", warmup_s=11, duration_s=15, processes=None, rates={}),
-                        "cap": Stage(kind="cap", warmup_s=5, duration_s=15, processes=2, rates={}),
+                        "rate": Stage(warmup_s=11, duration_s=15, processes=None, rates={}),
+                        "cap": Stage(warmup_s=5, duration_s=15, processes=2, rates={}),
                     },
                 )
                 self.assertEqual(suite_needs(suite), case["expected"])

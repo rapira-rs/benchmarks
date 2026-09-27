@@ -58,8 +58,8 @@ HELD_WRK2 = 8750000
 SHORT_WRK2 = 8000000
 HELD_H2LOAD = 3000000
 
-RATE_STAGE = Stage(kind="rate", warmup_s=10, duration_s=60, processes=None, rates={"hello-rapira-worker": 250000, "grpc-rapira": 100000})
-CAP_STAGE = Stage(kind="cap", warmup_s=5, duration_s=15, processes=2, rates={"hello-rapira-worker": 300000, "grpc-rapira": 300000})
+RATE_STAGE = Stage(warmup_s=10, duration_s=60, processes=None, rates={"hello-rapira-worker": 250000, "grpc-rapira": 100000})
+CAP_STAGE = Stage(warmup_s=5, duration_s=15, processes=2, rates={"hello-rapira-worker": 300000, "grpc-rapira": 300000})
 
 
 def suite(targets, connections=1000, rounds=1):

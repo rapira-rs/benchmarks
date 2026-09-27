@@ -185,8 +185,8 @@ SUITE_OK_CASES = [
             grpc_streams=100,
             targets=(REGISTRY["yii3-a"], REGISTRY["hello-a"]),
             stages={
-                "rate": Stage(kind="rate", warmup_s=0, duration_s=15, processes=None, rates={"hello-a": 60000, "yii3-a": 16000}),
-                "cap": Stage(kind="cap", warmup_s=5, duration_s=15, processes=2, rates={"hello-a": 300000, "yii3-a": 60000}),
+                "rate": Stage(warmup_s=0, duration_s=15, processes=None, rates={"hello-a": 60000, "yii3-a": 16000}),
+                "cap": Stage(warmup_s=5, duration_s=15, processes=2, rates={"hello-a": 300000, "yii3-a": 60000}),
             },
         ),
     },
@@ -236,7 +236,6 @@ CI_TARGETS = (
 # The stages of suites/ci.toml in the spec.
 CI_STAGES = {
     "rate": Stage(
-        kind="rate",
         warmup_s=11,
         duration_s=15,
         processes=None,
@@ -250,7 +249,6 @@ CI_STAGES = {
         },
     ),
     "cap": Stage(
-        kind="cap",
         warmup_s=5,
         duration_s=15,
         processes=2,
@@ -343,8 +341,8 @@ class PlanCellsTest(unittest.TestCase):
                     grpc_streams=100,
                     targets=targets,
                     stages={
-                        "rate": Stage(kind="rate", warmup_s=11, duration_s=15, processes=None, rates=rates),
-                        "cap": Stage(kind="cap", warmup_s=5, duration_s=15, processes=2, rates=rates),
+                        "rate": Stage(warmup_s=11, duration_s=15, processes=None, rates=rates),
+                        "cap": Stage(warmup_s=5, duration_s=15, processes=2, rates=rates),
                     },
                 )
                 self.assertEqual([cell.key for cell in plan_cells(suite)], case["expected"])

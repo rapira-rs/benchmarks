@@ -35,7 +35,6 @@ class Target:
 
 @dataclass(frozen=True)
 class Stage:
-    kind: str
     warmup_s: int
     duration_s: int
     # None for the rate stage, which runs one process per server vCPU.
@@ -119,7 +118,7 @@ def _stage(where: str, kind: str, table: dict, chosen: tuple[Target, ...], loade
         # Each loader sends its share of the rate.
         if rate % loader_count != 0:
             raise SuiteError(f"{at}: rate {rate} of target {name} is not a multiple of {loader_count} loaders")
-    return Stage(kind=kind, warmup_s=table["warmup_s"], duration_s=table["duration_s"], processes=processes, rates=rates)
+    return Stage(warmup_s=table["warmup_s"], duration_s=table["duration_s"], processes=processes, rates=rates)
 
 
 def load_suite(path: Path, targets: dict[str, Target], loader_count: int) -> Suite:
