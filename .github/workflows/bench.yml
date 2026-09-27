@@ -70,9 +70,9 @@ jobs:
             echo '{"runs": []}' > index.json
           fi
           skip=$(python3 -c 'import json, sys; runs = json.load(open("index.json"))["runs"]; print(str(any(r["rapira_sha"].startswith(sys.argv[1]) and not r["smoke"] for r in runs)).lower())' "$sha7")
-          echo "skip=$skip" >> "$GITHUB_OUTPUT"
           if [ "$skip" = true ]; then
             echo "$sha7 is already on the board"
+            echo "skip=true" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           echo "sha7=$sha7" >> "$GITHUB_OUTPUT"
@@ -97,6 +97,8 @@ jobs:
             echo "pr_url=$(jq -r .html_url <<<"$pr")" >> "$GITHUB_OUTPUT"
             echo "pr_title=$(jq -r .title <<<"$pr")" >> "$GITHUB_OUTPUT"
           fi
+          # The later steps and the teardown run only after a full resolve.
+          echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Upload the new binary
         if: steps.resolve.outputs.skip == 'false'
