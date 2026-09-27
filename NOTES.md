@@ -77,7 +77,7 @@ The gRPC p99 noise:
 - The p99 of the two loaders moves together in each cell: 6815 us and 6773 us in the new cell of round 2, 5400 us and 5154 us in the base cell of round 1. The variation comes with each server start, not from one loader.
 - h2load runs 4 threads per loader with 12 or 13 clients each, at 18% loader CPU. The loader is not the limit.
 - The HTTP/1.1 targets stay at or below 2.92% per pair.
-- Possible cause, not verified: the 100 long-lived gRPC connections spread over the 8 server processes differently at each start, and the busiest process sets the p99. The HTTP/1.1 targets have 1000 connections, which spread more evenly. A check needs a rig run with more gRPC connections.
+- The 100 gRPC connections spread unevenly over the 8 server processes, and a large spread comes with a high p99. The spread does not explain all of the noise, and more connections do not lower it. The section "gRPC connection check, 2026-09-27" has the data.
 
 The `loader_skew` flags: 2 of the 30 wrk2 rate cells have the flag, both on loader-2 in round 1.
 
@@ -91,6 +91,18 @@ Time and cost, at 0.93704 USD/h:
 - The suite time: pass 1 11.5 minutes (24 cells), the check pass 11.5 minutes (24 cells), pass 2 34.4 minutes (72 cells).
 - A CI run: the 72 cells take 34.4 minutes, 28.7 s per cell on average. The nominal time is 26 s per rate cell and 20 s per capacity cell, so the overhead is about 5.7 s per cell. `make up` and `make down` take 2.0 minutes. A CI run holds the rig for about 36.4 minutes, which costs about 0.57 USD. The EBS volumes (3 x 40 GB gp3) and the 3 public IPv4 addresses add about 0.02 USD.
 - The upper bound of a normal run, with the cells 20% longer: 34.4 x 1.2 + 2.0 = 43.3, about 43 minutes, which costs about 0.68 USD.
+
+## gRPC connection check, 2026-09-27
+
+Rig: the shape of the A/A calibration, on a new rig. Two gRPC-only A/A runs of 5 rounds at 153000 req/s, with ac56141 as both builds: `20260927T122454Z-grpc-c100-ac56141` with 100 connections and `20260927T123624Z-grpc-c800-ac56141` with 800 connections. A sampler on the server recorded once per second the established connections of each rapira process, the CPU time of each CPU, and the received packets of each ENA queue. The sampler and the two suite files are working files and are not in the repository. The rig ran for about 23.5 minutes, which cost about 0.37 USD.
+
+- With 100 connections, the busiest process held 1.5 to 2.9 times the mean of 12.5 connections, and the least busy process held 1 to 5. The three rate cells with the highest p99 (6853 us, 6709 us, 6414 us) had the largest spread (2.88, 2.88, 2.48 times the mean). Between 1.5 and 2.1 times the mean, the spread shows no relation to the p99.
+- The ENA receive queues do not explain the p99. The busiest queue got 1.21 to 1.46 times the mean packet count, and the busy time of the 8 CPUs differed by 1 to 3 points in each rate cell.
+- With 800 connections, the busiest process held 1.15 to 1.27 times the mean of 100 connections, but the p99 noise did not go down. Without round 4, the p99 standard deviation over the rate cells is 6.8% with 800 connections and 6.4% with 100 connections, and the largest pair delta is 15.6% and 16.3%. In round 4 both cells were fast (3488 us and 5173 us) at a higher server CPU (67% and 62%), so a second effect changes the latency for longer than one cell. Its cause is not known.
+- With 800 connections, most processes stopped at 114 or 115 connections. No code in rapira explains this value.
+- 800 connections cost more: the server CPU at 153000 req/s is 60 to 67% against 48 to 51%, and the loader CPU is about 2 times higher.
+- All 8 A/A pair deltas of the gRPC p99 with 100 connections (pass 2 of the A/A calibration and this check) are under 19.5%. So the `ci` suite keeps 100 gRPC connections and the gRPC p99 floor of 19.5%.
+- The code of the rapira accept path explains the spread, but no trace confirms it. During a burst of new connections, a worker that is already running accepts one connection after another, and a worker that wakes from sleep finds the queue empty. rapira spreads connections evenly only when they arrive slower than a worker wakes. With 2 processes (the capacity stage), the spread is 50/50 or 51/49.
 
 ## Method change, 2026-09-25
 
