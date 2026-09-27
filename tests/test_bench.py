@@ -80,13 +80,17 @@ def result_line(tool, requests, late_ms=0, status=0):
     return f"Running test\nRESULT {json.dumps(body)}\n"
 
 
-def load_reply(requests=None, late_ms=0, status=0):
-    """A loader that holds its share of the rate, or answers `requests` requests."""
+def load_reply(requests=None, late_ms=0, status=0, calibration_ms=()):
+    """A loader that holds its share of the rate, or answers `requests` requests.
+
+    wrk2 prints one calibration line per mean of `calibration_ms` before the result.
+    """
 
     def reply(cmd):
         tool = shlex.split(cmd)[2]
         count = requests if requests is not None else (HELD_H2LOAD if tool == "h2load" else HELD_WRK2)
-        return result_line(tool, count, late_ms, status)
+        lines = "".join(f"  Thread calibration: mean lat.: {mean:.3f}ms, rate sampling interval: 10ms\n" for mean in calibration_ms)
+        return lines + result_line(tool, count, late_ms, status)
 
     return reply
 
@@ -117,9 +121,9 @@ def replies(overrides):
         ("*", PROBE): "",
         ("*", LOAD): load_reply(),
     }
-    # Every loader is 90% busy in every window.
+    # Every loader is 60% busy in every window: under LOADER_BUSY.
     for host in LOADERS:
-        table[(host.name, "bash bench-rig/box/snapshot.sh")] = counter(90, 100)
+        table[(host.name, "bash bench-rig/box/snapshot.sh")] = counter(60, 100)
     table.update(overrides)
     return table
 
@@ -198,17 +202,23 @@ CELL_CASES = [
     },
     {
         # 228571 req/s is under 95% of 250000. Every loader is at 90% and the server at 50%.
+        # 90 is at least GENERATOR_BUSY and above LOADER_BUSY.
         "name": "does not hold the rate and is generator bound",
-        "overrides": {("*", LOAD): load_reply(SHORT_WRK2)},
+        "overrides": {
+            ("*", LOAD): load_reply(SHORT_WRK2),
+            ("loader-1", "bash bench-rig/box/snapshot.sh"): counter(90, 100),
+            ("loader-2", "bash bench-rig/box/snapshot.sh"): counter(90, 100),
+        },
         "status": "ok",
         "reason": None,
         "held": False,
         "achieved_rps": 16000000 / 70,
         "rss_kb": 204800,
-        "flags": {"generator_bound": True},
+        "flags": {"generator_bound": True, "loader_busy": 90},
         "loads": 8,
     },
     {
+        # The server is at 50% and every loader at 60%, under GENERATOR_BUSY.
         "name": "status errors at the full rate do not hold",
         "overrides": {("*", LOAD): load_reply(status=5)},
         "status": "ok",
@@ -216,7 +226,7 @@ CELL_CASES = [
         "held": False,
         "achieved_rps": 250000.0,
         "rss_kb": 204800,
-        "flags": {"generator_bound": True},
+        "flags": {"server_unsaturated": True},
         "loads": 8,
     },
     {
@@ -276,6 +286,55 @@ CELL_CASES = [
         "rss_kb": None,
         "flags": {},
         "loads": 8,
+    },
+]
+
+EVEN_MS = (3.6, 3.6, 3.6, 3.6)
+# 4.2 is above 3.6 x 1.15 = 4.14, the median of the other threads plus SKEW_PCT.
+SKEWED_MS = (3.6, 3.6, 3.6, 4.2)
+SKEW = {"loader": "loader-2", "thread_ms": 4.2, "median_ms": 3.6}
+
+SKEW_CELL_CASES = [
+    {
+        # The rate cells of wrk2 get the flag. The cap cells of the same output do not.
+        "name": "a skewed wrk2 thread on loader-2 flags the rate cells only",
+        "targets": [WORKER],
+        "overrides": {
+            ("loader-1", LOAD): load_reply(calibration_ms=EVEN_MS),
+            ("loader-2", LOAD): load_reply(calibration_ms=SKEWED_MS),
+        },
+        "skew": {
+            "r1-base-rate-hello-rapira-worker": SKEW,
+            "r1-new-rate-hello-rapira-worker": SKEW,
+            "r1-base-cap-hello-rapira-worker": None,
+            "r1-new-cap-hello-rapira-worker": None,
+        },
+        "calibration_ms": [list(EVEN_MS), list(SKEWED_MS)],
+    },
+    {
+        "name": "an even wrk2 calibration has no flag",
+        "targets": [WORKER],
+        "overrides": {("*", LOAD): load_reply(calibration_ms=EVEN_MS)},
+        "skew": {
+            "r1-base-rate-hello-rapira-worker": None,
+            "r1-new-rate-hello-rapira-worker": None,
+            "r1-base-cap-hello-rapira-worker": None,
+            "r1-new-cap-hello-rapira-worker": None,
+        },
+        "calibration_ms": [list(EVEN_MS), list(EVEN_MS)],
+    },
+    {
+        # h2load prints no calibration line.
+        "name": "an h2load cell has an empty calibration and no flag",
+        "targets": [GRPC],
+        "overrides": {},
+        "skew": {
+            "r1-base-rate-grpc-rapira": None,
+            "r1-new-rate-grpc-rapira": None,
+            "r1-base-cap-grpc-rapira": None,
+            "r1-new-cap-grpc-rapira": None,
+        },
+        "calibration_ms": [[], []],
     },
 ]
 
@@ -378,6 +437,16 @@ class RunSuiteTest(unittest.TestCase):
                 self.assertEqual((run["rapira"], run["base"]), (NEW, BASE))
                 self.assertNotIn("processes", run)
 
+    def test_loader_skew(self):
+        for case in SKEW_CELL_CASES:
+            with self.subTest(name=case["name"]), tempfile.TemporaryDirectory() as tmp:
+                boxes = FakeBoxes(replies(case["overrides"]))
+                path, _ = bench(boxes, Path(tmp), case["targets"])
+                cells = json.loads(path.read_text())["cells"]
+                self.assertEqual({cell["key"]: cell["flags"].get("loader_skew") for cell in cells}, case["skew"])
+                for cell in cells:
+                    self.assertEqual([entry["calibration_ms"] for entry in cell["loaders"]], case["calibration_ms"])
+
     def test_ok_cell_record(self):
         with tempfile.TemporaryDirectory() as tmp:
             boxes = FakeBoxes(replies({}))
@@ -385,14 +454,14 @@ class RunSuiteTest(unittest.TestCase):
             cell = json.loads(path.read_text())["cells"][0]
             # 2 x 8750000 requests with no status errors over 70 s: 17500000 / 70 = 250000 successful req/s.
             # Both loaders print the same percentiles, so each maximum is that value as a float.
-            # The fake counters step 50 of 100 on the server and 90 of 100 on the loaders: 50% and 90% busy.
+            # The fake counters step 50 of 100 on the server and 60 of 100 on the loaders: 50% and 60% busy.
             self.assertEqual(cell["successful_rps"], 250000.0)
             self.assertEqual(cell["errors"], {key: 0 for key in ERROR_KEYS})
             self.assertEqual(cell["latency_us"], {"p50": 690.0, "p90": 1100.0, "p99": 1260.0, "p999": 1350.0, "max": 2800.0})
-            self.assertEqual(cell["cpu"], {"server_busy": 50, "loader_busy": 90})
+            self.assertEqual(cell["cpu"], {"server_busy": 50, "loader_busy": 60})
             self.assertEqual(
                 [(entry["loader"], entry["tool"], entry["requests"], entry["busy_cpu"]) for entry in cell["loaders"]],
-                [("loader-1", "wrk2", 8750000, 90), ("loader-2", "wrk2", 8750000, 90)],
+                [("loader-1", "wrk2", 8750000, 60), ("loader-2", "wrk2", 8750000, 60)],
             )
 
     def test_grpc_cell_counts_the_measured_window(self):

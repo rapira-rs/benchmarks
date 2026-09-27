@@ -9,8 +9,8 @@ from pathlib import Path
 from typing import Protocol
 
 from rig import ssh
-from rig.flags import cell_flags, cpu_pct, ena_delta, keepalive_flag, parse_snapshot, stage_flags, stage_void
-from rig.merge import merge, parse_result
+from rig.flags import cell_flags, cpu_pct, ena_delta, keepalive_flag, parse_snapshot, skew_flag, stage_flags, stage_void
+from rig.merge import merge, parse_calibration, parse_result
 from rig.registry import PlannedCell, Stage, Suite, SuiteError, Target, plan_cells
 from rig.rig import Rig, ensure_ttl
 from rig.runfile import RunFile
@@ -231,9 +231,11 @@ def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, planned: Planned
     after = {host.name: parse_snapshot(taken["end", host.name]) for host in rig.hosts}
 
     records = {}
+    calibration_ms = {}
     for loader, out in zip(rig.loaders, results):
         text = str(out) if isinstance(out, SshError) else out
         (cell_dir / f"load-{loader.name}.txt").write_text(text)
+        calibration_ms[loader.name] = parse_calibration(text)
         try:
             records[loader.name] = None if isinstance(out, SshError) else parse_result(out, loader.name)
         except ValueError as exc:
@@ -251,7 +253,10 @@ def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, planned: Planned
     held = merged.achieved_rps >= HELD_TOLERANCE * rate and not any(merged.errors.values())
     server_busy = cpu_pct(before[server.name], after[server.name])
     loader_busy = {loader.name: cpu_pct(before[loader.name], after[loader.name]) for loader in rig.loaders}
-    flags = stage_flags(server_busy, loader_busy, held)
+    flags = stage_flags(planned.stage, server_busy, loader_busy, held)
+    # A slow wrk2 thread moves only the latency, and only the rate cells report the latency.
+    if target.proto == "http1" and planned.stage == "rate":
+        flags.update(skew_flag(calibration_ms))
     server_ena = ena_delta(before[server.name], after[server.name])
     if server_ena:
         flags["ena_throttled"] = server_ena
@@ -275,6 +280,7 @@ def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, planned: Planned
                 "errors": dict(record.errors),
                 "latency_us": dict(record.latency_us),
                 "requests_per_sec": record.requests_per_sec,
+                "calibration_ms": calibration_ms[name],
                 "busy_cpu": loader_busy[name],
                 "ena": loader_ena[name],
             }

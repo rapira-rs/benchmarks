@@ -1,6 +1,7 @@
 """Parse the RESULT line of a load process and merge the loader records of one stage into the numbers of a cell."""
 
 import json
+import re
 from dataclasses import dataclass
 
 LATE_LIMIT_MS = 1000
@@ -9,6 +10,8 @@ PERCENTILE_KEYS = ("p50", "p90", "p95", "p99", "p999", "max")
 # The percentiles of the cell record. The loader record keeps all of PERCENTILE_KEYS and the mean as evidence.
 MERGED_KEYS = ("p50", "p90", "p99", "p999", "max")
 _RESULT_PREFIX = "RESULT "
+# wrk2 prints one line per thread after the calibration: https://github.com/giltene/wrk2/blob/44a94c17d8e6a0bac8559b53da76848e430cb7a7/src/wrk.c#L362
+_CALIBRATION = re.compile(r"Thread calibration: mean lat\.: ([0-9.]+)ms, rate sampling interval: [0-9]+ms")
 
 
 class MissingLoader(ValueError):
@@ -59,6 +62,11 @@ def parse_result(text: str, loader: str) -> LoaderRecord | None:
         )
     except KeyError as exc:
         raise ValueError(f"{loader}: RESULT line has no key {exc}") from None
+
+
+def parse_calibration(text: str) -> list[float]:
+    """The calibration mean in ms of each wrk2 thread, in output order. h2load prints no calibration line."""
+    return [float(mean) for mean in _CALIBRATION.findall(text)]
 
 
 def merge(records: dict[str, LoaderRecord | None], window_s: int) -> Merged:
