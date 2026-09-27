@@ -19,6 +19,7 @@ This document defines how the rig measures a target, which numbers it reports, w
 - Two runs use different instances. Do not compare the absolute numbers of two runs.
 - Each cell starts its own server with the process count of its stage kind. The start script verifies the process count after the start, and a different count fails the start.
 - Every PHP process uses the shared `servers/php.ini`. The run file records its text.
+- A build of `REF` or of `make sync` links the PHP of the Fedora `php-embedded` package. The base build loads the libphp of its nightly tarball. The deltas of such a run therefore include the difference between the two PHP builds. For an A/B of two rapira builds, use `NIGHTLY`.
 - Pin `AMI` when a result set takes more than one day.
 
 ## Order

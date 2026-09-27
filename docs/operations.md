@@ -33,6 +33,8 @@ make bench
 make down
 ```
 
+A build of `REF` or of `make sync` links the PHP of the Fedora `php-embedded` package. The base build loads the libphp of its nightly tarball. The deltas of such a run therefore include the difference between the two PHP builds. For an A/B of two rapira builds, use `NIGHTLY`.
+
 `make up` checks the vCPU quota, writes `terraform/rig.auto.tfvars`, applies the Terraform stack, and runs `make provision`. `make bench` runs the suite, writes the run file, and prints the report. `make down` destroys the rig.
 
 `NIGHTLY` is the first 7 characters of the commit SHA of a nightly release asset of `rapira-rs/rapira`. The core Nightly workflow deletes the assets of older builds, so use the SHA of the current `nightly` release. `REF` accepts a branch, a tag, a commit, or `pr/N`. When you set `NIGHTLY`, provisioning ignores `REF`. The new build of the run is the build of `NIGHTLY` or `REF`.
@@ -110,7 +112,7 @@ The driver refuses a suite before it creates a run directory when one of these c
 - `make provision` provisions the rig again, for example after a change of `SUITE` or `REF`. It needs `BASE` and `NIGHTLY` or `REF`, as `make up` does.
 - `make status` shows the Terraform outputs, the instances, and the remaining lifetime of each box.
 - `make extend TTL=<minutes>` sets a new lifetime on every box.
-- `make sync` builds the local `../core` working tree on the server and installs it under `/opt/bench/rapira/local`. The next `make bench` uses that binary as the new build. The base build does not change. The rig must come from `make up REF=<ref> BASE=<sha7>`, because a nightly rig has no Rust toolchain.
+- `make sync` builds the local `../core` working tree on the server and installs it under `/opt/bench/rapira/local`. The next `make bench` uses that binary as the new build. The base build does not change. The rig must come from `make up REF=<ref> BASE=<sha7>`, because a nightly rig has no Rust toolchain. A build of `REF` or of `make sync` links the PHP of the Fedora `php-embedded` package. The base build loads the libphp of its nightly tarball. The deltas of such a run therefore include the difference between the two PHP builds. For an A/B of two rapira builds, use `NIGHTLY`.
 - `make report` prints the summary table of the newest run. `make report RUN=runs/<id>` prints another run.
 - `make board` copies the board files into `PAGES` and serves the directory on 127.0.0.1:8000. Fill the directory first with `python3 -m rig publish --pages-dir runs/pages runs/<id>/run.json`.
 - `make lock` creates `apps/yii3/composer.lock`, `apps/yii3/expect.json`, and `apps/grpc/composer.lock` from the pinned sources. It needs PHP 8.5, Composer, and a Valkey or Redis server on 127.0.0.1:6379 on the operator machine, for example `docker run --rm -d -p 127.0.0.1:6379:6379 valkey/valkey:9.1.2-alpine`.
