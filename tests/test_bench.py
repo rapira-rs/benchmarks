@@ -190,6 +190,8 @@ NO_NUMBERS = {"rate": None, "achieved_rps": None, "successful_rps": None, "error
 # "loads" counts the load calls of all 4 cells: 2 loaders x 4 cells = 8 when every cell reaches its stage.
 CELL_CASES = [
     {
+        # The third cell is the base cap cell: 2 x 8750000 / (5 + 15) = 875000 req/s holds 95% of 300000,
+        # and a cap cell that holds its rate is not a capacity.
         "name": "holds the rate",
         "overrides": {},
         "status": "ok",
@@ -199,6 +201,7 @@ CELL_CASES = [
         "rss_kb": 204800,
         "flags": {},
         "loads": 8,
+        "cap_cell": ("r1-base-cap-hello-rapira-worker", {"not_saturated": True}),
     },
     {
         # 228571 req/s is under 95% of 250000. Every loader is at 90% and the server at 50%.
@@ -415,6 +418,8 @@ class RunSuiteTest(unittest.TestCase):
                 if case["status"] != "ok":
                     self.assertEqual({key: cell[key] for key in NO_NUMBERS}, NO_NUMBERS)
                 self.assertEqual(cell["flags"], case["flags"])
+                if "cap_cell" in case:
+                    self.assertEqual((run["cells"][2]["key"], run["cells"][2]["flags"]), case["cap_cell"])
                 self.assertEqual(sum(1 for _, cmd in boxes.calls if label(cmd) == "load"), case["loads"])
                 self.assertEqual([label(cmd) for _, cmd in boxes.calls][-2:], ["stop", "log"])
                 # A void row overrides the reply of every cell, so every new cell of the target is void.
