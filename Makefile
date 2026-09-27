@@ -4,9 +4,9 @@ SHELL := /bin/bash
 .NOTPARALLEL:
 
 REGION ?= eu-central-1
-SERVER_TYPE ?= c7a.8xlarge
-LOADER_TYPE ?= c7a.2xlarge
-LOADER_COUNT ?= 1
+SERVER_TYPE ?= c7a.2xlarge
+LOADER_TYPE ?= c7a.xlarge
+LOADER_COUNT ?= 2
 AZ ?= eu-central-1a
 TTL ?= 60
 REF ?=
