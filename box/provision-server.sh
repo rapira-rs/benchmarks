@@ -133,65 +133,25 @@ with open("/opt/bench/meta.json", "w") as f:
 PY
 }
 
-# resolve_nightly prints the full sha, the version, the tarball name, and the checksum file name
-# of the NIGHTLY build on the nightly release.
-resolve_nightly() {
-  python3 - "$CORE_SLUG" "$NIGHTLY" <<'PY'
+# find_asset SLUG TAG SHA7 prints the version, the tarball name, and the checksum file name
+# of the php8.5 linux x86_64 tarball of SHA7 on the release TAG of SLUG.
+find_asset() {
+  python3 - "$@" <<'PY'
 import json, re, sys, urllib.request
 
-slug, sha7 = sys.argv[1], sys.argv[2]
-
-
-def get(path):
-    request = urllib.request.Request("https://api.github.com/repos/" + slug + path, headers={"Accept": "application/vnd.github+json"})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
-
-
-# The core Nightly workflow moves the nightly tag to each new build and deletes the assets of older builds.
-sha = get("/git/ref/tags/nightly")["object"]["sha"]
-if not sha.startswith(sha7):
-    sys.exit(f"ERROR: the nightly tag is at {sha[:7]}, not {sha7}; the release has no assets for {sha7}, rerun with NIGHTLY={sha[:7]}")
-names = [asset["name"] for asset in get("/releases/tags/nightly")["assets"]]
+slug, tag, sha7 = sys.argv[1:4]
+request = urllib.request.Request(f"https://api.github.com/repos/{slug}/releases/tags/{tag}", headers={"Accept": "application/vnd.github+json"})
+with urllib.request.urlopen(request, timeout=30) as response:
+    names = [asset["name"] for asset in json.load(response)["assets"]]
 tarball = re.compile(r"rapira-v(.+-nightly\." + re.escape(sha7) + r")-php8\.5-linux-x86_64\.tar\.gz")
 found = [m for m in map(tarball.fullmatch, names) if m]
 if len(found) != 1:
-    sys.exit(f"ERROR: expected one php8.5 linux x86_64 tarball for {sha7} on the nightly release, found {len(found)}")
+    sys.exit(f"ERROR: expected one php8.5 linux x86_64 tarball for {sha7} on the {tag} release, found {len(found)}")
 version = found[0].group(1)
 sums = f"rapira-v{version}-SHA256SUMS.txt"
 if sums not in names:
-    sys.exit(f"ERROR: {sums} is missing on the nightly release")
-print(sha, version, found[0].group(0), sums)
-PY
-}
-
-# resolve_base prints the full sha, the version, the tarball name, and the checksum file name
-# of the BASE build on the binaries release of this repository.
-resolve_base() {
-  python3 - "$CORE_SLUG" "$CACHE_SLUG" "$BASE" <<'PY'
-import json, re, sys, urllib.request
-
-core, cache, sha7 = sys.argv[1:4]
-
-
-def get(path):
-    request = urllib.request.Request("https://api.github.com/repos/" + path, headers={"Accept": "application/vnd.github+json"})
-    with urllib.request.urlopen(request, timeout=30) as response:
-        return json.load(response)
-
-
-# The binaries release keeps the nightly tarballs and the checksum files under their core names.
-names = [asset["name"] for asset in get(cache + "/releases/tags/binaries")["assets"]]
-tarball = re.compile(r"rapira-v(.+-nightly\." + re.escape(sha7) + r")-php8\.5-linux-x86_64\.tar\.gz")
-found = [m for m in map(tarball.fullmatch, names) if m]
-if len(found) != 1:
-    sys.exit(f"ERROR: expected one php8.5 linux x86_64 tarball for {sha7} on the binaries release, found {len(found)}")
-version = found[0].group(1)
-sums = f"rapira-v{version}-SHA256SUMS.txt"
-if sums not in names:
-    sys.exit(f"ERROR: {sums} is missing on the binaries release")
-sha = get(core + "/commits/" + sha7)["sha"]
-print(sha, version, found[0].group(0), sums)
+    sys.exit(f"ERROR: {sums} is missing on the {tag} release")
+print(version, found[0].group(0), sums)
 PY
 }
 
@@ -215,8 +175,18 @@ install_asset() {
 install_nightly() {
   local resolved sha version asset sums
   local dir=$BENCH/rapira/$NIGHTLY
-  resolved=$(resolve_nightly)
-  read -r sha version asset sums <<<"$resolved"
+  # The core Nightly workflow moves the nightly tag to each new build and deletes the assets of older builds.
+  sha=$(curl -fsSL --retry 3 -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$CORE_SLUG/git/ref/tags/nightly" |
+    python3 -c 'import json, sys; print(json.load(sys.stdin)["object"]["sha"])')
+  case "$sha" in
+  "$NIGHTLY"*) ;;
+  *)
+    echo "ERROR: the nightly tag is at ${sha:0:7}, not $NIGHTLY; the release has no assets for $NIGHTLY, rerun with NIGHTLY=${sha:0:7}"
+    exit 1
+    ;;
+  esac
+  resolved=$(find_asset "$CORE_SLUG" nightly "$NIGHTLY")
+  read -r version asset sums <<<"$resolved"
   install_asset "$dir" "https://github.com/$CORE_SLUG/releases/download/nightly" "$asset" "$sums"
   # The binary loads the libphp of the asset.
   record_version php "PHP $(cat "$dir/share/php/PHP_VERSION.txt") ($asset)"
@@ -227,8 +197,11 @@ install_nightly() {
 install_base() {
   local resolved sha version asset sums
   local dir=$BENCH/rapira/base-$BASE
-  resolved=$(resolve_base)
-  read -r sha version asset sums <<<"$resolved"
+  # The binaries release keeps the nightly tarballs and the checksum files under their core names.
+  resolved=$(find_asset "$CACHE_SLUG" binaries "$BASE")
+  read -r version asset sums <<<"$resolved"
+  sha=$(curl -fsSL --retry 3 -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$CORE_SLUG/commits/$BASE" |
+    python3 -c 'import json, sys; print(json.load(sys.stdin)["sha"])')
   install_asset "$dir" "https://github.com/$CACHE_SLUG/releases/download/binaries" "$asset" "$sums"
   write_meta base "$dir" cache "$sha" "$version" cache "$asset" ""
 }
