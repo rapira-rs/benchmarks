@@ -224,14 +224,6 @@ jobs:
           set -euo pipefail
           # The binary artifact holds the tarball and the SHA256SUMS file of the new build.
           gh release upload binaries binary/* --clobber -R "$GITHUB_REPOSITORY"
-          # Keep the newest 10 versions. A version is a tarball and its SHA256SUMS file.
-          old=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/binaries" --jq '[.assets[] | select(.name | endswith("-php8.5-linux-x86_64.tar.gz"))] | sort_by(.created_at) | reverse | .[10:] | .[].name')
-          for tarball in $old; do
-            version=${tarball#rapira-v}
-            version=${version%-php8.5-linux-x86_64.tar.gz}
-            gh release delete-asset binaries "$tarball" -y -R "$GITHUB_REPOSITORY"
-            gh release delete-asset binaries "rapira-v${version}-SHA256SUMS.txt" -y -R "$GITHUB_REPOSITORY"
-          done
 
       - name: Publish the run to gh-pages
         run: |
@@ -250,3 +242,18 @@ jobs:
           # A rerun of the job writes the same files and has nothing to commit.
           git diff --cached --quiet || git commit -s -m "chore: publish run $id"
           git push
+
+      # The prune step runs after the push, so a failed delete does not stop the publish.
+      - name: Prune the binaries release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          # Keep the newest 10 versions. A version is a tarball and its SHA256SUMS file.
+          old=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/binaries" --jq '[.assets[] | select(.name | endswith("-php8.5-linux-x86_64.tar.gz"))] | sort_by(.created_at) | reverse | .[10:] | .[].name')
+          for tarball in $old; do
+            version=${tarball#rapira-v}
+            version=${version%-php8.5-linux-x86_64.tar.gz}
+            gh release delete-asset binaries "$tarball" -y -R "$GITHUB_REPOSITORY"
+            gh release delete-asset binaries "rapira-v${version}-SHA256SUMS.txt" -y -R "$GITHUB_REPOSITORY"
+          done

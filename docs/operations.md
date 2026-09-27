@@ -140,7 +140,7 @@ Each run compares its two builds on the same instances. Do not compare the absol
 The release with the tag `binaries` in this repository keeps the php8.5 linux x86_64 nightly tarballs of rapira and the `rapira-v<version>-SHA256SUMS.txt` files of the core nightly release, under their core names. The base build of a run comes from this release, because the core Nightly workflow deletes the assets of older builds.
 
 - Provisioning finds the tarball of `BASE` in this release, verifies it against the cached SHA256SUMS file, and checks its libraries with `ldd`.
-- The publish job of CI uploads the tarball and the SHA256SUMS file of each published new build, and then deletes all tarballs except the newest 10 with their SHA256SUMS files.
+- The publish job of CI uploads the tarball and the SHA256SUMS file of each new build before the publish. After the publish, it deletes all tarballs except the newest 10 with their SHA256SUMS files.
 - A `BASE` that is not in the release fails the provisioning. In CI it fails the bench job before `make up`, with an error that names the sha.
 
 ## Remote state
@@ -210,7 +210,7 @@ After each successful Nightly run on the rapira main branch, the core repository
 - The suite step runs `suites/ci.toml`. It fails when the run is incomplete or broken.
 - The job uploads `run.json` and `raw/` as artifacts for 90 days. `make down` runs at the end of each bench job that passes the commit check, also after a failure. `make nuke` runs only when `make down` failed.
 
-The publish job runs only when the run is complete. It uploads the new tarball and its SHA256SUMS file to the `binaries` release, deletes all tarballs except the newest 10 with their SHA256SUMS files, adds the run to the `gh-pages` branch, copies `board/` there, and pushes the branch. The commit step skips when nothing changed, so a rerun of the publish job works.
+The publish job runs only when the run is complete. It uploads the new tarball and its SHA256SUMS file to the `binaries` release, adds the run to the `gh-pages` branch, copies `board/` there, and pushes the branch. Then it deletes all tarballs except the newest 10 with their SHA256SUMS files. A failed delete does not stop the publish. The commit step skips when nothing changed, so a rerun of the publish job works.
 
 To choose the base build of a manual run, give the `base` input:
 
