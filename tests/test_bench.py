@@ -714,7 +714,7 @@ class BenchCommandTest(unittest.TestCase):
                 stderr = io.StringIO()
                 with mock.patch("rig.__main__.from_terraform", return_value=RIG), \
                         mock.patch("rig.__main__.ssh.wait_ssh"), mock.patch("rig.__main__.ssh.stage_tree"), \
-                        mock.patch("rig.__main__.SshBoxes", return_value=boxes), \
+                        mock.patch("rig.__main__.ssh.run", side_effect=boxes.run), \
                         mock.patch("rig.__main__.server_versions", return_value={}), \
                         mock.patch("rig.__main__.app_hashes", return_value={}), \
                         mock.patch("rig.__main__.run_suite", side_effect=fake_run_suite), \
