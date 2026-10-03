@@ -49,22 +49,9 @@ NUMBER_KEYS = ("rate", "achieved_rps", "successful_rps", "errors", "latency_us",
 
 
 class Boxes(Protocol):
-    def run(self, host: Host, cmd: str, timeout: float | None = None) -> str: ...
-    def run_many(self, jobs: list[tuple[Host, str]], timeout: float | None = None) -> list[str | SshError]: ...
+    def run(self, host: Host, cmd: str, *, timeout: float | None = None) -> str: ...
+    def run_many(self, jobs: list[tuple[Host, str]], *, timeout: float | None = None) -> list[str | SshError]: ...
     def copy_from(self, host: Host, remote: str, local: Path) -> None: ...
-
-
-class SshBoxes:
-    """The Boxes of a real rig."""
-
-    def run(self, host: Host, cmd: str, timeout: float | None = None) -> str:
-        return ssh.run(host, cmd, timeout=timeout)
-
-    def run_many(self, jobs: list[tuple[Host, str]], timeout: float | None = None) -> list[str | SshError]:
-        return ssh.run_many(jobs, timeout=timeout)
-
-    def copy_from(self, host: Host, remote: str, local: Path) -> None:
-        ssh.copy_from(host, remote, local)
 
 
 class CellVoid(Exception):
@@ -178,10 +165,7 @@ def suite_record(suite: Suite, path: Path) -> dict:
         "file_sha256": digest,
         "rounds": suite.rounds,
         "connections": dict(suite.connections),
-        "stages": {
-            kind: {"warmup_s": stage.warmup_s, "duration_s": stage.duration_s, "processes": stage.processes, "rates": dict(stage.rates)}
-            for kind, stage in suite.stages.items()
-        },
+        "stages": {kind: asdict(stage) for kind, stage in suite.stages.items()},
     }
 
 
@@ -331,8 +315,7 @@ def measure(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, planned: PlannedCe
 
 
 def clear_numbers(cell: dict) -> None:
-    for key in NUMBER_KEYS:
-        cell[key] = None
+    cell.update(dict.fromkeys(NUMBER_KEYS))
 
 
 def void(cell: dict, reason: str) -> None:
