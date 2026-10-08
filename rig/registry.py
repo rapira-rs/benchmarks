@@ -55,10 +55,6 @@ class Suite:
     stages: dict[str, Stage]
 
 
-def cell_key(round_no: int, build: str, stage: str, target: Target) -> str:
-    return f"r{round_no}-{build}-{stage}-{target.name}"
-
-
 @dataclass(frozen=True)
 class PlannedCell:
     round_no: int
@@ -68,7 +64,7 @@ class PlannedCell:
 
     @property
     def key(self) -> str:
-        return cell_key(self.round_no, self.build, self.stage, self.target)
+        return f"r{self.round_no}-{self.build}-{self.stage}-{self.target.name}"
 
 
 def _target(name: str, table: dict) -> Target:

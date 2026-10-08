@@ -8,7 +8,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from rig import ssh
-from rig.bench import BENCH_DIR, SshBoxes, app_hashes, run_suite, server_versions
+from rig.bench import BENCH_DIR, app_hashes, run_suite, server_versions
 from rig.publish import publish
 from rig.registry import load_suite, load_targets, suite_needs
 from rig.report import render
@@ -35,10 +35,9 @@ def cmd_bench(args: argparse.Namespace) -> int:
     for host in rig.hosts:
         ssh.wait_ssh(host)
     ssh.stage_tree(rig.hosts)
-    boxes = SshBoxes()
-    server_vcpus = int(boxes.run(rig.server, "nproc"))
-    loader_threads = int(boxes.run(rig.loaders[0], "nproc"))
-    meta = json.loads(boxes.run(rig.server, f"cat {BENCH_DIR}/meta.json"))
+    server_vcpus = int(ssh.run(rig.server, "nproc"))
+    loader_threads = int(ssh.run(rig.loaders[0], "nproc"))
+    meta = json.loads(ssh.run(rig.server, f"cat {BENCH_DIR}/meta.json"))
     if "base" not in meta:
         raise ValueError("the server has no base build; provision it with BASE=<sha7>")
     # The merged pull request of the commit labels the run on the board. A manual run has none.
@@ -50,8 +49,8 @@ def cmd_bench(args: argparse.Namespace) -> int:
     path = Path(args.out) / run_id / "run.json"
     try:
         run_suite(
-            rig, suite, boxes, Path(args.out), suite_path=suite_path, run_id=run_id, builds=builds,
-            servers=server_versions(boxes, rig.server), apps=app_hashes(Path(".")), server_vcpus=server_vcpus,
+            rig, suite, ssh, Path(args.out), suite_path=suite_path, run_id=run_id, builds=builds,
+            servers=server_versions(ssh, rig.server), apps=app_hashes(Path(".")), server_vcpus=server_vcpus,
             loader_threads=loader_threads,
         )
     except KeyboardInterrupt:

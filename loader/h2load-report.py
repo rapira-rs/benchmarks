@@ -57,8 +57,7 @@ def report(lines, duration_s):
 def main(argv):
     path, duration_s = argv[1], int(argv[2])
     with open(path) as f:
-        lines = f.read().splitlines()
-    print("RESULT " + json.dumps(report(lines, duration_s)))
+        print("RESULT " + json.dumps(report(f, duration_s)))
 
 
 if __name__ == "__main__":
