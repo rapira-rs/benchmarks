@@ -5,7 +5,7 @@ This document defines how the rig measures a target, which numbers it reports, w
 ## Terms
 
 - A target is rapira in one mode with one app, for example `hello-rapira-worker`. `suites/targets.toml` defines every target.
-- A build is one rapira binary. The `new` build is the nightly build under test. The `base` build is the build of the previous board run. Each run measures both builds.
+- A build is one rapira binary. The `new` build is the build under test. The `base` build is the selected comparison build. Each run measures both builds.
 - A stage is one load run on the server: a warm-up of `warmup_s` seconds, then `duration_s` seconds measured. A stage has one of two kinds: `rate` or `cap`. The kind sets the process count, the rate, the warm-up, and the measured window.
 - A cell is one stage of one round, one build, one stage kind, and one target. Its key is `r<round>-<build>-<stage>-<target>`, for example `r2-new-cap-hello-rapira-worker`. The key also names the raw directory of the cell.
 - A pair is the base cell and the new cell of one round, one target, and one stage kind.
@@ -66,7 +66,7 @@ These h2load facts shape the method:
 The driver runs this sequence for each cell:
 
 1. It starts the target on the server from the binary directory of the build of the cell, with the process count of the stage kind, and verifies the listener process, the executable, and the process count.
-2. Each loader sends one probe and compares the response body with the expected file byte for byte.
+2. Each loader sends one probe and compares the response body with the expected file byte for byte. A gRPC probe also requires a final `grpc-status: 0` trailer.
 3. The driver sets a start time 3 seconds ahead and starts, in one parallel batch, one load process on each loader and two timed samples on every box: at the start of the measured window and half a second after its end. The busy CPU, the ENA deltas, and the TIME-WAIT growth come from these samples.
 4. The driver reads the RSS of the target: the sum of `VmRSS` over the listener and its workers.
 5. One loader sends one more probe.
@@ -116,7 +116,7 @@ Flags carry values. They are review items. They do not make a cell fail.
 
 ## Voids
 
-A void excludes the cell from every number, and the summary drops its pair. The numbers of a voided cell are null; its raw directory keeps the evidence. The driver voids a cell when:
+A void excludes the cell from every number, and the summary drops its pair. The numbers of a voided cell are null; its raw directory keeps the evidence. The driver saves all received loader and snapshot output before it checks that output. A failed start also saves its diagnostic in `start.txt`. The driver voids a cell when:
 
 - The target does not start, or its process count differs from the process count of the stage kind.
 - The probe before the stage does not match the expected response on a loader.
@@ -131,7 +131,7 @@ A void excludes the cell from every number, and the summary drops its pair. The 
 
 A run is `complete` when every planned cell ran. A complete run can hold void cells. Two cases stop the publication:
 
-- A missing cell, for example after a crash of the driver or of the rig, makes the run `incomplete`. An interrupted run stops the current target and writes the run file with the status `incomplete`. The interrupted cell has the status `incomplete`, and the cells that did not run are listed as missing.
+- A missing cell, for example after a crash of the driver or of the rig, makes the run `incomplete`. The driver saves the run file before the first cell and after each cell. Each write replaces the previous file only after the new JSON is written. A forced stop leaves the last saved progress, with unfinished cells listed as missing. A keyboard interrupt stops the current target and saves its cell with the status `incomplete`.
 - When every new cell of one target is void, the run is `broken`. `rig bench` exits with an error, and `rig publish` refuses the run. A new build that cannot run therefore fails the CI job, and it does not become the base build of the next run.
 
 A core change can break the config template for the base build, for example with a key that only the new build accepts. Every base cell of that run is then void. The run is complete and publishes, and its points on the board are gaps.
@@ -143,6 +143,8 @@ After the last cell, the driver writes the `summary` of the run file. An ok cell
 - `capacity`: the achieved req/s of the capacity cells.
 - `p99`: the p99 latency of the rate cells. A pair where one of the two cells has `loader_skew` does not count for this measure.
 - `rss`: the RSS of the rate cells. A pair with `loader_skew` counts for this measure.
+
+Each counted pair must have both values and a base value greater than zero. For p99 and RSS, the new value must also be greater than zero. A new capacity of zero is valid and gives a -100% delta.
 
 Each measure holds:
 
@@ -159,7 +161,7 @@ With 0 counted pairs, the numbers are null and the flag list is empty. `make rep
 Publish a result only when all these conditions are true:
 
 - `make bench` and `make report` return status 0.
-- Each measure of each target has as many pairs as the suite has rounds, or the voids and the `loader_skew` flags of the run explain the missing pairs.
+- Each measure of each target has as many pairs as the suite has rounds, or the cell records explain the missing pairs under the summary rules.
 - No flag changes the stated conclusion. Read the flag rules above for each flag in the summary.
 - `run.json` contains the expected new build and base build with their binary SHA-256, the AMI, the instance types, the loader count, the process counts, and the app hashes.
 - The raw files support the values in the report.
@@ -169,13 +171,13 @@ If the result depends on a response header or on a server configuration, capture
 
 ## Reading the board
 
-The board on the `gh-pages` branch shows the newest 60 runs. One run is one nightly build of the rapira main branch, labelled with the merged pull request of its commit. Merges that land between two nightly builds share one run. Each point compares the new build of a run with the base build of the same run, which is the build of the previous board run.
+The board shows the newest 60 runs from the `gh-pages` branch. A CI run measures one nightly build of the rapira main branch, labelled with the merged pull request of its commit. Merges that land between two nightly builds share one run. Each point compares the new build with the base build recorded in that run. CI selects the newest other non-smoke board build by default. An operator can select another base build.
 
 - Each target has one row with three charts: the capacity delta, the p99 delta, and the RSS delta, in percent.
 - A point is the `delta_pct` of one run. A band from `min_pct` to `max_pct` shows the spread of the paired deltas. A line marks zero. The y axis has no fixed minimum.
 - A run without the target, or a measure with 0 counted pairs, gives a gap.
 - The x axis lists the runs in order, labelled with the pull request number. A run without a pull request, for example a manual run, shows the first 7 characters of the rapira sha. A click in a chart opens the pull request, or the commit, of the run at the pointer. On a touch screen, a tap shows the tooltip, and a tap on a point opens the run.
-- The tooltip shows the start time and the label of the run, the pull request title, `new <x> vs base <y> <unit>`, `delta <d>% (min <a>%, max <b>%, <n> pairs)`, and the flag names. Read the flag rules above before you draw a conclusion from a point.
+- The tooltip shows the start time and the label of the run, the pull request title, the base commit, `new <x> vs base <y> <unit>`, `delta <d>% (min <a>%, max <b>%, <n> pairs)`, and the flag names. A gap has no measurement tooltip. Read the flag rules above before you draw a conclusion from a point.
 - `new` and `base` in the tooltip are separate medians. Use `delta_pct` for the change.
 - Tone: a higher capacity is better, and a lower p99 and a lower RSS are better. A point is green for a better value or red for a worse value only when all these conditions are true: the point has as many pairs as the suite has rounds, its whole band is strictly on one side of zero, and `|delta_pct|` is at least the noise floor of the target and the measure. Otherwise the point is gray.
 - The noise floor of a measure is the largest `|paired delta|` of that measure over all targets of an A/A run, rounded up to a multiple of 0.5%. In an A/A run, the base build and the new build are the same commit. When the A/A noise of one measure of a target is much larger than that of the other targets, the target gets its own floor for that measure, and the floor of the measure leaves that target out. The one such case is the p99 of grpc-rapira. The floors are in [NOTES.md](NOTES.md), and in `NOISE_FLOOR_PCT` and `TARGET_NOISE_FLOOR_PCT` of `board/app.js`.

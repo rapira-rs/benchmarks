@@ -94,6 +94,8 @@ def cmd_needs(args: argparse.Namespace) -> int:
 
 
 def cmd_provision(args: argparse.Namespace) -> int:
+    if args.nightly_dir and not args.nightly:
+        raise ValueError("NIGHTLY_DIR requires NIGHTLY=<sha7>")
     if not args.nightly and not args.ref:
         raise ValueError("set NIGHTLY=<sha7> or REF=<ref>, for example: make up REF=pr/97 BASE=<sha7>")
     if not args.base:
@@ -105,7 +107,7 @@ def cmd_provision(args: argparse.Namespace) -> int:
         "NEEDS": args.needs,
         "FRAME_POINTERS": args.frame_pointers,
     }
-    provision(from_terraform(TF_DIR), ttl_min=args.ttl, server_env=env)
+    provision(from_terraform(TF_DIR), ttl_min=args.ttl, server_env=env, nightly_dir=Path(args.nightly_dir) if args.nightly_dir else None)
     print("==> rig ready; run: make bench")
     return 0
 
@@ -166,6 +168,7 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("--ttl", type=int, required=True)
     p.add_argument("--needs", required=True)
     p.add_argument("--nightly", default="")
+    p.add_argument("--nightly-dir", default="", help="directory with the captured nightly archive, checksum, and nightly.json")
     p.add_argument("--ref", default="")
     p.add_argument("--base", required=True)
     p.add_argument("--frame-pointers", default="0", choices=("0", "1"))

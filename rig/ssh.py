@@ -136,6 +136,13 @@ def stage_tree(hosts: list[Host]) -> None:
         _unpack(host, data, RIG_DIR)
 
 
+def copy_to(host: Host, local: Path, remote: str) -> None:
+    """Copy a local file or directory to remote with scp."""
+    proc = subprocess.run(["scp", "-qr", *_options(), str(local.resolve()), f"{host.public_ip}:{remote}"], capture_output=True, check=False)
+    if proc.returncode != 0:
+        raise SshError(f"{host.name}: scp {local} failed\n{_tail(proc.stderr.decode(errors='replace'))}")
+
+
 def copy_from(host: Host, remote: str, local: Path) -> None:
     """Copy one remote file to local with scp."""
     local.parent.mkdir(parents=True, exist_ok=True)

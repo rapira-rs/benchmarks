@@ -11,6 +11,7 @@ AZ ?= eu-central-1a
 TTL ?= 60
 REF ?=
 NIGHTLY ?=
+NIGHTLY_DIR ?=
 # sha7 of the base build on the binaries release of this repository.
 BASE ?=
 SUITE ?= ci
@@ -63,7 +64,7 @@ up: preflight
 
 provision:
 	@needs=$$(python3 -m rig needs --suite $(SUITE)) && \
-	python3 -m rig provision --ttl $(TTL) --needs "$$needs" --nightly "$(NIGHTLY)" --ref "$(REF)" --base "$(BASE)" --frame-pointers "$(FRAME_POINTERS)"
+	python3 -m rig provision --ttl $(TTL) --needs "$$needs" --nightly "$(NIGHTLY)" --nightly-dir "$(NIGHTLY_DIR)" --ref "$(REF)" --base "$(BASE)" --frame-pointers "$(FRAME_POINTERS)"
 
 status: preflight
 	@out=$$($(TF) output 2>/dev/null); \

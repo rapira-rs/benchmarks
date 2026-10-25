@@ -84,7 +84,7 @@ def ensure_ttl(hosts: list[Host], needed_s: int) -> None:
         arm_ttl([host], minutes)
 
 
-def provision(rig: Rig, *, ttl_min: int, server_env: dict[str, str]) -> None:
+def provision(rig: Rig, *, ttl_min: int, server_env: dict[str, str], nightly_dir: Path | None = None) -> None:
     """Prepare every box, stage the tree, and run the provisioning scripts in parallel."""
     for host in rig.hosts:
         ssh.wait_ssh(host)
@@ -93,6 +93,10 @@ def provision(rig: Rig, *, ttl_min: int, server_env: dict[str, str]) -> None:
             raise result
     arm_ttl(rig.hosts, ttl_min)
     ssh.stage_tree(rig.hosts)
+    if nightly_dir is not None:
+        ssh.run(rig.server, "rm -rf nightly")
+        ssh.copy_to(rig.server, nightly_dir, "nightly")
+        server_env = {**server_env, "NIGHTLY_DIR": "nightly"}
     print(f"==> provisioning {len(rig.hosts)} boxes")
     env = " ".join(f"{name}={shlex.quote(value)}" for name, value in server_env.items())
     jobs = [(rig.server, f"{env} bash {ssh.RIG_DIR}/box/provision-server.sh")]

@@ -40,7 +40,7 @@ jobs:
       # Every terraform init of the Makefile gets the S3 backend settings.
       TF_CLI_ARGS_init: -backend-config=s3.tfbackend -backend-config=bucket=${{ secrets.TF_STATE_BUCKET }}
     outputs:
-      skip: ${{ steps.resolve.outputs.skip }}
+      ready: ${{ steps.suite.outcome == 'success' && steps.binary.outcome == 'success' && steps.run.outcome == 'success' && steps.raw.outcome == 'success' && (steps.down.outcome == 'success' || steps.nuke.outcome == 'success') }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -86,10 +86,16 @@ jobs:
           echo "base $base7, asset $base_asset"
           echo "base7=$base7" >> "$GITHUB_OUTPUT"
           # The next core nightly deletes the assets of this build, so the job keeps a copy for the binaries release.
-          # The copy is outside the checkout, so the rig does not copy it to the boxes.
+          # The copy is outside the checkout, so only the server receives it.
           version=${asset#rapira-v}
           version=${version%-php8.5-linux-x86_64.tar.gz}
           gh release download nightly -R rapira-rs/rapira -D "$RUNNER_TEMP/binary" -p "$asset" -p "rapira-v${version}-SHA256SUMS.txt"
+          python3 - "$sha" "$version" "$asset" > "$RUNNER_TEMP/binary/nightly.json" <<'PY'
+          import json, sys
+
+          sha, version, asset = sys.argv[1:]
+          json.dump({"sha": sha, "version": version, "asset": asset, "sums": f"rapira-v{version}-SHA256SUMS.txt"}, sys.stdout)
+          PY
           # The merged pull request of the commit labels the run on the board. A commit without one gets the sha.
           pr=$(gh api "repos/rapira-rs/rapira/commits/$sha/pulls" --jq '[.[] | select(.merged_at != null)][0]')
           if [ -n "$pr" ] && [ "$pr" != null ]; then
@@ -101,6 +107,7 @@ jobs:
           echo "skip=false" >> "$GITHUB_OUTPUT"
 
       - name: Upload the new binary
+        id: binary
         if: steps.resolve.outputs.skip == 'false'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
@@ -135,7 +142,7 @@ jobs:
           BASE7: ${{ steps.resolve.outputs.base7 }}
         run: |
           set -euo pipefail
-          if make up NIGHTLY="$SHA7" BASE="$BASE7" AZ=eu-central-1a 2>&1 | tee up.log; then
+          if make up NIGHTLY="$SHA7" NIGHTLY_DIR="$RUNNER_TEMP/binary" BASE="$BASE7" AZ=eu-central-1a 2>&1 | tee up.log; then
             exit 0
           fi
           # A capacity error retries once in the next AZ. Other errors stop the job.
@@ -144,9 +151,10 @@ jobs:
             exit 1
           fi
           make down
-          make up NIGHTLY="$SHA7" BASE="$BASE7" AZ=eu-central-1b
+          make up NIGHTLY="$SHA7" NIGHTLY_DIR="$RUNNER_TEMP/binary" BASE="$BASE7" AZ=eu-central-1b
 
       - name: Run the ci suite
+        id: suite
         if: steps.resolve.outputs.skip == 'false'
         timeout-minutes: 55
         env:
@@ -162,21 +170,23 @@ jobs:
           python3 -m rig bench --suite ci --out runs "${pr[@]}"
 
       - name: Upload the run file
+        id: run
         if: always() && steps.resolve.outputs.skip == 'false'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: run
           path: runs/*/run.json
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 90
 
       - name: Upload the raw evidence
+        id: raw
         if: always() && steps.resolve.outputs.skip == 'false'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: raw
           path: runs/*/raw/
-          if-no-files-found: ignore
+          if-no-files-found: error
           retention-days: 90
 
       - name: Destroy the rig
@@ -186,16 +196,22 @@ jobs:
 
       # make nuke deletes every resource with the Project tag, a local rig included, so it runs only after a failed destroy.
       - name: Remove tagged leftovers
+        id: nuke
         if: always() && steps.resolve.outputs.skip == 'false' && steps.down.outcome == 'failure'
         run: make nuke
 
   publish:
     needs: bench
-    if: needs.bench.outputs.skip == 'false'
+    if: ${{ !cancelled() && needs.bench.outputs.ready == 'true' }}
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -222,8 +238,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # The binary artifact holds the tarball and the SHA256SUMS file of the new build.
-          gh release upload binaries binary/* --clobber -R "$GITHUB_REPOSITORY"
+          gh release upload binaries binary/*-php8.5-linux-x86_64.tar.gz binary/*-SHA256SUMS.txt --clobber -R "$GITHUB_REPOSITORY"
 
       - name: Publish the run to gh-pages
         run: |
@@ -243,7 +258,16 @@ jobs:
           git diff --cached --quiet || git commit -s -m "chore: publish run $id"
           git push
 
-      # The prune step runs after the push, so a failed delete does not stop the publish.
+      - name: Upload the Pages site
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: pages
+
+      - name: Deploy the Pages site
+        id: deployment
+        uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+
+      # The prune step runs after deployment, so a failed delete does not stop the publish.
       - name: Prune the binaries release
         env:
           GH_TOKEN: ${{ github.token }}

@@ -164,6 +164,21 @@ PROVISION_CASES = [
 
 PROVISION_CLI_CASES = [
     {
+        "name": "a captured nightly directory goes to provisioning",
+        "argv": ["provision", "--ttl", "60", "--needs", "rapira hello", "--nightly", "abc1234", "--base", "def5678", "--nightly-dir", "captured"],
+        "status": 0,
+        "server_env": {"NIGHTLY": "abc1234", "REF": "", "BASE": "def5678", "NEEDS": "rapira hello", "FRAME_POINTERS": "0"},
+        "nightly_dir": Path("captured"),
+        "stderr": "",
+    },
+    {
+        "name": "a captured nightly needs its commit prefix",
+        "argv": ["provision", "--ttl", "60", "--needs", "rapira hello", "--ref", "main", "--base", "def5678", "--nightly-dir", "captured"],
+        "status": 1,
+        "server_env": None,
+        "stderr": "NIGHTLY_DIR requires NIGHTLY",
+    },
+    {
         # An A/A run: the base build is the nightly itself.
         "name": "the nightly and the base go to the server env",
         "argv": ["provision", "--ttl", "60", "--needs", "rapira hello", "--nightly", "abc1234", "--base", "abc1234"],
@@ -318,6 +333,40 @@ class NeedsTest(unittest.TestCase):
 
 
 class ProvisionTest(unittest.TestCase):
+    def test_captured_nightly_reaches_only_the_server(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            captured = root / "captured"
+            captured.mkdir()
+            (captured / "archive.tar.gz").write_bytes(b"captured archive")
+            (captured / "nightly.json").write_text('{"sha": "abc1234"}')
+            homes = {host.name: root / host.name for host in (SERVER, LOADER_1, LOADER_2)}
+            for home in homes.values():
+                home.mkdir()
+            (homes["server"] / "nightly").mkdir()
+            (homes["server"] / "nightly/stale").touch()
+            rig = Rig(SERVER, (LOADER_1, LOADER_2), "c7a.8xlarge", "c7a.xlarge", "ami-0123", Path("k"))
+            real_run = subprocess.run
+
+            def local_transfer(argv, **kwargs):
+                if argv[0] == "ssh":
+                    return real_run(["bash", "-c", argv[-1]], cwd=homes["server"], **kwargs)
+                self.assertEqual(argv[0], "scp")
+                address, remote = argv[-1].split(":", 1)
+                self.assertEqual(address, SERVER.public_ip)
+                return real_run(["cp", "-r", argv[-2], str(homes["server"] / remote)], **kwargs)
+
+            commands = []
+            with mock.patch("rig.rig.ssh.wait_ssh"), mock.patch("rig.rig.arm_ttl"), mock.patch("rig.rig.ssh.stage_tree"), \
+                    mock.patch("rig.rig.ssh.run_many", side_effect=lambda jobs: commands.extend(jobs) or [""] * len(jobs)), \
+                    mock.patch("rig.ssh.subprocess.run", side_effect=local_transfer):
+                rigmod.provision(rig, ttl_min=60, server_env={"NIGHTLY": "abc1234"}, nightly_dir=captured)
+            self.assertEqual((homes["server"] / "nightly/archive.tar.gz").read_bytes(), b"captured archive")
+            self.assertFalse((homes["server"] / "nightly/stale").exists())
+            self.assertEqual(list(homes["loader-1"].iterdir()), [])
+            self.assertEqual(list(homes["loader-2"].iterdir()), [])
+            self.assertIn((SERVER, "NIGHTLY=abc1234 NIGHTLY_DIR=nightly bash bench-rig/box/provision-server.sh"), commands)
+
     def test_provision(self):
         for case in PROVISION_CASES:
             with self.subTest(name=case["name"]):
@@ -363,4 +412,4 @@ class ProvisionCommandTest(unittest.TestCase):
                 if case["server_env"] is None:
                     provision.assert_not_called()
                 else:
-                    provision.assert_called_once_with(mock.sentinel.rig, ttl_min=60, server_env=case["server_env"])
+                    provision.assert_called_once_with(mock.sentinel.rig, ttl_min=60, server_env=case["server_env"], nightly_dir=case.get("nightly_dir"))

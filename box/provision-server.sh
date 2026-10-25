@@ -3,6 +3,7 @@
 #
 # Environment:
 #   NIGHTLY         sha7 of a build on the nightly release of the core repository. REF is then ignored.
+#   NIGHTLY_DIR     optional directory with the captured archive, checksum, and nightly.json.
 #   REF             a ref to build on the box when NIGHTLY is empty: a branch, a tag, a sha, or pr/N.
 #   BASE            sha7 of the base build on the binaries release of this repository. Required.
 #   NEEDS           the server kinds and apps of the suite, space separated, from python3 -m rig needs.
@@ -18,6 +19,7 @@
 set -euo pipefail
 
 NIGHTLY=${NIGHTLY:-}
+NIGHTLY_DIR=${NIGHTLY_DIR:-}
 REF=${REF:-}
 BASE=${BASE:-}
 NEEDS=${NEEDS:-}
@@ -150,15 +152,19 @@ print(version, found[0].group(0), sums)
 PY
 }
 
-# install_asset DIR URL ASSET SUMS downloads ASSET and SUMS from the release URL, checks ASSET
-# against SUMS, and unpacks ASSET into DIR.
+# install_asset DIR URL ASSET SUMS [CAPTURED_DIR] verifies and unpacks a release asset.
+# CAPTURED_DIR supplies the local files. Otherwise, URL supplies the download.
 install_asset() {
   local dir=$1 url=$2 asset=$3 sums=$4
-  local dl=$HOME/download
-  rm -rf "$dl" "$dir"
-  install -d "$dl" "$dir"
-  curl -fsSL --retry 3 -o "$dl/$asset" "$url/$asset"
-  curl -fsSL --retry 3 -o "$dl/$sums" "$url/$sums"
+  local dl=${5:-$HOME/download}
+  rm -rf "$dir"
+  install -d "$dir"
+  if [ -z "${5:-}" ]; then
+    rm -rf "$dl"
+    install -d "$dl"
+    curl -fsSL --retry 3 -o "$dl/$asset" "$url/$asset"
+    curl -fsSL --retry 3 -o "$dl/$sums" "$url/$sums"
+  fi
   (cd "$dl" && awk -v name="$asset" '$2 == name' "$sums" | sha256sum -c -)
   tar -xzf "$dl/$asset" -C "$dir" --strip-components=1
   if ldd "$dir/bin/rapira" 2>/dev/null | grep -F 'not found'; then
@@ -170,19 +176,33 @@ install_asset() {
 install_nightly() {
   local resolved sha version asset sums
   local dir=$BENCH/rapira/$NIGHTLY
-  # The core Nightly workflow moves the nightly tag to each new build and deletes the assets of older builds.
-  sha=$(curl -fsSL --retry 3 -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$CORE_SLUG/git/ref/tags/nightly" |
-    python3 -c 'import json, sys; print(json.load(sys.stdin)["object"]["sha"])')
+  if [ -n "$NIGHTLY_DIR" ]; then
+    resolved=$(python3 - "$NIGHTLY_DIR/nightly.json" <<'PY'
+import json, sys
+
+with open(sys.argv[1]) as f:
+    meta = json.load(f)
+print(meta["sha"], meta["version"], meta["asset"], meta["sums"])
+PY
+)
+    read -r sha version asset sums <<<"$resolved"
+  else
+    # The core Nightly workflow moves the tag and removes the older assets.
+    sha=$(curl -fsSL --retry 3 -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$CORE_SLUG/git/ref/tags/nightly" |
+      python3 -c 'import json, sys; print(json.load(sys.stdin)["object"]["sha"])')
+  fi
   case "$sha" in
   "$NIGHTLY"*) ;;
   *)
-    echo "ERROR: the nightly tag is at ${sha:0:7}, not $NIGHTLY; the release has no assets for $NIGHTLY, rerun with NIGHTLY=${sha:0:7}"
+    echo "ERROR: the nightly build is at ${sha:0:7}, not $NIGHTLY; rerun with NIGHTLY=${sha:0:7}"
     exit 1
     ;;
   esac
-  resolved=$(find_asset "$CORE_SLUG" nightly "$NIGHTLY")
-  read -r version asset sums <<<"$resolved"
-  install_asset "$dir" "https://github.com/$CORE_SLUG/releases/download/nightly" "$asset" "$sums"
+  if [ -z "$NIGHTLY_DIR" ]; then
+    resolved=$(find_asset "$CORE_SLUG" nightly "$NIGHTLY")
+    read -r version asset sums <<<"$resolved"
+  fi
+  install_asset "$dir" "https://github.com/$CORE_SLUG/releases/download/nightly" "$asset" "$sums" "$NIGHTLY_DIR"
   # The binary loads the libphp of the asset.
   record_version php "PHP $(cat "$dir/share/php/PHP_VERSION.txt") ($asset)"
   write_meta new "$dir" nightly "$sha" "$version" nightly "$asset" ""
@@ -252,7 +272,7 @@ build_server() {
   if [ ! -d "$CORE/.git" ]; then
     git clone "$CORE_REPO" "$CORE"
   fi
-  git -C "$CORE" fetch origin --tags --prune
+  git -C "$CORE" fetch origin --tags --prune --force
   if [ "$FRAME_POINTERS" = 1 ]; then
     rustflags="-C force-frame-pointers=yes"
   fi
