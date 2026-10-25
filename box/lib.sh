@@ -151,8 +151,8 @@ wait_answer() {
   fail "$tag" "no answer on :$PORT"
 }
 
-# wait_grpc_answer TAG waits up to 30 s until the gRPC Echo call on 127.0.0.1:$PORT returns the
-# expected bytes. A gRPC error is HTTP 200 with an empty body, so only the reply bytes prove a worker.
+# wait_grpc_answer TAG waits up to 30 s for the expected Echo bytes and a final grpc-status: 0 trailer.
+# https://raw.githubusercontent.com/grpc/grpc/master/doc/PROTOCOL-HTTP2.md
 wait_grpc_answer() {
   local tag=$1
   local deadline=$((SECONDS + 30))

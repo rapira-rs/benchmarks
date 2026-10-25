@@ -8,11 +8,14 @@ disposable image. From the repository root:
 
 Add -e RAPIRA_ASSET_URL=<URL of a nightly tarball> to run the rapira cases with the real binary.
 The probe tests run on every host with bash, curl, and cmp.
+The gRPC probe tests need curl with HTTP/2 support.
 """
 
 import os
 import shutil
 import socket
+import socketserver
+import struct
 import subprocess
 import tarfile
 import tempfile
@@ -93,8 +96,9 @@ class GrpcHandler(socketserver.BaseRequestHandler):
                 self.send(4, 1, 0, b"")
             elif kind in (0, 1) and flags & 1:
                 # 0x88 is ":status: 200" of the HPACK static table.
-                self.send(1, 4, number, b"\x88")
-                self.send(0, 1, number, reply)
+                self.send(1, 4, number, b"\x88\x00\x0ccontent-type\x10application/grpc")
+                self.send(0, 0, number, reply)
+                self.send(1, 5, number, b"\x00\x0bgrpc-status\x010")
 
 
 server = HTTPServer((host or "0.0.0.0", int(port)), GrpcHandler if grpc else Handler)
@@ -400,6 +404,37 @@ class ReplyHandler(BaseHTTPRequestHandler):
         pass
 
 
+class GrpcReplyHandler(socketserver.BaseRequestHandler):
+    def send(self, kind, flags, stream, payload):
+        self.request.sendall(struct.pack(">I", len(payload))[1:] + struct.pack(">BBI", kind, flags, stream) + payload)
+
+    def send_headers(self, flags, stream, headers):
+        # These short fields use HPACK literals: https://www.rfc-editor.org/rfc/rfc7541.html#section-6.2.2
+        payload = b""
+        for name, value in headers:
+            name, value = name.encode(), value.encode()
+            payload += b"\x00" + bytes([len(name)]) + name + bytes([len(value)]) + value
+        self.send(1, flags, stream, payload)
+
+    def handle(self):
+        case = self.server.case
+        self.request.settimeout(5)
+        with self.request.makefile("rb") as stream:
+            stream.read(24)
+            self.send(4, 0, 0, b"")
+            while header := stream.read(9):
+                length = int.from_bytes(header[:3])
+                kind, flags, number = struct.unpack(">BBI", header[3:])
+                stream.read(length)
+                if kind == 4 and not flags & 1:
+                    self.send(4, 1, 0, b"")
+                elif kind in (0, 1) and flags & 1:
+                    self.send_headers(4, number, [(":status", "200"), ("content-type", "application/grpc"), *case["headers"]])
+                    self.send(0, 1 if case["trailers"] is None else 0, number, case["reply"])
+                    if case["trailers"] is not None:
+                        self.send_headers(5, number, case["trailers"])
+
+
 PROBE_CASES = [
     {
         "name": "exact body",
@@ -456,6 +491,76 @@ PROBE_CASES = [
 ]
 
 
+GRPC_REPLY = (REPO / "apps/grpc/expect.grpc").read_bytes()
+# A response body requires a final status trailer: https://raw.githubusercontent.com/grpc/grpc/master/doc/PROTOCOL-HTTP2.md
+GRPC_PROBE_CASES = [
+    {
+        "name": "success0",
+        "reply": GRPC_REPLY,
+        "headers": [],
+        "trailers": [("grpc-status", "0")],
+        "status": 0,
+        "stderr": "",
+    },
+    {
+        "name": "error13",
+        "reply": GRPC_REPLY,
+        "headers": [],
+        "trailers": [("grpc-status", "13")],
+        "status": 1,
+        "stderr": "grpc-status",
+    },
+    {
+        "name": "missingstatus",
+        "reply": GRPC_REPLY,
+        "headers": [],
+        "trailers": None,
+        "status": 1,
+        "stderr": "grpc-status",
+    },
+    {
+        "name": "wrongbody",
+        "reply": GRPC_REPLY[:-1] + b"?",
+        "headers": [],
+        "trailers": [("grpc-status", "0")],
+        "status": 1,
+        "stderr": "differ",
+    },
+    {
+        "name": "header0_error13",
+        "reply": GRPC_REPLY,
+        "headers": [("grpc-status", "0")],
+        "trailers": [("grpc-status", "13")],
+        "status": 1,
+        "stderr": "grpc-status",
+    },
+    {
+        "name": "header0_missingstatus",
+        "reply": GRPC_REPLY,
+        "headers": [("grpc-status", "0")],
+        "trailers": None,
+        "status": 1,
+        "stderr": "grpc-status",
+    },
+    {
+        "name": "header0_statusless_trailer",
+        "reply": GRPC_REPLY,
+        "headers": [("grpc-status", "0")],
+        "trailers": [("grpc-message", "missing status")],
+        "status": 1,
+        "stderr": "grpc-status",
+    },
+    {
+        "name": "success0_with_trailer_metadata",
+        "reply": GRPC_REPLY,
+        "headers": [],
+        "trailers": [("grpc-status", "0"), ("worker", "1")],
+        "status": 0,
+        "stderr": "",
+    },
+]
+
+
 class ProbeTests(unittest.TestCase):
     def setUp(self):
         # probe.sh resolves a relative file under $HOME/bench-rig.
@@ -464,9 +569,9 @@ class ProbeTests(unittest.TestCase):
         os.symlink(REPO, Path(home) / "bench-rig")
         self.env = {**os.environ, "HOME": home}
 
-    def probe(self, url, *arguments):
+    def probe(self, url, *arguments, expect="apps/hello/expect.txt", proto="http1"):
         return subprocess.run(
-            [str(REPO / "box/probe.sh"), url, "apps/hello/expect.txt", "http1", *arguments],
+            [str(REPO / "box/probe.sh"), url, expect, proto, *arguments],
             env=self.env,
             capture_output=True,
             text=True,
@@ -498,6 +603,31 @@ class ProbeTests(unittest.TestCase):
                     self.assertEqual(case["body"], server.seen["body"])
                     for name, value in case["headers"].items():
                         self.assertEqual(value, server.seen["headers"][name])
+
+    def test_grpc_probe(self):
+        version = subprocess.run(["curl", "--version"], capture_output=True, text=True, check=True).stdout
+        if "HTTP2" not in version:
+            self.skipTest("curl needs HTTP/2 support")
+        for case in GRPC_PROBE_CASES:
+            with self.subTest(name=case["name"]):
+                with socketserver.TCPServer(("127.0.0.1", 0), GrpcReplyHandler) as server:
+                    server.timeout = 5
+                    server.case = case
+                    port = server.server_address[1]
+                    thread = threading.Thread(target=server.handle_request, daemon=True)
+                    thread.start()
+                    try:
+                        result = self.probe(
+                            f"http://127.0.0.1:{port}/bench.v1.EchoService/Echo",
+                            "POST",
+                            "apps/grpc/echo.grpc",
+                            expect="apps/grpc/expect.grpc",
+                            proto="grpc",
+                        )
+                    finally:
+                        thread.join(timeout=5)
+                self.assertEqual(case["status"], result.returncode, result.stderr)
+                self.assertIn(case["stderr"], result.stderr)
 
 
 if __name__ == "__main__":
