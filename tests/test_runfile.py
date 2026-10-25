@@ -4,6 +4,7 @@ import json
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from rig.runfile import SCHEMA, RunFile, run_status
 
@@ -186,6 +187,25 @@ class TestRunStatus(unittest.TestCase):
 
 
 class TestRunFile(unittest.TestCase):
+    def test_failed_write_keeps_the_previous_document(self):
+        run = new_run_file()
+        run.add_cell(CELLS[0])
+        run.finish("2026-09-27T12:01:00Z")
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "run.json"
+            run.write(path)
+            saved = path.read_text()
+            run.add_cell(CELLS[1])
+            write_text = Path.write_text
+
+            def partial_write(target, text):
+                write_text(target, text[:12])
+                raise OSError("disk full")
+
+            with mock.patch.object(Path, "write_text", partial_write), self.assertRaisesRegex(OSError, "disk full"):
+                run.write(path)
+            self.assertEqual(path.read_text(), saved)
+
     def test_written_document_round_trips_with_the_summary(self):
         run = new_run_file()
         for c in CELLS:

@@ -25,10 +25,12 @@ def load_json(path: str) -> dict:
 
 
 def cmd_bench(args: argparse.Namespace) -> int:
+    if args.rounds is not None and args.rounds < 1:
+        raise ValueError("rounds must be at least 1")
     rig = from_terraform(TF_DIR)
     suite_path = SUITES_DIR / f"{args.suite}.toml"
     suite = load_suite(suite_path, load_targets(TARGETS_FILE), len(rig.loaders))
-    if args.rounds:
+    if args.rounds is not None:
         suite = replace(suite, rounds=args.rounds)
     if args.smoke:
         suite = replace(suite, smoke=True)
@@ -110,7 +112,7 @@ def cmd_provision(args: argparse.Namespace) -> int:
 
 def cmd_sync(args: argparse.Namespace) -> int:
     rig = from_terraform(TF_DIR)
-    ensure_ttl([rig.server], SYNC_TTL_S)
+    ensure_ttl(rig.hosts, SYNC_TTL_S)
     ssh.stage_tree([rig.server])
     ssh.stage_dir(Path(args.src), rig.server, "core-sync")
     print(ssh.run(rig.server, f"bash {ssh.RIG_DIR}/box/build-local.sh"), end="")

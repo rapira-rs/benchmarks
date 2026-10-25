@@ -67,13 +67,15 @@ class RunFile:
         """Append one finished cell."""
         self.doc["cells"].append(cell)
 
-    def finish(self, finished: str) -> dict:
-        """Set the end time, the status and the summary, and return the document."""
+    def finish(self, finished: str | None) -> dict:
+        """Update the status and summary. The end time is None while the run is in progress."""
         self.doc["finished"] = finished
         self.doc["status"], self.doc["reasons"] = run_status(self.doc["plan"], self.doc["cells"])
         self.doc["summary"] = summarize(self.doc["cells"])
         return self.doc
 
     def write(self, path: Path) -> None:
-        """Write the document as JSON with a trailing newline."""
-        path.write_text(json.dumps(self.doc, indent=1, sort_keys=False) + "\n")
+        """Replace the saved document after the JSON write completes."""
+        temporary = path.with_suffix(".tmp")
+        temporary.write_text(json.dumps(self.doc, indent=1, sort_keys=False) + "\n")
+        temporary.replace(path)

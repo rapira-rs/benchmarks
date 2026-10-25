@@ -61,10 +61,11 @@ class CellVoid(Exception):
 def plan_run(rig: Rig, suite: Suite, *, server_vcpus: int, loader_threads: int) -> dict:
     """Check the suite against the rig and return the cells, the keys, the load shape, and the processes per stage kind."""
     loaders = len(rig.loaders)
-    http1 = suite.connections["http1"]
-    # wrk2 divides the connections of a process over its threads and drops the remainder.
-    if http1 % (loaders * loader_threads) != 0:
-        raise SuiteError(f"connections {http1} is not a multiple of {loaders} loaders x {loader_threads} threads")
+    if any(target.proto == "http1" for target in suite.targets):
+        http1 = suite.connections["http1"]
+        # wrk2 divides the connections of a process over its threads and drops the remainder.
+        if http1 % (loaders * loader_threads) != 0:
+            raise SuiteError(f"connections {http1} is not a multiple of {loaders} loaders x {loader_threads} threads")
     cells = plan_cells(suite)
     return {
         "cells": cells,
@@ -204,13 +205,16 @@ def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, planned: Planned
     timeout = LEAD_S + stage.warmup_s + stage.duration_s + LOAD_SLACK_S
     results = boxes.run_many(loads + [(host, cmd) for _, host, cmd in samples], timeout=timeout)
 
+    for loader, out in zip(rig.loaders, results):
+        (cell_dir / f"load-{loader.name}.txt").write_text(str(out))
     taken = {}
     with (cell_dir / "snapshots.txt").open("w") as log:
         for (mark, host, _), out in zip(samples, results[len(loads):]):
-            if isinstance(out, SshError):
-                raise out
-            log.write(f"# {mark} {host.name}\n{out}")
+            log.write(f"# {mark} {host.name}\n{out}\n")
             taken[mark, host.name] = out
+    for out in taken.values():
+        if isinstance(out, SshError):
+            raise out
     before = {host.name: parse_snapshot(taken["begin", host.name]) for host in rig.hosts}
     after = {host.name: parse_snapshot(taken["end", host.name]) for host in rig.hosts}
 
@@ -218,7 +222,6 @@ def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, planned: Planned
     calibration_ms = {}
     for loader, out in zip(rig.loaders, results):
         text = str(out) if isinstance(out, SshError) else out
-        (cell_dir / f"load-{loader.name}.txt").write_text(text)
         calibration_ms[loader.name] = parse_calibration(text)
         try:
             records[loader.name] = None if isinstance(out, SshError) else parse_result(out, loader.name)
@@ -286,6 +289,7 @@ def start_target(boxes: Boxes, rig: Rig, target: Target, cell: dict, cell_dir: P
     try:
         out = boxes.run(rig.server, cmd)
     except SshError as exc:
+        (cell_dir / "start.txt").write_text(str(exc) + "\n")
         raise CellVoid(f"start failed: {str(exc).splitlines()[-1]}") from exc
     for line in out.splitlines():
         if line.startswith("config="):
@@ -414,6 +418,8 @@ def run_suite(rig: Rig, suite: Suite, boxes: Boxes, out_dir: Path, *, suite_path
         started=utc_now(),
     )
     path = run_dir / "run.json"
+    run_file.finish(None)
+    run_file.write(path)
     try:
         for planned in plan["cells"]:
             print(f"==> {planned.key}")
@@ -428,6 +434,8 @@ def run_suite(rig: Rig, suite: Suite, boxes: Boxes, out_dir: Path, *, suite_path
                 raise
             finally:
                 run_file.add_cell(cell)
+                run_file.finish(None)
+                run_file.write(path)
     finally:
         run_file.finish(utc_now())
         run_file.write(path)

@@ -2,8 +2,12 @@ import contextlib
 import io
 import json
 import shlex
+import signal
+import subprocess
+import sys
 import tempfile
 import unittest
+from dataclasses import replace
 from pathlib import Path
 from unittest import mock
 
@@ -346,6 +350,44 @@ INTERRUPT_CASES = [
     {"name": "interrupt during target.sh stop", "overrides": {("server", STOP): KeyboardInterrupt()}},
 ]
 
+EVIDENCE_CASES = [
+    {
+        "name": "a failed first snapshot keeps every response",
+        "overrides": {("server", "bash bench-rig/box/snapshot.sh"): SshError("server: snapshot timeout")},
+        "loader_text": "RESULT ",
+        "snapshot_text": "server: snapshot timeout",
+    },
+    {
+        "name": "a malformed first loader keeps the second loader",
+        "overrides": {("loader-1", LOAD): "RESULT {broken}\n"},
+        "loader_text": "RESULT {broken}",
+        "snapshot_text": "# begin server",
+    },
+]
+
+TERMINATION_CASES = [
+    {"name": "before the first cell", "start": 1, "cells": []},
+    {"name": "after the first cell", "start": 2, "cells": ["r1-base-rate-hello-rapira-worker"]},
+]
+
+TERMINATE_RUN = '''
+import os
+from pathlib import Path
+import signal
+import sys
+from tests.test_bench import FakeBoxes, START, WORKER, bench, replies
+
+starts = 0
+def start(cmd):
+    global starts
+    starts += 1
+    if starts == int(sys.argv[2]):
+        os.kill(os.getpid(), signal.SIGTERM)
+    return "config=/opt/bench/run/r1-base-rate-hello-rapira-worker.toml\\npid=100\\n"
+
+bench(FakeBoxes(replies({("server", START): start})), Path(sys.argv[1]), [WORKER])
+'''
+
 
 # key, build, stage, and processes of the cell record; the processes and the binary dir of target.sh start;
 # the rate per loader, the warm-up, and the window of the first load.sh call of the cell.
@@ -402,6 +444,46 @@ def cell_calls(calls):
 
 
 class RunSuiteTest(unittest.TestCase):
+    def test_failed_cells_keep_all_received_evidence(self):
+        for case in EVIDENCE_CASES:
+            with self.subTest(name=case["name"]), tempfile.TemporaryDirectory() as tmp:
+                path, _ = bench(FakeBoxes(replies(case["overrides"])), Path(tmp), [WORKER])
+                self.assertEqual(json.loads(path.read_text())["cells"][0]["status"], "void")
+                raw = path.parent / "raw/r1-base-rate-hello-rapira-worker"
+                self.assertEqual(sorted(p.name for p in raw.iterdir()), [
+                    "config.toml", "load-loader-1.txt", "load-loader-2.txt", "server.log", "snapshots.txt",
+                ])
+                self.assertIn(case["loader_text"], (raw / "load-loader-1.txt").read_text())
+                self.assertIn("RESULT ", (raw / "load-loader-2.txt").read_text())
+                snapshots = (raw / "snapshots.txt").read_text()
+                self.assertIn(case["snapshot_text"], snapshots)
+                self.assertIn("# end loader-2", snapshots)
+
+    def test_start_failure_keeps_the_underlying_diagnostic(self):
+        failure = "server: exit 1\nunknown field pool_limit\nERROR: target: pid 123 exited before it listened on :8080"
+        with tempfile.TemporaryDirectory() as tmp:
+            path, _ = bench(FakeBoxes(replies({("server", START): SshError(failure)})), Path(tmp), [WORKER])
+            cell = json.loads(path.read_text())["cells"][0]
+            self.assertEqual(cell["status"], "void")
+            raw = path.parent / "raw" / cell["key"]
+            self.assertEqual((raw / "start.txt").read_text(), failure + "\n")
+
+    def test_forced_termination_keeps_completed_cells(self):
+        for case in TERMINATION_CASES:
+            with self.subTest(name=case["name"]), tempfile.TemporaryDirectory() as tmp:
+                result = subprocess.run(
+                    [sys.executable, "-c", TERMINATE_RUN, tmp, str(case["start"])],
+                    cwd=ROOT, capture_output=True, text=True, timeout=10,
+                )
+                self.assertEqual(result.returncode, -signal.SIGTERM, result.stderr)
+                path = Path(tmp) / "run1/run.json"
+                self.assertTrue(path.is_file(), "completed progress was not saved")
+                run = json.loads(path.read_text())
+                self.assertEqual(run["status"], "incomplete")
+                self.assertIsNone(run["finished"])
+                self.assertEqual([cell["key"] for cell in run["cells"]], case["cells"])
+                self.assertEqual(len(run["reasons"]), 4 - len(case["cells"]))
+
     def test_cells(self):
         for case in CELL_CASES:
             with self.subTest(name=case["name"]), tempfile.TemporaryDirectory() as tmp:
@@ -622,6 +704,33 @@ NEW_META = {key: value for key, value in NEW.items() if key != "pr"}
 
 BENCH_COMMAND_CASES = [
     {
+        "name": "zero round override fails before SSH",
+        "args": ["--rounds", "0"],
+        "meta": {"new": NEW_META, "base": BASE},
+        "status": 1,
+        "stderr": "ERROR: rounds must be at least 1\n",
+        "builds": None,
+        "no_ssh": True,
+    },
+    {
+        "name": "negative round override fails before SSH",
+        "args": ["--rounds", "-1"],
+        "meta": {"new": NEW_META, "base": BASE},
+        "status": 1,
+        "stderr": "ERROR: rounds must be at least 1\n",
+        "builds": None,
+        "no_ssh": True,
+    },
+    {
+        "name": "a positive round override replaces the suite count",
+        "args": ["--rounds", "1"],
+        "rounds": 1,
+        "meta": {"new": NEW_META, "base": BASE},
+        "status": 0,
+        "stderr": "",
+        "builds": {"new": {**NEW_META, "pr": PR}, "base": BASE},
+    },
+    {
         "name": "a meta.json without a base record refuses to start",
         "meta": {"new": NEW_META, "kernel": "6.17.1"},
         "status": 1,
@@ -666,6 +775,21 @@ class SampleJobsTest(unittest.TestCase):
 
 
 class PlanRunTest(unittest.TestCase):
+    def test_grpc_only_suite_needs_no_http_connections(self):
+        cases = [
+            {"name": "no HTTP setting", "connections": {"grpc": 100}},
+            {"name": "unused HTTP setting", "connections": {"grpc": 100, "http1": 2}},
+        ]
+        for case in cases:
+            with self.subTest(name=case["name"]):
+                spec = replace(suite([GRPC]), connections=case["connections"])
+                plan = plan_run(RIG, spec, server_vcpus=SERVER_VCPUS, loader_threads=THREADS)
+                self.assertEqual(plan["conns_per_loader"]["grpc"], 50)
+                self.assertEqual(plan["keys"], [
+                    "r1-base-rate-grpc-rapira", "r1-new-rate-grpc-rapira",
+                    "r1-base-cap-grpc-rapira", "r1-new-cap-grpc-rapira",
+                ])
+
     def test_plan_run(self):
         for case in PLAN_CASES:
             with self.subTest(name=case["name"]):
@@ -705,7 +829,7 @@ class BenchCommandTest(unittest.TestCase):
                 calls = []
 
                 def fake_run_suite(rig, suite, boxes, out_dir, **kwargs):
-                    calls.append(kwargs)
+                    calls.append({**kwargs, "rounds": suite.rounds})
                     path = out_dir / kwargs["run_id"] / "run.json"
                     path.parent.mkdir(parents=True)
                     path.write_text(json.dumps({"cells": [], "status": "complete", "reasons": [], "summary": {}}))
@@ -722,12 +846,16 @@ class BenchCommandTest(unittest.TestCase):
                     status = main([
                         "bench", "--suite", "ci", "--out", tmp,
                         "--pr-number", "59", "--pr-url", PR["url"], "--pr-title", PR["title"],
+                        *case.get("args", []),
                     ])
                 self.assertEqual((status, stderr.getvalue()), (case["status"], case["stderr"]))
+                if case.get("no_ssh"):
+                    self.assertEqual(boxes.calls, [])
                 if case["builds"] is None:
                     self.assertEqual(calls, [])
                     continue
                 self.assertEqual(calls[0]["builds"], case["builds"])
+                self.assertEqual(calls[0]["rounds"], case.get("rounds", 3))
                 self.assertEqual((calls[0]["server_vcpus"], calls[0]["loader_threads"]), (8, 4))
                 # The run id ends with the suite name and the sha7 of the new build.
                 self.assertTrue(calls[0]["run_id"].endswith("-ci-abc1234"), calls[0]["run_id"])
