@@ -1,6 +1,5 @@
 """Snapshot parsing and the flag and void rules of a stage and a cell."""
 
-import statistics
 from dataclasses import dataclass
 
 GENERATOR_BUSY = 85
@@ -81,10 +80,13 @@ def skew_flag(calibration_ms: dict[str, list[float]]) -> dict:
     for loader, means in calibration_ms.items():
         if len(means) < 2:
             continue
-        for index, mean in enumerate(means):
-            median = statistics.median(means[:index] + means[index + 1:])
-            if mean > median * (1 + SKEW_PCT / 100):
-                return {"loader_skew": {"loader": loader, "thread_ms": mean, "median_ms": median}}
+        means_us = [round(mean * 1000) for mean in means]
+        for index, mean_us in enumerate(means_us):
+            others = sorted(means_us[:index] + means_us[index + 1:])
+            # Twice the median preserves a half microsecond for an even count.
+            median_twice_us = others[len(others) // 2] + others[(len(others) - 1) // 2]
+            if mean_us * 200 > median_twice_us * (100 + SKEW_PCT):
+                return {"loader_skew": {"loader": loader, "thread_ms": means[index], "median_ms": median_twice_us / 2000}}
     return {}
 
 

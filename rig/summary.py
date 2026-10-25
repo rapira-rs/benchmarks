@@ -8,17 +8,24 @@ MEASURES = ("capacity", "p99", "rss")
 MEASURE_STAGE = {"capacity": "cap", "p99": "rate", "rss": "rate"}
 
 
-def measure_value(measure: str, cell: dict) -> float:
+def measure_value(measure: str, cell: dict) -> float | None:
     """The number of one ok cell for one measure."""
     if measure == "capacity":
         return cell["achieved_rps"]
     if measure == "p99":
-        return cell["latency_us"]["p99"]
+        latency = cell["latency_us"]
+        return latency["p99"] if latency is not None else None
     return cell["rss_kb"]
 
 
 def counts(measure: str, base: dict, new: dict) -> bool:
-    """True when the pair counts for the measure. A p99 pair with loader_skew on either cell does not count."""
+    """Require available values and a positive baseline. Only capacity accepts a zero new value."""
+    base_value = measure_value(measure, base)
+    new_value = measure_value(measure, new)
+    if base_value is None or base_value <= 0 or new_value is None:
+        return False
+    if measure != "capacity" and new_value <= 0:
+        return False
     return measure != "p99" or not ("loader_skew" in base["flags"] or "loader_skew" in new["flags"])
 
 

@@ -208,6 +208,35 @@ SKEW_CASES = [
         "flags": {"loader_skew": {"loader": "loader-1", "thread_ms": 4.141, "median_ms": 3.6}},
     },
     {
+        # 700 us x 115 / 100 = 805 us. Equality does not set the flag.
+        "name": "805 us is exactly 15% above 700 us",
+        "calibration_ms": {"loader-1": [0.700, 0.700, 0.700, 0.805]},
+        "flags": {},
+    },
+    {
+        "name": "806 us is above the 805 us boundary",
+        "calibration_ms": {"loader-1": [0.700, 0.700, 0.700, 0.806]},
+        "flags": {"loader_skew": {"loader": "loader-1", "thread_ms": 0.806, "median_ms": 0.700}},
+    },
+    {
+        # The other-thread median is (699 + 701) / 2 = 700 us. The boundary is 805 us.
+        "name": "an even other-thread count preserves the exact boundary",
+        "calibration_ms": {"loader-1": [0.699, 0.701, 0.805]},
+        "flags": {},
+    },
+    {
+        # (690 + 691) / 2 = 690.5 us. The boundary is 690.5 x 115 / 100 = 794.075 us.
+        "name": "an even median keeps the half microsecond below the boundary",
+        "calibration_ms": {"loader-1": [0.690, 0.691, 0.794]},
+        "flags": {},
+    },
+    {
+        # (700 + 701) / 2 = 700.5 us. The boundary is 700.5 x 115 / 100 = 805.575 us.
+        "name": "an even median keeps the half microsecond above the boundary",
+        "calibration_ms": {"loader-1": [0.700, 0.701, 0.806]},
+        "flags": {"loader_skew": {"loader": "loader-1", "thread_ms": 0.806, "median_ms": 0.7005}},
+    },
+    {
         # For 4.0 the others are 3.0 and 3.4, with the median 3.2, and 3.2 x 1.15 = 3.68.
         # For 3.0 and 3.4 the medians of the others are 3.7 and 3.5.
         "name": "the median of an even count of other threads",

@@ -120,6 +120,94 @@ SUMMARY_CASES = [
         "summary": {HELLO: {"capacity": NULL, "p99": NULL, "rss": NULL}},
     },
     {
+        # An empty h2load log gives zero requests and zero latency. RSS is still measured.
+        "name": "empty base h2load cells exclude capacity and p99",
+        "cells": [
+            rate_cell(1, "base", 0, 102400, target=GRPC) | {"achieved_rps": 0.0},
+            rate_cell(1, "new", 1000, 102400, target=GRPC),
+            cap_cell(1, "base", 0.0, target=GRPC) | {"latency_us": {"p50": 0, "p99": 0}},
+            cap_cell(1, "new", 100000.0, target=GRPC),
+        ],
+        "summary": {GRPC: {
+            "capacity": NULL,
+            "p99": NULL,
+            "rss": entry(1, 0.0, 0.0, 0.0, 102400, 102400),
+        }},
+    },
+    {
+        # Capacity: 100 * (0 - 100000) / 100000 = -100. RSS: 100 * 2048 / 102400 = 2.
+        "name": "empty new h2load cells give a capacity loss and no p99",
+        "cells": [
+            rate_cell(1, "base", 1000, 102400, target=GRPC),
+            rate_cell(1, "new", 0, 104448, target=GRPC) | {"achieved_rps": 0.0},
+            cap_cell(1, "base", 100000.0, target=GRPC),
+            cap_cell(1, "new", 0.0, {"died": True}, target=GRPC) | {"latency_us": {"p50": 0, "p99": 0}},
+        ],
+        "summary": {GRPC: {
+            "capacity": entry(1, -100.0, -100.0, -100.0, 100000.0, 0.0, ["died"]),
+            "p99": NULL,
+            "rss": entry(1, 2.0, 2.0, 2.0, 102400, 104448),
+        }},
+    },
+    {
+        # Only round 2 counts: 100 * (110000 - 100000) / 100000 = 10.
+        "name": "a zero capacity baseline excludes its pair and flags",
+        "cells": [
+            cap_cell(1, "base", 0.0, {"died": True}), cap_cell(1, "new", 100000.0),
+            cap_cell(2, "base", 100000.0), cap_cell(2, "new", 110000.0, {"loader_busy": 72}),
+        ],
+        "summary": {HELLO: {
+            "capacity": entry(1, 10.0, 10.0, 10.0, 100000.0, 110000.0, ["loader_busy"]),
+            "p99": NULL,
+            "rss": NULL,
+        }},
+    },
+    {
+        # wrk2 can count requests from warm-up with no measured latency sample. RSS still counts.
+        "name": "zero measured p99 excludes latency with a positive achieved rate",
+        "cells": [rate_cell(1, "base", 1000, 102400), rate_cell(1, "new", 0, 102400)],
+        "summary": {HELLO: {
+            "capacity": NULL,
+            "p99": NULL,
+            "rss": entry(1, 0.0, 0.0, 0.0, 102400, 102400),
+        }},
+    },
+    {
+        # A zero RSS has no process sample. The p99 delta is 100 * (1100 - 1000) / 1000 = 10.
+        "name": "zero base RSS excludes only RSS",
+        "cells": [rate_cell(1, "base", 1000, 0), rate_cell(1, "new", 1100, 102400)],
+        "summary": {HELLO: {
+            "capacity": NULL,
+            "p99": entry(1, 10.0, 10.0, 10.0, 1000, 1100),
+            "rss": NULL,
+        }},
+    },
+    {
+        "name": "zero new RSS excludes only RSS",
+        "cells": [rate_cell(1, "base", 1000, 102400), rate_cell(1, "new", 1100, 0)],
+        "summary": {HELLO: {
+            "capacity": NULL,
+            "p99": entry(1, 10.0, 10.0, 10.0, 1000, 1100),
+            "rss": NULL,
+        }},
+    },
+    {
+        "name": "null base values give no measure pairs",
+        "cells": [
+            rate_cell(1, "base", 1000, None) | {"latency_us": None}, rate_cell(1, "new", 1100, 102400),
+            cap_cell(1, "base", None), cap_cell(1, "new", 100000.0),
+        ],
+        "summary": {HELLO: {"capacity": NULL, "p99": NULL, "rss": NULL}},
+    },
+    {
+        "name": "null new values give no measure pairs",
+        "cells": [
+            rate_cell(1, "base", 1000, 102400), rate_cell(1, "new", 1100, None) | {"latency_us": {"p50": None, "p99": None}},
+            cap_cell(1, "base", 100000.0), cap_cell(1, "new", None),
+        ],
+        "summary": {HELLO: {"capacity": NULL, "p99": NULL, "rss": NULL}},
+    },
+    {
         # Every base cell of grpc-rapira is void, so it has no pair. hello-rapira-worker has one pair per stage kind:
         # capacity 100 * 5000 / 100000 = 5.0, p99 100 * -100 / 1000 = -10.0, rss 0.0.
         # The targets keep the order of their first cell.
