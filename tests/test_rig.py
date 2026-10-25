@@ -135,8 +135,8 @@ RUN_CASES = [
 NEEDS_CASES = [
     {
         "name": "servers first then apps, each sorted without repeats",
-        "targets": [("yii3", "rapira"), ("hello", "rapira"), ("grpc", "rapira")],
-        "expected": ["rapira", "grpc", "hello", "yii3"],
+        "targets": [("hello", "rapira"), ("hello", "rapira"), ("grpc", "rapira")],
+        "expected": ["rapira", "grpc", "hello"],
     },
     {
         "name": "one rapira target",
@@ -148,9 +148,9 @@ NEEDS_CASES = [
 PROVISION_CASES = [
     {
         "name": "nightly with a quoted needs list",
-        "env": {"NIGHTLY": "abc1234", "REF": "", "BASE": "abc1234", "NEEDS": "rapira hello yii3"},
+        "env": {"NIGHTLY": "abc1234", "REF": "", "BASE": "abc1234", "NEEDS": "rapira hello grpc"},
         "results": ["ok", "ok", "ok"],
-        "server_cmd": "NIGHTLY=abc1234 REF='' BASE=abc1234 NEEDS='rapira hello yii3' bash bench-rig/box/provision-server.sh",
+        "server_cmd": "NIGHTLY=abc1234 REF='' BASE=abc1234 NEEDS='rapira hello grpc' bash bench-rig/box/provision-server.sh",
         "error": None,
     },
     {

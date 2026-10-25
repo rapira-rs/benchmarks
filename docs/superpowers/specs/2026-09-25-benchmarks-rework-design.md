@@ -142,9 +142,9 @@ k6 runs the gRPC targets with the `ramping-arrival-rate` executor: one k6 proces
 
 A stage is one constant request rate held for `stage_s` seconds, default 20. The stage list per app is geometric with ratio 2 from the floor in the suite file: hello 10k, symfony 10k, laravel 5k, static 10k, grpc 10k. The list has no rate bound; the run stops at the first failing stage. The driver caps a cell at 20 stages as a guard against a loop.
 
-Every loader runs one process per stage with rate `stage_rate / loader_count`, threads equal to its vCPU count, and 64 connections, which is 256 connections in total with four loaders, the Yii3 setting. Connections are a multiple of threads by construction.
+Every loader runs one process per stage with rate `stage_rate / loader_count`, threads equal to its vCPU count, and 64 connections, which is 256 connections in total with four loaders. Connections are a multiple of threads by construction.
 
-The load side must be able to break every target. The four loaders are sized for about 1.3M req/s on hello, far above the 200k req/s top of the Yii3 ladder, and a ladder stops only at a failing stage or a void. A cell whose failing stage carries `generator_bound` is a floor, and with this sizing that happens only near the hello ceiling on rapira. The gRPC targets are the exception: k6 on 16 loader cores reaches an estimated 100k to 160k req/s, below the rapira gRPC ceiling of about 810k. The first CI run measures that k6 limit; if the RoadRunner gRPC target is also generator-bound, the follow-up in section 13 applies.
+The load side must be able to break every target. The four loaders are sized for about 1.3M req/s on hello, and a ladder stops only at a failing stage or a void. A cell whose failing stage carries `generator_bound` is a floor, and with this sizing that happens only near the hello ceiling on rapira. The gRPC targets are the exception: k6 on 16 loader cores reaches an estimated 100k to 160k req/s, below the rapira gRPC ceiling of about 810k. The first CI run measures that k6 limit; if the RoadRunner gRPC target is also generator-bound, the follow-up in section 13 applies.
 
 ### 5.3 Cell sequence
 

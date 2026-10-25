@@ -21,13 +21,13 @@ TOML_CASES = [
         },
     },
     {
-        "name": "rapira http dispatcher of the yii3 app",
+        "name": "rapira http dispatcher",
         "path": "servers/rapira/http.toml.tpl",
-        "values": {"LISTEN": ":8080", "ENTRY": "/opt/bench/apps/yii3/worker-rapira.php", "MODE": "dispatcher", "PROCS": "32"},
+        "values": {"LISTEN": ":8080", "ENTRY": RIG + "/apps/hello/dispatcher.php", "MODE": "dispatcher", "PROCS": "32"},
         "expected": {
             "http": {
                 "listen": ":8080",
-                "pool": {"entrypoint": "/opt/bench/apps/yii3/worker-rapira.php", "mode": "dispatcher", "processes": 32},
+                "pool": {"entrypoint": RIG + "/apps/hello/dispatcher.php", "mode": "dispatcher", "processes": 32},
             },
             "log": {"level": "warn"},
         },
@@ -74,12 +74,6 @@ BODY_CASES = [
         "path": "apps/grpc/echo.grpc",
         # The length-prefixed frame of an EchoRequest with the 64 character text of apps/grpc/fixtures.py: 71 bytes.
         "expected": b"\x00\x00\x00\x00\x42\x0a\x40" + b"0123456789abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ01",
-    },
-    {
-        "name": "yii3 expected body",
-        "path": "apps/yii3/expect.json",
-        # 65 bytes: the body of GET / on the Yii3 app-api at the pinned commit, without a trailing newline.
-        "expected": b'{"status":"success","data":{"name":"My Project","version":"1.0"}}',
     },
 ]
 

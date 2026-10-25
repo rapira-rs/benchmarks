@@ -4,7 +4,7 @@ The benchmark rig of [rapira](https://github.com/rapira-rs/rapira). It runs on A
 
 ## What is tested
 
-Rapira in its classic, worker, and dispatcher modes on a hello app, the dispatcher behind the static middleware, the dispatcher with a Yii3 API app, and a gRPC echo service: six targets, listed in `suites/targets.toml`. The `ci` suite runs them after each nightly build of rapira main.
+Rapira in its classic, worker, and dispatcher modes on a hello app, the dispatcher behind the static middleware, and a gRPC echo service: five targets, listed in `suites/targets.toml`. The `ci` suite runs them after each nightly build of rapira main.
 
 Each target runs two stage kinds for each build. The rate stage runs one rapira process per server vCPU at a constant rate that keeps the server at about 50% CPU, and reports the p99 latency and the RSS of the rapira process tree. The capacity stage runs 2 rapira processes at a rate above their capacity, and reports the achieved req/s. The base cell and the new cell of one round, target, and stage kind are a pair. Each run reports the median change from the base build to the new build over its pairs. [METHOD.md](METHOD.md) defines the stages, the pairs, the flags, the voids, and the summary.
 

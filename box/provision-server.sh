@@ -14,7 +14,6 @@
 #   /opt/bench/meta.json                       the new and the base record for the run file
 #   /opt/bench/versions.json                   one version line per runtime
 #   /opt/bench/php.ini                         the shared php.ini
-#   /opt/bench/apps/yii3                       the Yii3 app with its vendor tree
 #   /opt/bench/apps/grpc/vendor                the PHP protobuf runtime of the gRPC app
 set -euo pipefail
 
@@ -48,12 +47,8 @@ install_packages() {
   if [ -z "$NIGHTLY" ]; then
     pkgs="$pkgs php-devel php-embedded clang clang-devel gcc make cmake git perf"
   fi
-  if needs yii3 || needs grpc; then
+  if needs grpc; then
     pkgs="$pkgs composer unzip git"
-  fi
-  if needs yii3; then
-    # The PHP modules of the platform requirements of the app, and the cache server of its routes.
-    pkgs="$pkgs php-mbstring php-xml php-pdo php-pgsql valkey"
   fi
   # shellcheck disable=SC2086
   sudo dnf -y install $pkgs
@@ -270,25 +265,6 @@ build_server() {
   write_meta new "$BENCH/rapira/$sha7" "$REF" "$sha" "$version" server "" "$rustflags"
 }
 
-# source_value KEY prints the value of KEY in apps/yii3/source.toml.
-source_value() {
-  python3 -c 'import sys, tomllib; print(tomllib.load(open(sys.argv[1], "rb"))[sys.argv[2]])' "$RIG/apps/yii3/source.toml" "$1"
-}
-
-install_yii3() {
-  local dir=$BENCH/apps/yii3 commit
-  commit=$(source_value commit)
-  rm -rf "$dir"
-  git clone -q "$(source_value repo)" "$dir"
-  git -C "$dir" checkout -q "$commit"
-  install -m 0644 "$RIG/apps/yii3/composer.lock" "$dir/composer.lock"
-  composer --working-dir="$dir" install --no-dev --no-progress --no-scripts --classmap-authoritative
-  # The app reads its compiled routes from Valkey when a process builds its container.
-  sudo systemctl enable --now valkey
-  record_version valkey "$(valkey-server --version)"
-  record_version yii3 "$commit"
-}
-
 install_grpc_runtime() {
   local dir=$BENCH/apps/grpc
   rm -rf "$dir"
@@ -340,10 +316,5 @@ if needs grpc; then
   echo "==> grpc runtime"
   install_grpc_runtime
 fi
-if needs yii3; then
-  echo "==> yii3"
-  install_yii3
-fi
-
 echo "==> server provisioned: needs=$NEEDS"
 python3 -c 'import json; meta = json.load(open("/opt/bench/meta.json")); print(json.dumps(meta["new"])); print(json.dumps(meta["base"]))'

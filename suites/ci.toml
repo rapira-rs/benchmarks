@@ -4,7 +4,7 @@
 name = "ci"
 rounds = 3
 smoke = false
-targets = ["hello-rapira-classic", "hello-rapira-worker", "hello-rapira-dispatcher", "hello-rapira-dispatcher-static", "yii3-rapira-dispatcher", "grpc-rapira"]
+targets = ["hello-rapira-classic", "hello-rapira-worker", "hello-rapira-dispatcher", "hello-rapira-dispatcher-static", "grpc-rapira"]
 
 [connections]
 http1 = 1000
@@ -22,7 +22,6 @@ hello-rapira-classic = 110000
 hello-rapira-worker = 200000
 hello-rapira-dispatcher = 200000
 hello-rapira-dispatcher-static = 150000
-yii3-rapira-dispatcher = 29000
 grpc-rapira = 153000
 
 [stages.cap]
@@ -35,5 +34,4 @@ hello-rapira-classic = 270000
 hello-rapira-worker = 750000
 hello-rapira-dispatcher = 770000
 hello-rapira-dispatcher-static = 510000
-yii3-rapira-dispatcher = 50000
 grpc-rapira = 340000

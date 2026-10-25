@@ -187,7 +187,6 @@ The board draws only runs with the schema `rapira-bench-run/3`. The numbers of t
 
 - A target listens on port 8080.
 - The static target runs the hello dispatcher behind the static middleware with `apps/hello` as its root. The request misses the root, so the target shows the cost of the middleware on the PHP path. Compare its numbers with the plain dispatcher numbers of the same run.
-- The Yii3 target runs the app-api of `apps/yii3/source.toml` on the dispatcher in its `prod` environment without debug. Its `/` route answers from the application parameters. The route cache lives in the Valkey service of the server. No request touches a database.
 - The gRPC target uses the pure PHP protobuf runtime.
 
 ## Connection distribution tests

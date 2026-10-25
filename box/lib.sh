@@ -14,11 +14,10 @@ die() {
   exit 1
 }
 
-# expand_path TEXT replaces the @RIG@ and @APPS@ tokens of the target registry.
+# expand_path TEXT replaces the @RIG@ token of the target registry.
 expand_path() {
   local text=$1
   text=${text//@RIG@/$RIG}
-  text=${text//@APPS@/$BENCH/apps}
   printf '%s\n' "$text"
 }
 

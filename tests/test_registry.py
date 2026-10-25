@@ -54,7 +54,7 @@ def target(name: str, app: str = "hello", proto: str = "http1") -> Target:
 REGISTRY = {
     "hello-a": target("hello-a"),
     "hello-b": target("hello-b"),
-    "yii3-a": target("yii3-a", app="yii3"),
+    "hello-c": target("hello-c"),
     "grpc-a": target("grpc-a", app="grpc", proto="grpc"),
 }
 
@@ -64,7 +64,7 @@ duration_s = 15
 
 [stages.rate.rates]
 hello-a = 60000
-yii3-a = 16000
+hello-c = 16000
 """
 
 CAP_STAGE = """[stages.cap]
@@ -74,12 +74,12 @@ processes = 2
 
 [stages.cap.rates]
 hello-a = 300000
-yii3-a = 60000
+hello-c = 60000
 """
 
 SUITE_DEFAULTS = {
     "rounds": 1,
-    "targets": '["hello-a", "yii3-a"]',
+    "targets": '["hello-a", "hello-c"]',
     "connections": "http1 = 1000\ngrpc = 100",
     "streams": 100,
     "stages": RATE_STAGE + "\n" + CAP_STAGE,
@@ -151,9 +151,9 @@ SUITE_ERROR_CASES = [
     },
     {
         "name": "no rate for a target in the cap stage",
-        "fields": {"stages": RATE_STAGE + "\n" + CAP_STAGE.replace("yii3-a = 60000\n", "")},
+        "fields": {"stages": RATE_STAGE + "\n" + CAP_STAGE.replace("hello-c = 60000\n", "")},
         "loaders": 1,
-        "message": "suite.toml: stages.cap: no rate for target yii3-a",
+        "message": "suite.toml: stages.cap: no rate for target hello-c",
     },
     # hello-b is in the registry but not in the suite targets.
     {
@@ -175,7 +175,7 @@ SUITE_OK_CASES = [
     {
         # 15 s is MIN_DURATION_S, a warm-up of 0 s is valid, and every rate and connection count divides by 2 loaders.
         "name": "minimum duration, zero warm-up, and two loaders",
-        "fields": {"targets": '["yii3-a", "hello-a"]', "stages": RATE_STAGE.replace("warmup_s = 11", "warmup_s = 0") + "\n" + CAP_STAGE},
+        "fields": {"targets": '["hello-c", "hello-a"]', "stages": RATE_STAGE.replace("warmup_s = 11", "warmup_s = 0") + "\n" + CAP_STAGE},
         "loaders": 2,
         "expected": Suite(
             name="test",
@@ -183,10 +183,10 @@ SUITE_OK_CASES = [
             smoke=False,
             connections={"http1": 1000, "grpc": 100},
             grpc_streams=100,
-            targets=(REGISTRY["yii3-a"], REGISTRY["hello-a"]),
+            targets=(REGISTRY["hello-c"], REGISTRY["hello-a"]),
             stages={
-                "rate": Stage(warmup_s=0, duration_s=15, processes=None, rates={"hello-a": 60000, "yii3-a": 16000}),
-                "cap": Stage(warmup_s=5, duration_s=15, processes=2, rates={"hello-a": 300000, "yii3-a": 60000}),
+                "rate": Stage(warmup_s=0, duration_s=15, processes=None, rates={"hello-a": 60000, "hello-c": 16000}),
+                "cap": Stage(warmup_s=5, duration_s=15, processes=2, rates={"hello-a": 300000, "hello-c": 60000}),
             },
         ),
     },
@@ -229,7 +229,6 @@ CI_TARGETS = (
     "hello-rapira-worker",
     "hello-rapira-dispatcher",
     "hello-rapira-dispatcher-static",
-    "yii3-rapira-dispatcher",
     "grpc-rapira",
 )
 
@@ -244,7 +243,6 @@ CI_STAGES = {
             "hello-rapira-worker": 200000,
             "hello-rapira-dispatcher": 200000,
             "hello-rapira-dispatcher-static": 150000,
-            "yii3-rapira-dispatcher": 29000,
             "grpc-rapira": 153000,
         },
     ),
@@ -257,7 +255,6 @@ CI_STAGES = {
             "hello-rapira-worker": 750000,
             "hello-rapira-dispatcher": 770000,
             "hello-rapira-dispatcher-static": 510000,
-            "yii3-rapira-dispatcher": 50000,
             "grpc-rapira": 340000,
         },
     ),

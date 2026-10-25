@@ -49,7 +49,7 @@ SERIES_CASES = [
     {
         # A point is the summary record of one target and one measure in one run, as the run file holds it.
         # grpc-rapira has 0 pairs in run b, so its records there hold nulls and the chart draws gaps.
-        # yii3-rapira-dispatcher is only in run b, so its points in run a are null.
+        # hello-rapira-dispatcher is only in run b, so its points in run a are null.
         # The targets come in name order. A date is the UTC start of the run to the minute.
         "name": "series from the summary with 0 pairs and a target in one run",
         "runs": [RUN_A, RUN_B],
@@ -65,15 +65,15 @@ SERIES_CASES = [
                     "p99": [SUMMARY_A["grpc-rapira"]["p99"], SUMMARY_B["grpc-rapira"]["p99"]],
                     "rss": [SUMMARY_A["grpc-rapira"]["rss"], SUMMARY_B["grpc-rapira"]["rss"]],
                 },
+                "hello-rapira-dispatcher": {
+                    "capacity": [None, SUMMARY_B["hello-rapira-dispatcher"]["capacity"]],
+                    "p99": [None, SUMMARY_B["hello-rapira-dispatcher"]["p99"]],
+                    "rss": [None, SUMMARY_B["hello-rapira-dispatcher"]["rss"]],
+                },
                 "hello-rapira-worker": {
                     "capacity": [SUMMARY_A["hello-rapira-worker"]["capacity"], SUMMARY_B["hello-rapira-worker"]["capacity"]],
                     "p99": [SUMMARY_A["hello-rapira-worker"]["p99"], SUMMARY_B["hello-rapira-worker"]["p99"]],
                     "rss": [SUMMARY_A["hello-rapira-worker"]["rss"], SUMMARY_B["hello-rapira-worker"]["rss"]],
-                },
-                "yii3-rapira-dispatcher": {
-                    "capacity": [None, SUMMARY_B["yii3-rapira-dispatcher"]["capacity"]],
-                    "p99": [None, SUMMARY_B["yii3-rapira-dispatcher"]["p99"]],
-                    "rss": [None, SUMMARY_B["yii3-rapira-dispatcher"]["rss"]],
                 },
             },
         },
@@ -199,9 +199,9 @@ TOOLTIP_CASES = [
         ],
     },
     {
-        # Run b, yii3 capacity: 1 of 3 pairs, so the tone is gray.
+        # Run b, hello dispatcher capacity: 1 of 3 pairs, so the tone is gray.
         "name": "capacity, 1 pair",
-        "target": "yii3-rapira-dispatcher", "measure": "capacity", "index": 1,
+        "target": "hello-rapira-dispatcher", "measure": "capacity", "index": 1,
         "expected": [
             line("2026-09-27 01:00 UTC - bbbbbbb"),
             line("new 24000 vs base 25000 req/s"),

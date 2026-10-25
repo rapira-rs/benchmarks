@@ -573,11 +573,11 @@ CI_SUITE = load_suite(SUITE_FILE, load_targets(ROOT / "suites" / "targets.toml")
 
 TTL_CASES = [
     {
-        # 3 rounds x 6 targets x 2 builds = 36 cells per stage kind.
-        # 36 x (11 + 15 + 20) + 36 x (5 + 15 + 20) + 300 = 1656 + 1440 + 300 = 3396 seconds.
+        # 3 rounds x 5 targets x 2 builds = 30 cells per stage kind.
+        # 30 x (11 + 15 + 20) + 30 x (5 + 15 + 20) + 300 = 1380 + 1200 + 300 = 2880 seconds.
         "name": "the ci suite",
         "suite": CI_SUITE,
-        "expected": 3396,
+        "expected": 2880,
     },
     {
         # 2 rate cells x (10 + 60 + 20) + 2 cap cells x (5 + 15 + 20) + 300 = 560 seconds.

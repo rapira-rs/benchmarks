@@ -13,7 +13,7 @@ from rig.report import render
 VOIDED_TITLE = "VOIDED cells (their pairs do not count):"
 FOOTER = "Do not publish these tables."
 HELLO = "hello-rapira-worker"
-YII3 = "yii3-rapira-dispatcher"
+DISPATCHER = "hello-rapira-dispatcher"
 
 
 def entry(pairs, delta_pct, min_pct, max_pct, base, new, flags=()):
@@ -44,16 +44,16 @@ HELLO_ROWS = [
     [HELLO, "rss", "3", "+1.0%", "+0.0%", "+2.0%", "100.0", "102.0", "MiB", "-"],
 ]
 NULL_ROWS = [
-    [YII3, "capacity", "0", "-", "-", "-", "-", "-", "req/s", "-"],
-    [YII3, "p99", "0", "-", "-", "-", "-", "-", "ms", "-"],
-    [YII3, "rss", "0", "-", "-", "-", "-", "-", "MiB", "-"],
+    [DISPATCHER, "capacity", "0", "-", "-", "-", "-", "-", "req/s", "-"],
+    [DISPATCHER, "p99", "0", "-", "-", "-", "-", "-", "ms", "-"],
+    [DISPATCHER, "rss", "0", "-", "-", "-", "-", "-", "MiB", "-"],
 ]
 BASE_VOID = [
-    void_cell("r1-base-rate-yii3-rapira-dispatcher", "server log: 3 warn or error lines"),
-    void_cell("r1-base-cap-yii3-rapira-dispatcher", "server log: 3 warn or error lines"),
+    void_cell("r1-base-rate-hello-rapira-dispatcher", "server log: 3 warn or error lines"),
+    void_cell("r1-base-cap-hello-rapira-dispatcher", "server log: 3 warn or error lines"),
 ]
 
-# width is the longest target name plus 2: hello-rapira-worker has 19 characters, yii3-rapira-dispatcher 22.
+# width is the longest target name plus 2: hello-rapira-worker has 19 characters, hello-rapira-dispatcher 23.
 CASES = [
     {
         "name": "a complete run with three pairs",
@@ -68,12 +68,12 @@ CASES = [
         # The rows keep the target order of the summary. A measure with 0 pairs prints dashes.
         # A complete run with void cells lists them and exits 0.
         "name": "a complete run with every base cell of a target void",
-        "width": 24,
-        "run": run_doc({YII3: {"capacity": NULL, "p99": NULL, "rss": NULL}, HELLO: HELLO_SUMMARY}, BASE_VOID),
+        "width": 25,
+        "run": run_doc({DISPATCHER: {"capacity": NULL, "p99": NULL, "rss": NULL}, HELLO: HELLO_SUMMARY}, BASE_VOID),
         "rows": NULL_ROWS + HELLO_ROWS,
         "voided": [
-            "r1-base-rate-yii3-rapira-dispatcher: server log: 3 warn or error lines",
-            "r1-base-cap-yii3-rapira-dispatcher: server log: 3 warn or error lines",
+            "r1-base-rate-hello-rapira-dispatcher: server log: 3 warn or error lines",
+            "r1-base-cap-hello-rapira-dispatcher: server log: 3 warn or error lines",
         ],
         "footer": [],
         "status": 0,
@@ -107,16 +107,16 @@ CASES = [
     },
     {
         "name": "a broken run",
-        "width": 24,
+        "width": 25,
         "run": run_doc(
-            {YII3: {"capacity": NULL, "p99": NULL, "rss": NULL}},
-            [void_cell("r1-new-rate-yii3-rapira-dispatcher", "stop failed: timeout"), void_cell("r1-new-cap-yii3-rapira-dispatcher", "stop failed: timeout")],
+            {DISPATCHER: {"capacity": NULL, "p99": NULL, "rss": NULL}},
+            [void_cell("r1-new-rate-hello-rapira-dispatcher", "stop failed: timeout"), void_cell("r1-new-cap-hello-rapira-dispatcher", "stop failed: timeout")],
             "broken",
-            ["yii3-rapira-dispatcher: every new cell is void"],
+            ["hello-rapira-dispatcher: every new cell is void"],
         ),
         "rows": NULL_ROWS,
-        "voided": ["r1-new-rate-yii3-rapira-dispatcher: stop failed: timeout", "r1-new-cap-yii3-rapira-dispatcher: stop failed: timeout"],
-        "footer": ["BROKEN RUN: yii3-rapira-dispatcher: every new cell is void.", FOOTER],
+        "voided": ["r1-new-rate-hello-rapira-dispatcher: stop failed: timeout", "r1-new-cap-hello-rapira-dispatcher: stop failed: timeout"],
+        "footer": ["BROKEN RUN: hello-rapira-dispatcher: every new cell is void.", FOOTER],
         "status": 1,
     },
 ]

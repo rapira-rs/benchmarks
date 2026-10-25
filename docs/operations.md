@@ -58,7 +58,6 @@ Provisioning installs only the apps that the suite uses. Set the same `SUITE` on
 | Instance | Condition | Software |
 | --- | --- | --- |
 | Server | All runs | PHP with opcache, the shared `servers/php.ini`, and two rapira binaries: the new build under `/opt/bench/rapira/<sha7>`, from the nightly release asset or a build of `REF`, and the base build under `/opt/bench/rapira/base-<sha7>`, from the `binaries` release |
-| Server | Yii3 target | The PHP modules `mbstring`, `xml`, `pdo`, and `pgsql`, Composer, the app-api at the commit of `apps/yii3/source.toml` with the dependencies of the committed `composer.lock`, and the Valkey service for its route cache |
 | Server | gRPC target | Composer and the pure PHP protobuf runtime of `apps/grpc/composer.lock` |
 | Loader | All runs | wrk2 at commit `44a94c1`, h2load from the Fedora `nghttp2` package, and a chrony synchronization check |
 
@@ -75,7 +74,7 @@ The Fedora 44 EC2 image supplies Bash, `dnf`, `sudo`, the OpenSSH server, cloud-
 - `[stages.cap]`: `warmup_s`, `duration_s`, and `processes`, the rapira process count of the capacity stage.
 - `[stages.rate.rates]` and `[stages.cap.rates]`: the rate of each target of the suite in that stage kind, as the total req/s over all loaders. The keys are target names.
 
-`ci` is the per-merge suite: the six targets, 3 rounds, 1000 connections for the HTTP targets, and 100 connections with 100 streams each for the gRPC target. The rate stage has an 11 s warm-up and 15 s measured. The capacity stage has a 5 s warm-up, 15 s measured, and 2 processes. [METHOD.md](../METHOD.md) gives the rules for its rates.
+`ci` is the per-merge suite: the five targets, 3 rounds, 1000 connections for the HTTP targets, and 100 connections with 100 streams each for the gRPC target. The rate stage has an 11 s warm-up and 15 s measured. The capacity stage has a 5 s warm-up, 15 s measured, and 2 processes. [METHOD.md](../METHOD.md) gives the rules for its rates.
 
 The driver refuses a suite before it creates a run directory when one of these conditions is true:
 
@@ -115,7 +114,7 @@ The driver refuses a suite before it creates a run directory when one of these c
 - `make sync` builds the local `../core` working tree on the server and installs it under `/opt/bench/rapira/local`. The next `make bench` uses that binary as the new build. The base build does not change. The rig must come from `make up REF=<ref> BASE=<sha7>`, because a nightly rig has no Rust toolchain. A build of `REF` or of `make sync` links the PHP of the Fedora `php-embedded` package. The base build loads the libphp of its nightly tarball. The deltas of such a run therefore include the difference between the two PHP builds. For an A/B of two rapira builds, use `NIGHTLY`.
 - `make report` prints the summary table of the newest run. `make report RUN=runs/<id>` prints another run.
 - `make board` copies the board files into `PAGES` and serves the directory on 127.0.0.1:8000. Fill the directory first with `python3 -m rig publish --pages-dir runs/pages runs/<id>/run.json`.
-- `make lock` creates `apps/yii3/composer.lock`, `apps/yii3/expect.json`, and `apps/grpc/composer.lock` from the pinned sources. It needs PHP 8.5, Composer, and a Valkey or Redis server on 127.0.0.1:6379 on the operator machine, for example `docker run --rm -d -p 127.0.0.1:6379:6379 valkey/valkey:9.1.2-alpine`.
+- `make lock` creates `apps/grpc/composer.lock` from `apps/grpc/composer.json`. It needs PHP 8.5 and Composer on the operator machine.
 - `make test` runs the unit tests.
 - `make nuke` removes the tagged AWS resources when the Terraform state is not usable.
 - `make grpc_fixtures` builds the gRPC descriptor, the PHP classes, and the request and response fixtures. It needs Go and access to the buf remote plugins.
@@ -158,9 +157,9 @@ Keep `TF_BACKEND=s3` and the variable set for every later target that uses Terra
 
 The instances use on-demand billing per second. In eu-central-1 the default rig costs 0.93704 USD per hour: 0.46852 USD for the c7a.2xlarge server and 0.23426 USD for each c7a.xlarge loader.
 
-The `ci` suite has 72 cells. The measured overhead is about 5.7 s per cell, so a rate cell takes about 32 s and a capacity cell about 26 s. The cells take about 34 minutes. The rig creation, the provisioning, and the destroy take about 2.0 minutes. A CI run therefore holds the rig for about 36 minutes, which costs about 0.57 USD. The EBS volumes and the public IPv4 addresses add about 0.02 USD. The upper bound of a normal run is about 43 minutes, which costs about 0.68 USD. The job timeout of 75 minutes stops a run that hangs.
+The `ci` suite has 60 cells. The measured overhead is about 5.7 s per cell, so a rate cell takes about 32 s and a capacity cell about 26 s. The estimated cell time is about 29 minutes. The rig creation, the provisioning, and the destroy take about 2.0 minutes. A CI run therefore holds the rig for about 31 minutes, which costs about 0.48 USD. The EBS volumes and the public IPv4 addresses add about 0.02 USD. With cells 20% longer, the estimated time is about 36 minutes, which costs about 0.57 USD. The job timeout of 75 minutes stops a run that hangs.
 
-Every box has a lifetime. The bootstrap sets 75 minutes. Provisioning replaces it with `TTL`. `make bench` extends it from the run estimate: for each cell, `warmup_s` plus `duration_s` of its stage kind plus 20 seconds, and 300 seconds for the run. For the `ci` suite that is 36 x (11 + 15 + 20) + 36 x (5 + 15 + 20) + 300 = 3396 seconds. When the lifetime ends, the box shuts down, and a shutdown terminates the instance. A CI runner that stops before the provisioning therefore bills at most about 1.2 USD.
+Every box has a lifetime. The bootstrap sets 75 minutes. Provisioning replaces it with `TTL`. `make bench` extends it from the run estimate: for each cell, `warmup_s` plus `duration_s` of its stage kind plus 20 seconds, and 300 seconds for the run. For the `ci` suite that is 30 x (11 + 15 + 20) + 30 x (5 + 15 + 20) + 300 = 2880 seconds. When the lifetime ends, the box shuts down, and a shutdown terminates the instance. A CI runner that stops before the provisioning therefore bills at most about 1.2 USD.
 
 - Run `make down` after every session. Check `make status` when you are not sure.
 - When `make down` fails, run it again. Placement group deletion can lag instance termination.

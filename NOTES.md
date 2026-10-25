@@ -17,6 +17,8 @@ Dated records and the decisions the code cannot show. Methodology lives in METHO
 
 Rig: one c7a.2xlarge server and two c7a.xlarge loaders in eu-central-1a, placement group `rapira-bench`, AMI `ami-05d038400faa82df7` with the kernel 7.2.7-200.fc44.x86_64. `NIGHTLY=ac56141 BASE=ac56141`: the two builds are the same tarball of the `binaries` release, so every paired delta is noise. The three passes ran on one rig.
 
+The target tables show the current targets. The run totals and noise measurements include all targets measured at the time.
+
 - Pass 1: `20260927T104446Z-ci-ac56141`, 1 round, the initial rates.
 - Check pass: `20260927T105717Z-ci-ac56141`, 1 round, the rates from pass 1.
 - Pass 2: `20260927T110949Z-ci-ac56141`, 3 rounds, the final rates of `suites/ci.toml`. The run is complete and has no void cell.
@@ -29,7 +31,6 @@ The rate rule: the rate stage rate is the calibration rate x 50 / the server bus
 | hello-rapira-worker | 60000 | 28.5% | 105000 | 300000 | 295340 (held) | 600000 | 50% |
 | hello-rapira-dispatcher | 60000 | 29.0% | 103000 | 300000 | 295340 (held) | 600000 | 47% |
 | hello-rapira-dispatcher-static | 60000 | 35.5% | 84000 | 300000 | 247534 | 500000 | 40% |
-| yii3-rapira-dispatcher | 16000 | 32.0% | 25000 | 60000 | 22760 | 50000 | 5% |
 | grpc-rapira | 50000 | 18.5% | 135000 | 300000 | 168388 | 340000 | 34% |
 
 Every new rate stage rate differs from its calibration rate by more than 30%, and 2 capacity cells held. So a check pass ran with the new rates:
@@ -40,11 +41,10 @@ Every new rate stage rate differs from its calibration rate by more than 30%, an
 | hello-rapira-worker | 105000 | 24.0% | 218000 | 600000 | 371395 | 750000 | 55% |
 | hello-rapira-dispatcher | 103000 | 23.5% | 219000 | 600000 | 384091 | 770000 | 58% |
 | hello-rapira-dispatcher-static | 84000 | 26.5% | 158000 | 500000 | 252278 | 510000 | 41% |
-| yii3-rapira-dispatcher | 25000 | 42.0% | 29000 | 50000 | 22467 | 50000 | 5% |
 | grpc-rapira | 135000 | 44.0% | 153000 | 340000 | 166592 | 340000 | 34% |
 
 - All capacity cells of the check pass saturated, and the capacity loaders stayed at 58% or less. So `stages.cap.processes` stays 2. The final capacity rates are the "new cap rate" column of the check pass.
-- The final rate stage rates of hello-rapira-classic (110000), yii3-rapira-dispatcher (29000), and grpc-rapira (153000) follow the rule.
+- The final rate stage rates of hello-rapira-classic (110000) and grpc-rapira (153000) follow the rule.
 - The final rate stage rates of hello-rapira-worker (200000), hello-rapira-dispatcher (200000), and hello-rapira-dispatcher-static (150000) are below the rule. The server CPU of these targets increases much slower than the rate: the worker is at 28% at 60000 req/s and at 24% at 105000 req/s. At the rule rate the loader busy would increase to 60 to 70%.
 
 Pass 2, per target: the server busy range of the 6 rate cells, and the median of the 6 capacity cells.
@@ -55,7 +55,6 @@ Pass 2, per target: the server busy range of the 6 rate cells, and the median of
 | hello-rapira-worker | 200000 | 49-50% | 40% | 366073 | 73% | 55% |
 | hello-rapira-dispatcher | 200000 | 46-47% | 38% | 380001 | 66-67% | 57% |
 | hello-rapira-dispatcher-static | 150000 | 42-58% | 35% | 250670 | 63% | 41% |
-| yii3-rapira-dispatcher | 29000 | 57-60% | 11% | 22730 | 32% | 5% |
 | grpc-rapira | 153000 | 47-50% | 19% | 167199 | 72-73% | 35% |
 
 - All 36 rate cells held their rate. No capacity cell held. The largest loader busy of the run is 57%.
@@ -65,7 +64,7 @@ Pass 2, per target: the server busy range of the 6 rate cells, and the median of
 | --- | --- | --- | --- | --- |
 | capacity | 2.30% (dispatcher, round 1) | 2.30% | 2.14% | 2.5% |
 | p99 | 19.35% (grpc, round 2) | 2.92% (dispatcher, round 1) | 19.35% | 3.0%, grpc-rapira 19.5% |
-| RSS | 1.54% (yii3) | 1.54% | 0.74% | 2.0% |
+| RSS | 1.54% | 1.54% | 0.74% | 2.0% |
 
 - A floor is the largest `|paired delta|` rounded up to a multiple of 0.5%. One p99 floor of 19.5% for all targets would keep a real 10% p99 regression of an HTTP/1.1 target gray. So the p99 floor of the measure leaves out grpc-rapira, and grpc-rapira gets its own p99 floor in `TARGET_NOISE_FLOOR_PCT`.
 - The median deltas (the board points) of pass 2: capacity -1.2% to +1.4%, HTTP/1.1 p99 -0.6% to +0.5%, RSS -0.1% to +0.5%, and grpc-rapira p99 +17.2% (pairs +17.2%, +19.4%, -1.3%). With these floors no point gets a color: every band crosses zero, or the delta is under the floor.
@@ -79,11 +78,10 @@ The gRPC p99 noise:
 - The HTTP/1.1 targets stay at or below 2.92% per pair.
 - The 100 gRPC connections spread unevenly over the 8 server processes, and a large spread comes with a high p99. The spread does not explain all of the noise, and more connections do not lower it. The section "gRPC connection check, 2026-09-27" has the data.
 
-The `loader_skew` flags: 2 of the 30 wrk2 rate cells have the flag, both on loader-2 in round 1.
+The `loader_skew` flag on the hello dispatcher with static middleware:
 
 - `r1-base-rate-hello-rapira-dispatcher-static`: thread 1.444 ms, median 1.203 ms, gap 0.241 ms. The p99 is 2709 us against 2613 us of its pair cell (+3.7%, above the 3.0% HTTP/1.1 p99 floor).
-- `r1-base-rate-yii3-rapira-dispatcher`: thread 3.982 ms, median 1.248 ms, gap 2.734 ms. The p99 is 8407 us against 2401 us of its pair cell (+250%).
-- In both cells the p99 is above the p99 of the pair cell by more than the p99 floor, so the flag does not trip on noise. `rig/flags.py` has no absolute floor for the skew gap. The two p99 measures have 2 counted pairs, so their points are gray.
+- In this cell the p99 is above the p99 of the pair cell by more than the p99 floor, so the flag does not trip on noise. `rig/flags.py` has no absolute floor for the skew gap. The p99 measure has 2 counted pairs, so its point is gray.
 
 Time and cost, at 0.93704 USD/h:
 
@@ -115,7 +113,7 @@ Rig: the shape of the A/A calibration, on a new rig. Two gRPC-only A/A runs of 5
 ## Method change 2, 2026-09-25
 
 - From this date the rig measures one constant rate per target, as METHOD.md defines: 250000 req/s over 5000 connections for the HTTP targets and 100000 req/s over 100 connections for the gRPC target, 60 s measured after a 10 s warm-up, from one c7a.2xlarge loader against one c7a.8xlarge server. The numbers are the p99 latency and the RSS of the rapira process tree next to the achieved rate.
-- The targets are rapira only: hello in the classic, worker, and dispatcher modes, the dispatcher behind the static middleware, the Yii3 app-api on the dispatcher, and gRPC echo. FrankenPHP, php-fpm, nginx, RoadRunner, Symfony, Laravel, the static file rows, the gRPC-Web and Connect rows, k6, the base build, and the `full` and `ab` suites are removed.
+- The current targets are rapira only: hello in the classic, worker, and dispatcher modes, the dispatcher behind the static middleware, and gRPC echo. FrankenPHP, php-fpm, nginx, RoadRunner, Symfony, Laravel, the static file rows, the gRPC-Web and Connect rows, k6, the base build, and the `full` and `ab` suites are removed.
 - Each run writes `runs/<id>/run.json` with the schema `rapira-bench-run/2`. The ladder run of the same day, `20260925T190409Z-ci-73b9d30`, has the schema 1: its numbers do not compare with the runs after it, and the board does not draw it.
 
 ## First ladder run, 2026-09-25

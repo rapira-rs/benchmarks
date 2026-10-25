@@ -4,7 +4,7 @@ Date: 2026-09-25. Status: approved by the owner in conversation; this document i
 
 ## 1. Goals
 
-- Bench rapira only: its classic, worker, and dispatcher modes on a hello app, the dispatcher with the static middleware on, the Yii3 app-api on the dispatcher, and gRPC echo.
+- Bench rapira only: its classic, worker, and dispatcher modes on a hello app, the dispatcher with the static middleware on, and gRPC echo.
 - Measure at one constant request rate per app, from one loader, and report two numbers per target: the p99 latency and the RSS of the rapira process tree, next to the achieved rate.
 - Show the history on two charts, p99 and RSS, with the merged pull request as the x label and a click that opens it.
 - Keep everything else from the rework: the EC2 rig, the box protocol, the run file discipline, the CI path, the flags and voids.
@@ -23,13 +23,13 @@ Date: 2026-09-25. Status: approved by the owner in conversation; this document i
 
 - Terraform: `loader_count` defaults to 1 and `loader_instance_type` to `c7a.2xlarge`. The server stays `c7a.8xlarge`. Nothing else changes in `terraform/`.
 - Loader provisioning installs wrk2 (unchanged, pinned commit) and the `nghttp2` package for h2load. k6 goes. `/opt/bench/loader.json` records `wrk2_commit` and `h2load_version` (the first line of `h2load --version`).
-- Server provisioning installs PHP with opcache and the shared `servers/php.ini`, the rapira binary (the nightly asset or a build of `REF`), and for the apps of the suite: Composer, the PHP modules of the Yii3 app (`php-mbstring`, `php-xml`, `php-pdo`, `php-pgsql`), Valkey, the Yii3 app, and the pure PHP protobuf runtime of the gRPC app from `apps/grpc/composer.json` and its committed `composer.lock` into `/opt/bench/apps/grpc/vendor`. FrankenPHP, php-fpm, nginx, RoadRunner, Symfony, Laravel, the PECL protobuf extension, and the base build of `BASE_REF` are no longer installed. `/opt/bench/versions.json` records `php`, and with the Yii3 app `valkey` and `yii3` (the commit), and with the gRPC app `protobuf` (the runtime version).
-- The Yii3 app: `apps/yii3/source.toml` pins `repo = "https://github.com/Yii3-Benchmarks/app-api"` and `commit` (the master head on 2026-09-25, `0fa2e2a`). Provisioning clones that commit to `/opt/bench/apps/yii3`, copies the committed `apps/yii3/composer.lock` over it, and runs `composer install --no-dev --classmap-authoritative --no-scripts`. The app keeps its compiled routes in its PSR-16 cache, which is `yiisoft/cache-redis` on `127.0.0.1:6379`, and reads that cache when a process builds its container, so the server runs the Fedora `valkey` service. The app defaults to the `prod` environment without debug when `APP_ENV` and `APP_DEBUG` are unset, so nothing sets them. Its `worker-rapira.php` entry point detects the rapira mode at startup and supports all three modes. The `/` endpoint returns the 65 byte JSON body `{"status":"success","data":{"name":"My Project","version":"1.0"}}` without a database; `apps/yii3/expect.json` holds that body byte for byte. `make lock` creates `apps/yii3/composer.lock` with `composer install` from the pristine `composer.json` of the pinned commit (`composer update` would also bump the constraints of that file) and captures `expect.json` with `php -S` and `public/index.php`. It runs on the operator machine with PHP 8.5, Composer, and a Valkey or Redis server on `127.0.0.1:6379`, for example `docker run --rm -d -p 127.0.0.1:6379:6379 valkey/valkey:9.1.2-alpine`. `make lock` also writes `apps/grpc/composer.lock`.
+- Server provisioning installs PHP with opcache, the shared `servers/php.ini`, and the rapira binary from the nightly asset or a build of `REF`. For the gRPC app, it installs Composer and the pure PHP protobuf runtime from `apps/grpc/composer.json` and its committed `composer.lock` into `/opt/bench/apps/grpc/vendor`. `/opt/bench/versions.json` records `php` and, with the gRPC app, `protobuf`.
+- `make lock` creates `apps/grpc/composer.lock` from `apps/grpc/composer.json`. It needs PHP 8.5 and Composer on the operator machine.
 - The gRPC app keeps in `apps/grpc` the descriptor, the request and response classes, the dispatcher, `echo.grpc` (the request frame), and `expect.grpc` (the response frame), and gains `composer.json` with `google/protobuf` and its lock. The RoadRunner worker, the RoadRunner service interface and its buf plugin, and the gRPC-Web and Connect fixtures go.
 
 ## 4. Targets and the suite
 
-`suites/targets.toml` defines six targets. The name form stays `<app>-rapira-<mode>` with a `-static` suffix for the static middleware; the gRPC target is `grpc-rapira`. Every target has `server = "rapira"`. The `binary` field, the `-base` twins, `BASE_REF`, and the base build are gone with the `ab` suite.
+`suites/targets.toml` defines five targets. The name form stays `<app>-rapira-<mode>` with a `-static` suffix for the static middleware; the gRPC target is `grpc-rapira`. Every target has `server = "rapira"`. The `binary` field, the `-base` twins, `BASE_REF`, and the base build are gone with the `ab` suite.
 
 | target | app | mode | config template | request |
 | --- | --- | --- | --- | --- |
@@ -37,7 +37,6 @@ Date: 2026-09-25. Status: approved by the owner in conversation; this document i
 | hello-rapira-worker | hello | worker | servers/rapira/http.toml.tpl | GET /?name=you |
 | hello-rapira-dispatcher | hello | dispatcher | servers/rapira/http.toml.tpl | GET /?name=you |
 | hello-rapira-dispatcher-static | hello | dispatcher | servers/rapira/static.toml.tpl | GET /?name=you |
-| yii3-rapira-dispatcher | yii3 | dispatcher | servers/rapira/http.toml.tpl | GET / |
 | grpc-rapira | grpc | dispatcher | servers/rapira/grpc.toml.tpl | POST /bench.v1.EchoService/Echo |
 
 The static row enables rapira's static middleware with the static root of the hello app; the request misses the root and reaches PHP, so the row shows the cost of the middleware on the PHP path.
@@ -50,11 +49,10 @@ rounds = 1
 warmup_s = 10
 duration_s = 60
 smoke = false
-targets = ["hello-rapira-classic", "hello-rapira-worker", "hello-rapira-dispatcher", "hello-rapira-dispatcher-static", "yii3-rapira-dispatcher", "grpc-rapira"]
+targets = ["hello-rapira-classic", "hello-rapira-worker", "hello-rapira-dispatcher", "hello-rapira-dispatcher-static", "grpc-rapira"]
 
 [rates]
 hello = 250000
-yii3 = 250000
 grpc = 100000
 
 [connections]
@@ -108,7 +106,7 @@ The voids of the rework stay: a start failure, a probe mismatch, a loader withou
 
 ### 5.6 Time budget
 
-A cell is about 10 s start and probe, 70 s load, and 15 s stop and drain. Six cells are about 10 minutes. The TTL estimate is the cell count times (`warmup_s` plus `duration_s` plus 60) plus 300 s.
+A cell is about 10 s start and probe, 70 s load, and 15 s stop and drain. Five cells are about 8 minutes. The TTL estimate is the cell count times (`warmup_s` plus `duration_s` plus 60) plus 300 s.
 
 ## 6. Result format
 
@@ -152,7 +150,7 @@ One page, two charts, no selector:
 ## 10. Docs
 
 - `METHOD.md` is rewritten for the constant-rate method: terms, rig rules, the two tools, the cell sequence, the numbers, `held`, the flags, the voids, the review before publication, and the board.
-- `README.md` keeps its three paragraphs; "what is tested" names the six rows and the two numbers.
+- `README.md` keeps its three paragraphs; "what is tested" names the five rows and the two numbers.
 - `docs/operations.md` follows the knobs and targets that remain.
 - `NOTES.md` gets a dated entry "Method change 2, 2026-09-25": the constant rate replaces the ladder, the targets that were removed, and that the ladder numbers of the same day do not compare.
 

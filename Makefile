@@ -90,7 +90,7 @@ extend:
 sync:
 	@python3 -m rig sync --src ../core
 
-# Creates the Yii3 and gRPC lock files and the Yii3 expected body. Needs PHP 8.5, Composer, and a Valkey on 127.0.0.1:6379.
+# Creates the gRPC lock file. Needs PHP 8.5 and Composer.
 lock:
 	box/lock-apps.sh
 

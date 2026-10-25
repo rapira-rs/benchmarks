@@ -1,7 +1,7 @@
 # The target registry. The driver reads it with tomllib.
 # A name is <app>-rapira-<mode>, with the suffix -static for the static middleware. The gRPC target is grpc-rapira.
 # The start arguments follow the box protocol of box/target.sh.
-# On the box @RIG@ expands to $HOME/bench-rig and @APPS@ expands to /opt/bench/apps.
+# On the box @RIG@ expands to $HOME/bench-rig.
 # The expect, body, and config paths are relative to the repository root.
 
 [hello-rapira-classic]
@@ -44,17 +44,6 @@ start = ["dispatcher", "@RIG@/apps/hello/dispatcher.php", "@RIG@/servers/rapira/
 url = "/?name=you"
 expect = "apps/hello/expect.txt"
 config = "servers/rapira/static.toml.tpl"
-
-# The Yii3 app-api at the commit of apps/yii3/source.toml. Its entry point detects the rapira mode.
-[yii3-rapira-dispatcher]
-server = "rapira"
-app = "yii3"
-mode = "dispatcher"
-proto = "http1"
-start = ["dispatcher", "@APPS@/yii3/worker-rapira.php"]
-url = "/"
-expect = "apps/yii3/expect.json"
-config = "servers/rapira/http.toml.tpl"
 
 # The gRPC target calls bench.v1.EchoService/Echo over h2c under h2load.
 [grpc-rapira]

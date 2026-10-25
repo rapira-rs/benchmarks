@@ -5,7 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 SERVERS = ("rapira",)
-APPS = ("hello", "yii3", "grpc")
+APPS = ("hello", "grpc")
 MODES = ("worker", "classic", "dispatcher")
 PROTOS = ("http1", "grpc")
 MIN_DURATION_S = 15

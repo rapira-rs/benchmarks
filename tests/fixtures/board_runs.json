@@ -32,7 +32,7 @@
     "p99": {"pairs": 2, "delta_pct": -12.5, "min_pct": -14.0, "max_pct": -11.0, "base": 1200.0, "new": 1050.0, "flags": []},
     "rss": {"pairs": 3, "delta_pct": 0.2, "min_pct": 0.0, "max_pct": 0.4, "base": 208896.0, "new": 209305.6, "flags": ["loader_skew"]}
    },
-   "yii3-rapira-dispatcher": {
+   "hello-rapira-dispatcher": {
     "capacity": {"pairs": 1, "delta_pct": -4.0, "min_pct": -4.0, "max_pct": -4.0, "base": 25000.0, "new": 24000.0, "flags": []},
     "p99": {"pairs": 3, "delta_pct": 2.0, "min_pct": 1.0, "max_pct": 3.0, "base": 4000.0, "new": 4080.0, "flags": []},
     "rss": {"pairs": 3, "delta_pct": 0.0, "min_pct": -0.2, "max_pct": 0.2, "base": 524288.0, "new": 524288.0, "flags": []}
