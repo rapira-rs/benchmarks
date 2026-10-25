@@ -45,10 +45,18 @@ def entry(run):
     return {"id": run["id"], "started": run["started"], "smoke": run["smoke"], "schema": run["schema"]}
 
 
+def initial(record):
+    return {**record, "change_pct": 0, "initial": True, "estimated": False}
+
+
+def direct(record):
+    return {**record, "change_pct": record["delta_pct"], "initial": False, "estimated": False}
+
+
 SERIES_CASES = [
     {
-        # A point is the summary record of one target and one measure in one run, as the run file holds it.
-        # grpc-rapira has 0 pairs in run b, so its records there hold nulls and the chart draws gaps.
+        # The first run is the origin. Run b compares directly with that build.
+        # grpc-rapira has 0 pairs in run b, so its points there are gaps.
         # hello-rapira-dispatcher is only in run b, so its points in run a are null.
         # The targets come in name order. A date is the UTC start of the run to the minute.
         "name": "series from the summary with 0 pairs and a target in one run",
@@ -58,23 +66,24 @@ SERIES_CASES = [
             "dates": ["2026-09-26 01:00 UTC", "2026-09-27 01:00 UTC"],
             "links": ["https://github.com/rapira-rs/rapira/pull/101", COMMIT_B],
             "titles": ["Faster hello", ""],
-            "bases": ["ccccccc", "bbbbbbb"],
+            "baseline": RUN_A["rapira"]["sha"],
+            "bases": ["ccccccc", "aaaaaaa"],
             "rounds": [3, 3],
             "targets": {
                 "grpc-rapira": {
-                    "capacity": [SUMMARY_A["grpc-rapira"]["capacity"], SUMMARY_B["grpc-rapira"]["capacity"]],
-                    "p99": [SUMMARY_A["grpc-rapira"]["p99"], SUMMARY_B["grpc-rapira"]["p99"]],
-                    "rss": [SUMMARY_A["grpc-rapira"]["rss"], SUMMARY_B["grpc-rapira"]["rss"]],
+                    "capacity": [initial(SUMMARY_A["grpc-rapira"]["capacity"]), None],
+                    "p99": [initial(SUMMARY_A["grpc-rapira"]["p99"]), None],
+                    "rss": [initial(SUMMARY_A["grpc-rapira"]["rss"]), None],
                 },
                 "hello-rapira-dispatcher": {
-                    "capacity": [None, SUMMARY_B["hello-rapira-dispatcher"]["capacity"]],
-                    "p99": [None, SUMMARY_B["hello-rapira-dispatcher"]["p99"]],
-                    "rss": [None, SUMMARY_B["hello-rapira-dispatcher"]["rss"]],
+                    "capacity": [None, direct(SUMMARY_B["hello-rapira-dispatcher"]["capacity"])],
+                    "p99": [None, direct(SUMMARY_B["hello-rapira-dispatcher"]["p99"])],
+                    "rss": [None, direct(SUMMARY_B["hello-rapira-dispatcher"]["rss"])],
                 },
                 "hello-rapira-worker": {
-                    "capacity": [SUMMARY_A["hello-rapira-worker"]["capacity"], SUMMARY_B["hello-rapira-worker"]["capacity"]],
-                    "p99": [SUMMARY_A["hello-rapira-worker"]["p99"], SUMMARY_B["hello-rapira-worker"]["p99"]],
-                    "rss": [SUMMARY_A["hello-rapira-worker"]["rss"], SUMMARY_B["hello-rapira-worker"]["rss"]],
+                    "capacity": [initial(SUMMARY_A["hello-rapira-worker"]["capacity"]), direct(SUMMARY_B["hello-rapira-worker"]["capacity"])],
+                    "p99": [initial(SUMMARY_A["hello-rapira-worker"]["p99"]), direct(SUMMARY_B["hello-rapira-worker"]["p99"])],
+                    "rss": [initial(SUMMARY_A["hello-rapira-worker"]["rss"]), direct(SUMMARY_B["hello-rapira-worker"]["rss"])],
                 },
             },
         },
@@ -83,7 +92,7 @@ SERIES_CASES = [
         # An index without schema 3 runs gives an empty board: no labels and no targets.
         "name": "no runs",
         "runs": [],
-        "expected": {"labels": [], "dates": [], "links": [], "titles": [], "bases": [], "rounds": [], "targets": {}},
+        "expected": {"labels": [], "dates": [], "links": [], "titles": [], "baseline": "", "bases": [], "rounds": [], "targets": {}},
     },
 ]
 
@@ -155,38 +164,41 @@ def line(text, tone=""):
 TOOLTIP_CASES = [
     {
         # Run a, hello capacity: base 100000, new 104000 req/s. 3 of 3 pairs, band above zero, 4.0 >= 2.5.
-        "name": "capacity, pull request title, selected base outside the board, better",
+        "name": "capacity, pull request title, initial point with its original comparison",
         "target": "hello-rapira-worker", "measure": "capacity", "index": 0,
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
-            line("base ccccccc"),
+            line("change vs aaaaaaa 0.0% (starting point)"),
+            line("measured base ccccccc"),
             line("new 104000 vs base 100000 req/s"),
-            line("delta +4.0% (min +3.5%, max +4.6%, 3 pairs)", "better"),
+            line("paired delta +4.0% (min +3.5%, max +4.6%, 3 pairs)"),
         ],
     },
     {
         # Run b, hello p99: 1050 us = 1.05 ms, 1200 us = 1.20 ms. 2 of 3 pairs, so the tone is gray.
-        "name": "p99, run without a pull request, A/A base, 2 pairs",
+        "name": "p99, run without a pull request, direct comparison, 2 pairs",
         "target": "hello-rapira-worker", "measure": "p99", "index": 1,
         "expected": [
             line("2026-09-27 01:00 UTC - bbbbbbb"),
-            line("base bbbbbbb"),
+            line("change vs aaaaaaa -12.5%"),
+            line("measured base aaaaaaa"),
             line("new 1.05 vs base 1.20 ms"),
-            line("delta -12.5% (min -14.0%, max -11.0%, 2 pairs)"),
+            line("paired delta -12.5% (min -14.0%, max -11.0%, 2 pairs)"),
         ],
     },
     {
         # Run a, hello RSS: 208896 / 1024 = 204.0 MiB, 204800 / 1024 = 200.0 MiB. 3 of 3 pairs, band above zero,
         # 2.0 >= 2, and a higher RSS is worse.
-        "name": "RSS, worse, one flag",
+        "name": "RSS, initial point, one flag",
         "target": "hello-rapira-worker", "measure": "rss", "index": 0,
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
-            line("base ccccccc"),
+            line("change vs aaaaaaa 0.0% (starting point)"),
+            line("measured base ccccccc"),
             line("new 204.0 vs base 200.0 MiB"),
-            line("delta +2.0% (min +1.5%, max +2.5%, 3 pairs)", "worse"),
+            line("paired delta +2.0% (min +1.5%, max +2.5%, 3 pairs)"),
             line("loader_skew"),
         ],
     },
@@ -197,9 +209,10 @@ TOOLTIP_CASES = [
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
-            line("base ccccccc"),
+            line("change vs aaaaaaa 0.0% (starting point)"),
+            line("measured base ccccccc"),
             line("new 150750 vs base 150000 req/s"),
-            line("delta +0.5% (min -0.8%, max +1.2%, 3 pairs)"),
+            line("paired delta +0.5% (min -0.8%, max +1.2%, 3 pairs)"),
             line("loader_busy, not_saturated"),
         ],
     },
@@ -209,9 +222,10 @@ TOOLTIP_CASES = [
         "target": "hello-rapira-dispatcher", "measure": "capacity", "index": 1,
         "expected": [
             line("2026-09-27 01:00 UTC - bbbbbbb"),
-            line("base bbbbbbb"),
+            line("change vs aaaaaaa -4.0%"),
+            line("measured base aaaaaaa"),
             line("new 24000 vs base 25000 req/s"),
-            line("delta -4.0% (min -4.0%, max -4.0%, 1 pair)"),
+            line("paired delta -4.0% (min -4.0%, max -4.0%, 1 pair)"),
         ],
     },
 ]

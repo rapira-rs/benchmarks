@@ -10,17 +10,30 @@ const board = path.join(__dirname, "..", "board");
 const prA = "https://github.com/rapira-rs/rapira/pull/101";
 const commitB = "https://github.com/rapira-rs/rapira/commit/bbbbbbb0000000000000000000000000000000b2";
 
+const history = JSON.parse(JSON.stringify([runs[0], runs[1], runs[1]]));
+history[1].summary["hello-rapira-worker"].capacity = { pairs: 3, delta_pct: 10, min_pct: 9, max_pct: 11, base: 100, new: 110, flags: [] };
+history[2].id = "20260928T010000Z-ci-ddddddd";
+history[2].started = "2026-09-28T01:00:00Z";
+history[2].rapira.sha = "ddddddd0000000000000000000000000000000d4";
+history[2].base = runs[1].rapira;
+history[2].summary["hello-rapira-worker"].capacity = { pairs: 3, delta_pct: 10, min_pct: 9, max_pct: 11, base: 110, new: 121, flags: [] };
+const longHistory = [history[0], history[1], ...Array.from({ length: 61 }, (_, i) => ({
+  ...history[2], id: "later-" + i, started: new Date(Date.UTC(2026, 8, 28 + i, 1)).toISOString(),
+}))];
+
 const cases = [
   { name: "desktop hover at a zero-pair gap hides the previous tooltip", target: "grpc-rapira", index: 1, from: 0, action: "hover", tooltip: null, links: [] },
   { name: "desktop click at a zero-pair gap opens its run", target: "grpc-rapira", index: 1, action: "click", tooltip: null, links: [commitB] },
   { name: "desktop hover at a missing target hides the tooltip", target: "hello-rapira-dispatcher", index: 0, action: "hover", tooltip: null, links: [] },
   { name: "desktop click at a missing target opens its run", target: "hello-rapira-dispatcher", index: 0, action: "click", tooltip: null, links: [prA] },
-  { name: "desktop hover from a gap to a point shows the recorded base", target: "grpc-rapira", index: 0, from: 1, action: "hover", tooltip: ["2026-09-26 01:00 UTC - #101", "base ccccccc"], links: [] },
-  { name: "desktop hover from a missing target to a point keeps the tooltip in the plot", target: "hello-rapira-dispatcher", index: 1, from: 0, action: "hover", tooltip: ["2026-09-27 01:00 UTC - bbbbbbb", "base bbbbbbb"], links: [] },
-  { name: "desktop click at a measurement opens its run", target: "hello-rapira-worker", index: 1, action: "click", tooltip: ["2026-09-27 01:00 UTC - bbbbbbb", "base bbbbbbb"], links: [commitB] },
-  { name: "touch tap in the plot shows a tooltip without navigation", touch: true, target: "grpc-rapira", index: 0, action: "tap", tooltip: ["2026-09-26 01:00 UTC - #101", "base ccccccc"], links: [] },
+  { name: "desktop hover from a gap to a point shows the recorded base", target: "grpc-rapira", index: 0, from: 1, action: "hover", tooltip: ["2026-09-26 01:00 UTC - #101", "measured base ccccccc"], links: [] },
+  { name: "desktop hover from a missing target to a point keeps the tooltip in the plot", target: "hello-rapira-dispatcher", index: 1, from: 0, action: "hover", tooltip: ["2026-09-27 01:00 UTC - bbbbbbb", "measured base aaaaaaa"], links: [] },
+  { name: "desktop click at a measurement opens its run", target: "hello-rapira-worker", index: 1, action: "click", tooltip: ["2026-09-27 01:00 UTC - bbbbbbb", "measured base aaaaaaa"], links: [commitB] },
+  { name: "touch tap in the plot shows a tooltip without navigation", touch: true, target: "grpc-rapira", index: 0, action: "tap", tooltip: ["2026-09-26 01:00 UTC - #101", "measured base ccccccc"], links: [] },
   { name: "touch tap at a gap hides the previous tooltip without navigation", touch: true, target: "grpc-rapira", index: 1, from: 0, action: "tap", tooltip: null, links: [] },
-  { name: "touch tap on a point opens its run", touch: true, target: "grpc-rapira", index: 0, point: true, action: "tap", tooltip: ["2026-09-26 01:00 UTC - #101", "base ccccccc"], links: [prA] },
+  { name: "touch tap on a point opens its run", touch: true, target: "grpc-rapira", index: 0, point: true, action: "tap", tooltip: ["2026-09-26 01:00 UTC - #101", "measured base ccccccc"], links: [prA] },
+  { name: "the chart plots a cumulative estimate from A with no paired band", runs: history, target: "hello-rapira-worker", index: 2, action: "hover", tooltip: ["2026-09-28 01:00 UTC - ddddddd", "change vs aaaaaaa +21.0% (cumulative estimate)"], links: [], values: [0, 10, 21], min: [0, 9, null], max: [0, 11, null] },
+  { name: "the chart keeps A after the origin and its comparison leave the display", runs: longHistory, target: "hello-rapira-worker", index: 59, action: "hover", tooltip: ["2026-11-27 01:00 UTC - ddddddd", "change vs aaaaaaa +21.0% (cumulative estimate)"], links: [], values: Array(60).fill(21), min: Array(60).fill(null), max: Array(60).fill(null) },
 ];
 
 let browser;
@@ -35,14 +48,15 @@ for (const c of cases) {
   test(c.name, async () => {
     const page = await browser.newPage({ hasTouch: !!c.touch, isMobile: !!c.touch, viewport: c.touch ? { width: 390, height: 844 } : { width: 1280, height: 900 } });
     const errors = [];
+    const data = c.runs || runs;
     page.on("pageerror", (error) => errors.push(error.message));
     try {
       await page.route("https://board-audit.invalid/**", async (route) => {
         const pathname = new URL(route.request().url()).pathname;
         if (pathname === "/data/index.json") {
-          await route.fulfill({ json: { runs } });
+          await route.fulfill({ json: { runs: data.map((run) => ({ id: run.id, started: run.started, schema: run.schema, smoke: run.smoke, rapira_sha: run.rapira.sha, base_sha: run.base.sha })) } });
         } else if (pathname.startsWith("/data/")) {
-          await route.fulfill({ json: runs.find((run) => pathname === "/data/" + run.id + ".json") });
+          await route.fulfill({ json: data.find((run) => pathname === "/data/" + run.id + ".json") });
         } else {
           await route.fulfill({ path: path.join(board, pathname === "/" ? "index.html" : pathname) });
         }
@@ -53,7 +67,17 @@ for (const c of cases) {
       });
       await page.goto("https://board-audit.invalid/");
       await page.waitForFunction(() => document.querySelectorAll("canvas").length === 9);
-      const canvas = page.locator(`canvas[aria-label="capacity delta (%) of ${c.target} by run"]`);
+      const canvas = page.locator(`canvas[aria-label^="capacity "][aria-label$="of ${c.target} by run"]`);
+      if (c.values) {
+        const datasets = await canvas.evaluate((canvas) => Chart.getChart(canvas).data.datasets);
+        assert.equal(datasets[2].data.length, c.values.length);
+        datasets[2].data.forEach((value, i) => assert.ok(Math.abs(value - c.values[i]) < 1e-10));
+        assert.deepEqual(datasets[0].data, c.min);
+        assert.deepEqual(datasets[1].data, c.max);
+        assert.equal(datasets[2].pointBackgroundColor.at(-1), "#8c959f");
+        assert.match(await canvas.getAttribute("aria-label"), /change from baseline/);
+        assert.match(await page.locator("#baseline").textContent(), /aaaaaaa/);
+      }
       await canvas.scrollIntoViewIfNeeded();
       const positions = await canvas.evaluate((canvas, c) => {
         const chart = Chart.getChart(canvas);

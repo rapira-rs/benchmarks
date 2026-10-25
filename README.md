@@ -2,6 +2,8 @@
 
 The benchmark rig of [rapira](https://github.com/rapira-rs/rapira). It runs on Amazon EC2: one c7a.2xlarge server and two c7a.xlarge loaders. Each run measures the new build and the selected base build, one after the other on the same instances. CI selects the newest other non-smoke board build as the base by default.
 
+The board shows every change from the first build of the current benchmark method, fixed at 0%. Comparisons through other builds appear as cumulative estimates. The tooltip includes the original measured values.
+
 ## What is tested
 
 Rapira in its classic, worker, and dispatcher modes on a hello app, the dispatcher behind the static middleware, and a gRPC echo service: five targets, listed in `suites/targets.toml`. The `ci` suite runs them after each nightly build of rapira main.

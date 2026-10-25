@@ -137,6 +137,8 @@ The run status is `complete` when every planned cell ran. A complete run can hol
 
 Each run compares its two builds on the same instances. Do not compare the absolute numbers of two runs. Read [METHOD.md](../METHOD.md) before you publish a number.
 
+The board uses the first non-smoke build of the current method as its fixed chart baseline. Its `data/index.json` and `data/<id>.json` files retain the measured numbers. The board uses the recorded paired changes to calculate cumulative estimates from that baseline. The run file and `make report` show the original comparison. Remeasuring the first build requires its executable archive and SHA256SUMS file in the `binaries` release.
+
 ## Release cache
 
 The release with the tag `binaries` in this repository keeps the php8.5 linux x86_64 nightly tarballs of rapira and the `rapira-v<version>-SHA256SUMS.txt` files of the core nightly release, under their core names. The base build of a run comes from this release, because the core Nightly workflow deletes the assets of older builds.

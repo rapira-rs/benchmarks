@@ -2,7 +2,7 @@
 
 // The board draws run files of this schema only.
 const RUN_SCHEMA = "rapira-bench-run/3";
-// The board loads at most this many runs, the newest ones.
+// The board displays the newest runs up to this limit.
 const HISTORY_RUNS = 60;
 const COMMITS = "https://github.com/rapira-rs/rapira/commit/";
 const INK = "#000000";
@@ -24,12 +24,11 @@ const NOISE_FLOOR_PCT = { capacity: 2.5, p99: 3, rss: 2 };
 // The floors of one target that replace the floor of the measure: the largest |paired delta| of the target in the
 // same A/A run, rounded up to 0.5%.
 const TARGET_NOISE_FLOOR_PCT = { "grpc-rapira": { p99: 19.5 } };
-// Every target gets one chart per measure, in this order. The chart shows the paired delta in percent. The tooltip
-// shows the base and new medians in the unit: the value in the run file times the scale, with the given digits.
+// Each chart shows the change from the first build. Tooltip medians use the given scale and digits.
 const MEASURES = [
-  { key: "capacity", name: "capacity", axis: "capacity delta (%)", unit: "req/s", scale: 1, digits: 0, higherIsBetter: true },
-  { key: "p99", name: "p99", axis: "p99 delta (%)", unit: "ms", scale: 1 / 1000, digits: 2, higherIsBetter: false },
-  { key: "rss", name: "RSS", axis: "RSS delta (%)", unit: "MiB", scale: 1 / 1024, digits: 1, higherIsBetter: false },
+  { key: "capacity", name: "capacity", axis: "capacity change from baseline (%)", unit: "req/s", scale: 1, digits: 0, higherIsBetter: true },
+  { key: "p99", name: "p99", axis: "p99 change from baseline (%)", unit: "ms", scale: 1 / 1000, digits: 2, higherIsBetter: false },
+  { key: "rss", name: "RSS", axis: "RSS change from baseline (%)", unit: "MiB", scale: 1 / 1024, digits: 1, higherIsBetter: false },
 ];
 
 // Manifest entries to show, oldest first. Smoke runs and runs of another schema are not shown.
@@ -37,6 +36,24 @@ function visibleRuns(entries) {
   return entries
     .filter((entry) => !entry.smoke && entry.schema === RUN_SCHEMA)
     .sort((a, b) => (a.started < b.started ? -1 : a.started > b.started ? 1 : 0));
+}
+
+// Load the origin and the recorded comparisons needed by the displayed runs.
+function requiredRuns(entries) {
+  const needed = new Set(entries.slice(-HISTORY_RUNS));
+  if (entries.length) {
+    needed.add(entries[0]);
+  }
+  const bases = new Set();
+  entries.slice().reverse().forEach((entry) => {
+    if (bases.has(entry.rapira_sha)) {
+      needed.add(entry);
+    }
+    if (needed.has(entry)) {
+      bases.add(entry.base_sha);
+    }
+  });
+  return entries.filter((entry) => needed.has(entry));
 }
 
 // The x label of a run: the pull request number, or the first 7 characters of the sha without one.
@@ -49,34 +66,51 @@ function runLink(run) {
   return run.rapira.pr ? run.rapira.pr.url : COMMITS + run.rapira.sha;
 }
 
-// Chart data of every target over the runs, which come in started order. The targets come in name order. A point is
-// the summary record of one target and one measure in one run, or null when the run does not have the target.
+// Runs arrive oldest first. Each point keeps its measured summary and its change from the first build.
 function targetSeries(runs) {
-  const names = Array.from(new Set(runs.flatMap((run) => Object.keys(run.summary)))).sort();
+  const displayed = runs.slice(-HISTORY_RUNS);
+  const baseline = runs[0]?.rapira.sha ?? "";
+  const names = Array.from(new Set(displayed.flatMap((run) => Object.keys(run.summary)))).sort();
   const targets = {};
   names.forEach((name) => {
     targets[name] = {};
     MEASURES.forEach((measure) => {
-      targets[name][measure.key] = runs.map((run) => (run.summary[name] ? run.summary[name][measure.key] : null));
+      const changes = new Map([[baseline, 0]]);
+      targets[name][measure.key] = runs.map((run, i) => {
+        const point = run.summary[name]?.[measure.key];
+        const base = changes.get(run.base.sha);
+        if (!point?.pairs || (i !== 0 && base === undefined)) {
+          return null;
+        }
+        const initial = i === 0;
+        const estimated = !initial && run.base.sha !== baseline;
+        const change = initial ? 0 : estimated
+          ? 100 * ((1 + base / 100) * (1 + point.delta_pct / 100) - 1)
+          : point.delta_pct;
+        if (run.rapira.sha !== baseline) {
+          changes.set(run.rapira.sha, change);
+        }
+        return { ...point, change_pct: change, initial, estimated };
+      }).slice(-HISTORY_RUNS);
     });
   });
   return {
-    labels: runs.map(runLabel),
+    labels: displayed.map(runLabel),
     // started is an ISO 8601 UTC time, for example 2026-09-26T19:10:13Z.
-    dates: runs.map((run) => run.started.slice(0, 16).replace("T", " ") + " UTC"),
-    links: runs.map(runLink),
-    titles: runs.map((run) => (run.rapira.pr ? run.rapira.pr.title : "")),
-    bases: runs.map((run) => run.base.sha.slice(0, 7)),
-    rounds: runs.map((run) => run.suite.rounds),
+    dates: displayed.map((run) => run.started.slice(0, 16).replace("T", " ") + " UTC"),
+    links: displayed.map(runLink),
+    titles: displayed.map((run) => (run.rapira.pr ? run.rapira.pr.title : "")),
+    baseline,
+    bases: displayed.map((run) => run.base.sha.slice(0, 7)),
+    rounds: displayed.map((run) => run.suite.rounds),
     targets,
   };
 }
 
-// The tone of a point of the target and the measure with the given key: "better", "worse", or "" (gray). A point has
-// a color only when it has one pair per round, its band is strictly on one side of zero, and |delta_pct| is at least
-// the noise floor: the floor of the target for the measure, or else the floor of the measure.
+// Direct comparisons have a tone when every round counts, the band excludes zero, and the change reaches the noise floor.
+// The starting point and cumulative estimates are gray.
 function tone(point, target, measure, rounds) {
-  if (!point || point.pairs < rounds) {
+  if (!point || point.initial || point.estimated || point.pairs < rounds) {
     return "";
   }
   const up = point.min_pct > 0;
@@ -101,10 +135,15 @@ function tooltipLines(series, name, measure, i) {
   if (series.titles[i]) {
     lines.push({ text: series.titles[i], tone: "" });
   }
-  lines.push({ text: "base " + series.bases[i], tone: "" });
+  const label = point.initial ? " (starting point)" : point.estimated ? " (cumulative estimate)" : "";
+  lines.push({
+    text: "change vs " + series.baseline.slice(0, 7) + " " + percent(point.change_pct) + label,
+    tone: tone(point, name, measure, series.rounds[i]),
+  });
+  lines.push({ text: "measured base " + series.bases[i], tone: "" });
   lines.push({ text: "new " + value(point.new) + " vs base " + value(point.base) + " " + spec.unit, tone: "" });
   lines.push({
-    text: "delta " + percent(point.delta_pct) + " (min " + percent(point.min_pct) + ", max " + percent(point.max_pct) +
+    text: "paired delta " + percent(point.delta_pct) + " (min " + percent(point.min_pct) + ", max " + percent(point.max_pct) +
       ", " + point.pairs + (point.pairs === 1 ? " pair)" : " pairs)"),
     tone: tone(point, name, measure, series.rounds[i]),
   });
@@ -162,7 +201,7 @@ const plotMarks = {
 // One chart of one measure of one target over the runs.
 function drawChart(parent, series, name, measure) {
   const points = series.targets[name][measure.key];
-  const field = (key) => points.map((point) => (point ? point[key] : null));
+  const band = (key) => points.map((point) => point?.initial ? 0 : point?.estimated ? null : point?.[key] ?? null);
   const colors = points.map((point, i) => TONE_COLORS[tone(point, name, measure.key, series.rounds[i])]);
   const box = el("div");
   const title = el("h2", name + " · " + measure.name);
@@ -196,10 +235,10 @@ function drawChart(parent, series, name, measure) {
     data: {
       labels: series.labels,
       datasets: [
-        { ...edge, data: field("min_pct"), fill: false },
-        { ...edge, data: field("max_pct"), backgroundColor: BAND, fill: "-1" },
+        { ...edge, data: band("min_pct"), fill: false },
+        { ...edge, data: band("max_pct"), backgroundColor: BAND, fill: "-1" },
         {
-          data: field("delta_pct"),
+          data: points.map((point) => point?.change_pct ?? null),
           borderColor: LINE,
           borderWidth: 1,
           pointRadius: 3,
@@ -282,8 +321,13 @@ function showError(error) {
 async function main() {
   Chart.defaults.color = INK;
   Chart.defaults.font.family = SANS;
-  const entries = visibleRuns((await fetchJson("data/index.json")).runs).slice(-HISTORY_RUNS);
+  const entries = requiredRuns(visibleRuns((await fetchJson("data/index.json")).runs));
   const series = targetSeries(await Promise.all(entries.map((entry) => fetchJson("data/" + entry.id + ".json"))));
+  if (series.baseline) {
+    const link = el("a", series.baseline.slice(0, 7));
+    link.href = COMMITS + series.baseline;
+    document.getElementById("baseline").replaceChildren("Baseline: ", link, " (first run = 0%).");
+  }
   const root = document.getElementById("charts");
   Object.keys(series.targets).forEach((name) => {
     MEASURES.forEach((measure) => drawChart(root, series, name, measure));
@@ -291,7 +335,7 @@ async function main() {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { visibleRuns, runLabel, runLink, targetSeries, tone, tooltipLines };
+  module.exports = { visibleRuns, requiredRuns, runLabel, runLink, targetSeries, tone, tooltipLines };
 } else {
   document.addEventListener("DOMContentLoaded", () => main().catch(showError));
 }

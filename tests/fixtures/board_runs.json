@@ -27,7 +27,7 @@
   "smoke": false,
   "suite": {"name": "ci", "rounds": 3},
   "rapira": {"sha": "bbbbbbb0000000000000000000000000000000b2", "version": "v0.8.1-130-gbbbbbbb", "pr": null},
-  "base": {"sha": "bbbbbbb0000000000000000000000000000000b2", "version": "v0.8.1-130-gbbbbbbb"},
+  "base": {"sha": "aaaaaaa0000000000000000000000000000000a1", "version": "0.8.1-nightly.aaaaaaa"},
   "summary": {
    "hello-rapira-worker": {
     "capacity": {"pairs": 3, "delta_pct": -0.5, "min_pct": -1.0, "max_pct": 0.2, "base": 104000.0, "new": 103480.0, "flags": []},
