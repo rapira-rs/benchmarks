@@ -58,6 +58,7 @@ SERIES_CASES = [
             "dates": ["2026-09-26 01:00 UTC", "2026-09-27 01:00 UTC"],
             "links": ["https://github.com/rapira-rs/rapira/pull/101", COMMIT_B],
             "titles": ["Faster hello", ""],
+            "bases": ["ccccccc", "bbbbbbb"],
             "rounds": [3, 3],
             "targets": {
                 "grpc-rapira": {
@@ -82,7 +83,7 @@ SERIES_CASES = [
         # An index without schema 3 runs gives an empty board: no labels and no targets.
         "name": "no runs",
         "runs": [],
-        "expected": {"labels": [], "dates": [], "links": [], "titles": [], "rounds": [], "targets": {}},
+        "expected": {"labels": [], "dates": [], "links": [], "titles": [], "bases": [], "rounds": [], "targets": {}},
     },
 ]
 
@@ -154,21 +155,23 @@ def line(text, tone=""):
 TOOLTIP_CASES = [
     {
         # Run a, hello capacity: base 100000, new 104000 req/s. 3 of 3 pairs, band above zero, 4.0 >= 2.5.
-        "name": "capacity, pull request title, better",
+        "name": "capacity, pull request title, selected base outside the board, better",
         "target": "hello-rapira-worker", "measure": "capacity", "index": 0,
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
+            line("base ccccccc"),
             line("new 104000 vs base 100000 req/s"),
             line("delta +4.0% (min +3.5%, max +4.6%, 3 pairs)", "better"),
         ],
     },
     {
         # Run b, hello p99: 1050 us = 1.05 ms, 1200 us = 1.20 ms. 2 of 3 pairs, so the tone is gray.
-        "name": "p99, run without a pull request, 2 pairs",
+        "name": "p99, run without a pull request, A/A base, 2 pairs",
         "target": "hello-rapira-worker", "measure": "p99", "index": 1,
         "expected": [
             line("2026-09-27 01:00 UTC - bbbbbbb"),
+            line("base bbbbbbb"),
             line("new 1.05 vs base 1.20 ms"),
             line("delta -12.5% (min -14.0%, max -11.0%, 2 pairs)"),
         ],
@@ -181,6 +184,7 @@ TOOLTIP_CASES = [
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
+            line("base ccccccc"),
             line("new 204.0 vs base 200.0 MiB"),
             line("delta +2.0% (min +1.5%, max +2.5%, 3 pairs)", "worse"),
             line("loader_skew"),
@@ -193,6 +197,7 @@ TOOLTIP_CASES = [
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
+            line("base ccccccc"),
             line("new 150750 vs base 150000 req/s"),
             line("delta +0.5% (min -0.8%, max +1.2%, 3 pairs)"),
             line("loader_busy, not_saturated"),
@@ -204,6 +209,7 @@ TOOLTIP_CASES = [
         "target": "hello-rapira-dispatcher", "measure": "capacity", "index": 1,
         "expected": [
             line("2026-09-27 01:00 UTC - bbbbbbb"),
+            line("base bbbbbbb"),
             line("new 24000 vs base 25000 req/s"),
             line("delta -4.0% (min -4.0%, max -4.0%, 1 pair)"),
         ],

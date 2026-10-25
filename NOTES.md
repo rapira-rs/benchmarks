@@ -4,7 +4,7 @@ Dated records and the decisions the code cannot show. Methodology lives in METHO
 
 ## Method change 3, 2026-09-27
 
-- From this date each run measures two builds on the same instances: the new nightly build and the base build, which is the build of the previous board run. The rig is one c7a.2xlarge server and two c7a.xlarge loaders in eu-central-1a. The base build comes from the `binaries` release of this repository.
+- From this date each run measures two builds on the same instances: the new nightly build and the selected base build. The default base is the newest other non-smoke board build. The rig is one c7a.2xlarge server and two c7a.xlarge loaders in eu-central-1a. The base build comes from the `binaries` release of this repository.
 - Each target runs two stage kinds for each build. The rate stage runs one rapira process per server vCPU at a rate that keeps the server at about 50% CPU, and gives the p99 latency and the RSS. The capacity stage runs 2 rapira processes at a rate above their capacity, and gives the achieved req/s. The `ci` suite has 3 rounds, 1000 HTTP connections, and 100 gRPC connections with 100 streams each.
 - A pair is the base cell and the new cell of one round, one target, and one stage kind. The two cells of a pair run one after the other. A board point is the median paired delta of one run, with the smallest and the largest paired delta as a band. A point has a color only when the change is above the noise floor of an A/A run.
 - The new flags are `loader_busy`, `loader_skew`, and `not_saturated`. A run with void cells is complete and publishes. A run where every new cell of one target is void is `broken` and does not publish.

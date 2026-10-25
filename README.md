@@ -1,6 +1,6 @@
 # Rapira benchmarks
 
-The benchmark rig of [rapira](https://github.com/rapira-rs/rapira). It runs on Amazon EC2: one c7a.2xlarge server and two c7a.xlarge loaders. Each run measures the new nightly build and the base build, which is the build of the previous board run, one after the other on the same instances.
+The benchmark rig of [rapira](https://github.com/rapira-rs/rapira). It runs on Amazon EC2: one c7a.2xlarge server and two c7a.xlarge loaders. Each run measures the new build and the selected base build, one after the other on the same instances. CI selects the newest other non-smoke board build as the base by default.
 
 ## What is tested
 

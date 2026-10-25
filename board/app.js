@@ -66,6 +66,7 @@ function targetSeries(runs) {
     dates: runs.map((run) => run.started.slice(0, 16).replace("T", " ") + " UTC"),
     links: runs.map(runLink),
     titles: runs.map((run) => (run.rapira.pr ? run.rapira.pr.title : "")),
+    bases: runs.map((run) => run.base.sha.slice(0, 7)),
     rounds: runs.map((run) => run.suite.rounds),
     targets,
   };
@@ -91,8 +92,7 @@ function percent(value) {
   return (value > 0 ? "+" : "") + value.toFixed(1) + "%";
 }
 
-// The hover lines of the point i of one target and the measure with the given key. Chart.js shows no tooltip at a
-// gap, so the point has at least one pair.
+// The hover lines of point i of one target and measure. The point has at least one pair.
 function tooltipLines(series, name, measure, i) {
   const spec = MEASURES.find((m) => m.key === measure);
   const point = series.targets[name][measure][i];
@@ -101,6 +101,7 @@ function tooltipLines(series, name, measure, i) {
   if (series.titles[i]) {
     lines.push({ text: series.titles[i], tone: "" });
   }
+  lines.push({ text: "base " + series.bases[i], tone: "" });
   lines.push({ text: "new " + value(point.new) + " vs base " + value(point.base) + " " + spec.unit, tone: "" });
   lines.push({
     text: "delta " + percent(point.delta_pct) + " (min " + percent(point.min_pct) + ", max " + percent(point.max_pct) +
@@ -213,13 +214,17 @@ function drawChart(parent, series, name, measure) {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: "index", intersect: false },
+      onHover: (event, elements, chart) => {
+        const i = chart.scales.x.getValueForPixel(event.x);
+        tip.style.visibility = points[i]?.pairs ? "" : "hidden";
+      },
       // A touch screen has no hover. There, a tap in the plot shows the tooltip, and only a tap on a point opens the run.
       onClick: (event, elements, chart) => {
-        const hits = matchMedia("(hover: none)").matches
-          ? chart.getElementsAtEventForMode(event, "nearest", { intersect: true }, false)
-          : elements;
-        if (hits.length) {
-          window.open(series.links[hits[0].index], "_blank", "noopener");
+        const i = matchMedia("(hover: none)").matches
+          ? chart.getElementsAtEventForMode(event, "nearest", { intersect: true }, false)[0]?.index
+          : chart.scales.x.getValueForPixel(event.x);
+        if (i !== undefined) {
+          window.open(series.links[i], "_blank", "noopener");
         }
       },
       scales: {
