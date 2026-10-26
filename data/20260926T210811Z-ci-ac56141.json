@@ -9,7 +9,6 @@
   "duration_s": 60,
   "rates": {
    "hello": 250000,
-   "yii3": 250000,
    "grpc": 100000
   },
   "connections": {
@@ -49,7 +48,6 @@
   "php": "PHP 8.5.10 (cli) (built: Aug 25 2026 21:09:32) (NTS gcc x86_64)",
   "protobuf": "v5.36.2",
   "valkey": "Valkey server v=9.0.6 sha=00000000:0 malloc=jemalloc-5.3.0 bits=64 build=5b870319988f4c3",
-  "yii3": "0fa2e2a",
   "php_ini": "; The php.ini of every PHP process of the rig. rapira loads it through PHPRC. The run file records this text.\nopcache.enable=1\nopcache.enable_cli=1\nopcache.validate_timestamps=0\nopcache.jit=disable\nopcache.memory_consumption=256\nmemory_limit=256M\nrealpath_cache_size=4096K\nrealpath_cache_ttl=600\nexpose_php=0\n; Notices go to the log, never into a response body.\ndisplay_errors=0\nlog_errors=1\nerror_reporting=E_ALL & ~E_DEPRECATED\nerror_log=/dev/stderr\n"
  },
  "apps": {
@@ -69,10 +67,7 @@
   "apps/hello/classic.php": "0dddebc6e8bb92a3ac96deefe028160743adb8bb811196f7c3812c85b2090dca",
   "apps/hello/dispatcher.php": "7cf8e431df45785d3667b8fbc6ea1a98f6b69f2d732f0804bbe1f7dc078eb315",
   "apps/hello/expect.txt": "294902b9785136138cc2a6f7ffe6123a617f41ae647cae58739ccd5be23abcd4",
-  "apps/hello/worker.php": "003af3c44889509ceacffc09e6d0ebabcf89fc64346ad8951633ba68d58d2b21",
-  "apps/yii3/composer.lock": "e7c1881755e06d7c85821ee85e3d7af6aed85e949b2d422bb467fd6092d5bf33",
-  "apps/yii3/expect.json": "183cab8805e25143fea22c1dbb7675503e3df29d064cc604e9315805295764be",
-  "apps/yii3/source.toml": "2c06e118dbbb8f9dbbf794f75fea329a46c68fe6b5b5f770fd98277dc33051f7"
+  "apps/hello/worker.php": "003af3c44889509ceacffc09e6d0ebabcf89fc64346ad8951633ba68d58d2b21"
  },
  "loaders": [
   {
@@ -90,7 +85,6 @@
   "r1-hello-rapira-worker",
   "r1-hello-rapira-dispatcher",
   "r1-hello-rapira-dispatcher-static",
-  "r1-yii3-rapira-dispatcher",
   "r1-grpc-rapira"
  ],
  "cells": [
@@ -395,82 +389,6 @@
      },
      "requests_per_sec": 244363.341,
      "busy_cpu": 91,
-     "ena": {}
-    }
-   ]
-  },
-  {
-   "key": "r1-yii3-rapira-dispatcher",
-   "target": {
-    "name": "yii3-rapira-dispatcher",
-    "server": "rapira",
-    "app": "yii3",
-    "mode": "dispatcher",
-    "proto": "http1",
-    "start": [
-     "dispatcher",
-     "@APPS@/yii3/worker-rapira.php"
-    ],
-    "url": "/",
-    "expect": "apps/yii3/expect.json",
-    "config": "servers/rapira/http.toml.tpl",
-    "method": "GET",
-    "headers": {},
-    "body": null
-   },
-   "round": 1,
-   "status": "ok",
-   "flags": {},
-   "rate": 250000,
-   "achieved_rps": 194459.74285714285,
-   "successful_rps": 194459.74285714285,
-   "errors": {
-    "connect": 0,
-    "read": 0,
-    "write": 0,
-    "status": 0,
-    "timeout": 0,
-    "dropped": 0
-   },
-   "latency_us": {
-    "p50": 5976063.0,
-    "p90": 14901247.0,
-    "p99": 24788991.0,
-    "p999": 30916607.0,
-    "max": 31424512.0
-   },
-   "rss_kb": 1397608,
-   "held": false,
-   "cpu": {
-    "server_busy": 98,
-    "loader_busy": 37
-   },
-   "loaders": [
-    {
-     "loader": "loader-1",
-     "tool": "wrk2",
-     "late_ms": 0,
-     "requests": 13612182,
-     "bytes": 2559090216,
-     "errors": {
-      "connect": 0,
-      "read": 0,
-      "write": 0,
-      "status": 0,
-      "timeout": 0,
-      "dropped": 0
-     },
-     "latency_us": {
-      "mean": 7731915.82,
-      "p50": 5976063.0,
-      "p90": 14901247.0,
-      "p95": 20955135.0,
-      "p99": 24788991.0,
-      "p999": 30916607.0,
-      "max": 31424512.0
-     },
-     "requests_per_sec": 194465.371,
-     "busy_cpu": 37,
      "ena": {}
     }
    ]
