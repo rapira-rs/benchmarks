@@ -135,9 +135,9 @@ The run status is `complete` when every planned cell ran. A complete run can hol
 
 `python3 -m rig bench --suite <name> --smoke` marks the run as a smoke run. The board does not show it, and the CI commit check ignores it.
 
-Each run compares its two builds on the same instances. Do not compare the absolute numbers of two runs. Read [METHOD.md](../METHOD.md) before you publish a number.
+Each run compares its two builds on the same instances. The same build gives different numbers in two runs. Read [METHOD.md](../METHOD.md) before you publish a number.
 
-The board uses the first non-smoke build of the current method as its fixed chart baseline. Its `data/index.json` and `data/<id>.json` files retain the measured numbers. The board uses the recorded paired changes to calculate cumulative estimates from that baseline. The run file and `make report` show the original comparison. Remeasuring the first build requires its executable archive and SHA256SUMS file in the `binaries` release.
+The board uses the first non-smoke run of the current method as its fixed chart baseline. It compares the `new` median of each run with the `new` median of that run. The run file and `make report` show the comparison of the two builds in a run.
 
 ## Release cache
 

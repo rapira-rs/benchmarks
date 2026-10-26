@@ -7,6 +7,7 @@ import json
 import shutil
 import subprocess
 import unittest
+from copy import deepcopy
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -25,6 +26,8 @@ CALL = (
 RUN_A, RUN_B, RUN_S = json.loads(FIXTURE.read_text())
 SUMMARY_A = RUN_A["summary"]
 SUMMARY_B = RUN_B["summary"]
+SHA_A = RUN_A["rapira"]["sha"]
+SHA_B = RUN_B["rapira"]["sha"]
 COMMIT_B = "https://github.com/rapira-rs/rapira/commit/bbbbbbb0000000000000000000000000000000b2"
 
 # An index entry of a run file from before schema 3: it has no schema key.
@@ -45,19 +48,21 @@ def entry(run):
     return {"id": run["id"], "started": run["started"], "smoke": run["smoke"], "schema": run["schema"]}
 
 
-def initial(record):
-    return {**record, "change_pct": 0, "initial": True, "estimated": False}
+def start(record, sha):
+    """The baseline point of a target and a measure: the summary record of the run of the build sha."""
+    return {**record, "change_pct": 0, "initial": True, "baseline_sha": sha, "baseline_new": record["new"]}
 
 
-def direct(record):
-    return {**record, "change_pct": record["delta_pct"], "initial": False, "estimated": False}
+def later(record, baseline, sha):
+    """A point after the baseline point: the change of its new median from the new median of the baseline record."""
+    return {**record, "change_pct": 100 * (record["new"] / baseline["new"] - 1), "initial": False, "baseline_sha": sha, "baseline_new": baseline["new"]}
 
 
 SERIES_CASES = [
     {
-        # The first run is the origin. Run b compares directly with that build.
+        # The first run is the baseline run. A point of run b compares its new median with the new median of run a.
         # grpc-rapira has 0 pairs in run b, so its points there are gaps.
-        # hello-rapira-dispatcher is only in run b, so its points in run a are null.
+        # hello-rapira-dispatcher is only in run b, so its points in run a are null, and its baseline value is in run b.
         # The targets come in name order. A date is the UTC start of the run to the minute.
         "name": "series from the summary with 0 pairs and a target in one run",
         "runs": [RUN_A, RUN_B],
@@ -66,24 +71,24 @@ SERIES_CASES = [
             "dates": ["2026-09-26 01:00 UTC", "2026-09-27 01:00 UTC"],
             "links": ["https://github.com/rapira-rs/rapira/pull/101", COMMIT_B],
             "titles": ["Faster hello", ""],
-            "baseline": RUN_A["rapira"]["sha"],
+            "baseline": SHA_A,
             "bases": ["ccccccc", "aaaaaaa"],
             "rounds": [3, 3],
             "targets": {
                 "grpc-rapira": {
-                    "capacity": [initial(SUMMARY_A["grpc-rapira"]["capacity"]), None],
-                    "p99": [initial(SUMMARY_A["grpc-rapira"]["p99"]), None],
-                    "rss": [initial(SUMMARY_A["grpc-rapira"]["rss"]), None],
+                    "capacity": [start(SUMMARY_A["grpc-rapira"]["capacity"], SHA_A), None],
+                    "p99": [start(SUMMARY_A["grpc-rapira"]["p99"], SHA_A), None],
+                    "rss": [start(SUMMARY_A["grpc-rapira"]["rss"], SHA_A), None],
                 },
                 "hello-rapira-dispatcher": {
-                    "capacity": [None, direct(SUMMARY_B["hello-rapira-dispatcher"]["capacity"])],
-                    "p99": [None, direct(SUMMARY_B["hello-rapira-dispatcher"]["p99"])],
-                    "rss": [None, direct(SUMMARY_B["hello-rapira-dispatcher"]["rss"])],
+                    "capacity": [None, start(SUMMARY_B["hello-rapira-dispatcher"]["capacity"], SHA_B)],
+                    "p99": [None, start(SUMMARY_B["hello-rapira-dispatcher"]["p99"], SHA_B)],
+                    "rss": [None, start(SUMMARY_B["hello-rapira-dispatcher"]["rss"], SHA_B)],
                 },
                 "hello-rapira-worker": {
-                    "capacity": [initial(SUMMARY_A["hello-rapira-worker"]["capacity"]), direct(SUMMARY_B["hello-rapira-worker"]["capacity"])],
-                    "p99": [initial(SUMMARY_A["hello-rapira-worker"]["p99"]), direct(SUMMARY_B["hello-rapira-worker"]["p99"])],
-                    "rss": [initial(SUMMARY_A["hello-rapira-worker"]["rss"]), direct(SUMMARY_B["hello-rapira-worker"]["rss"])],
+                    "capacity": [start(SUMMARY_A["hello-rapira-worker"]["capacity"], SHA_A), later(SUMMARY_B["hello-rapira-worker"]["capacity"], SUMMARY_A["hello-rapira-worker"]["capacity"], SHA_A)],
+                    "p99": [start(SUMMARY_A["hello-rapira-worker"]["p99"], SHA_A), later(SUMMARY_B["hello-rapira-worker"]["p99"], SUMMARY_A["hello-rapira-worker"]["p99"], SHA_A)],
+                    "rss": [start(SUMMARY_A["hello-rapira-worker"]["rss"], SHA_A), later(SUMMARY_B["hello-rapira-worker"]["rss"], SUMMARY_A["hello-rapira-worker"]["rss"], SHA_A)],
                 },
             },
         },
@@ -100,55 +105,38 @@ SERIES_CASES = [
 SERIES_AB = SERIES_CASES[0]["expected"]
 
 
-def point(pairs, delta_pct, min_pct, max_pct):
-    """A summary record of one measure. tone does not read base, new and flags."""
-    return {"pairs": pairs, "delta_pct": delta_pct, "min_pct": min_pct, "max_pct": max_pct, "base": 100.0, "new": 104.0, "flags": []}
+def point(pairs, change_pct):
+    """A board point with the fields that tone reads."""
+    return {"pairs": pairs, "change_pct": change_pct}
 
 
-# A point is "better" or "worse" only when it has one pair per round, its band is strictly on one side of zero,
-# and |delta_pct| is at least the noise floor. The floors of board/app.js: capacity 2.5, p99 3, rss 2 (percent), and
-# p99 19.5 for grpc-rapira. A higher capacity is better. A lower p99 and a lower RSS are better. All other points are
-# "" (gray).
+# A point is "better" or "worse" only when it has one pair per round and |change_pct| is at least the noise floor.
+# The floors of board/app.js: capacity 8, p99 17, rss 4.5 (percent), and p99 34.5 for grpc-rapira. A higher capacity
+# is better. A lower p99 and a lower RSS are better. All other points are "" (gray).
 # The target of the rows that do not test a per-target floor.
 HELLO = "hello-rapira-worker"
 TONE_CASES = [
-    # 3 of 3 pairs, band 3.5 to 4.6 above zero, 4.0 >= 2.5.
-    {"name": "capacity up above the floor is better", "point": point(3, 4.0, 3.5, 4.6), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": "better"},
-    # 3 of 3 pairs, band -6.0 to -4.0 below zero, 5.0 >= 2.5.
-    {"name": "capacity down above the floor is worse", "point": point(3, -5.0, -6.0, -4.0), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": "worse"},
-    # 3 of 3 pairs, band -14.0 to -11.0 below zero, 12.5 >= 3.
-    {"name": "p99 down above the floor is better", "point": point(3, -12.5, -14.0, -11.0), "target": HELLO, "measure": "p99", "rounds": 3, "expected": "better"},
-    # 3 of 3 pairs, band 11.0 to 14.0 above zero, 12.5 >= 3.
-    {"name": "p99 up above the floor is worse", "point": point(3, 12.5, 11.0, 14.0), "target": HELLO, "measure": "p99", "rounds": 3, "expected": "worse"},
-    # 3 of 3 pairs, band 2.0 to 4.0 above zero, 3.0 >= 3: a delta equal to the p99 floor counts.
-    {"name": "hello p99 at the p99 floor is worse", "point": point(3, 3.0, 2.0, 4.0), "target": HELLO, "measure": "p99", "rounds": 3, "expected": "worse"},
-    # 3 of 3 pairs, band 2.0 to 3.0 above zero, 2.5 >= 2.
-    {"name": "rss up above the floor is worse", "point": point(3, 2.5, 2.0, 3.0), "target": HELLO, "measure": "rss", "rounds": 3, "expected": "worse"},
-    # 3 of 3 pairs, band -3.0 to -2.0 below zero, 2.5 >= 2.
-    {"name": "rss down above the floor is better", "point": point(3, -2.5, -3.0, -2.0), "target": HELLO, "measure": "rss", "rounds": 3, "expected": "better"},
-    # 2 pairs of 3 rounds: one pair was void or dropped, so the point is gray although the band is above zero.
-    {"name": "2 pairs of 3 rounds", "point": point(2, 4.0, 3.5, 4.6), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": ""},
-    # min_pct 0 is not strictly above zero.
-    {"name": "band touches zero from above", "point": point(3, 4.0, 0.0, 6.0), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": ""},
-    # max_pct 0 is not strictly below zero.
-    {"name": "band touches zero from below", "point": point(3, -12.0, -15.0, 0.0), "target": HELLO, "measure": "p99", "rounds": 3, "expected": ""},
-    # The band -0.5 to 2.0 crosses zero.
-    {"name": "band crosses zero", "point": point(3, 1.5, -0.5, 2.0), "target": HELLO, "measure": "rss", "rounds": 3, "expected": ""},
-    # 2.4 < 2.5, the capacity floor, although the band 2.0 to 2.9 is above zero.
-    {"name": "delta under the floor", "point": point(3, 2.4, 2.0, 2.9), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": ""},
-    # 2.5 >= 2.5: a delta equal to the floor counts.
-    {"name": "delta at the floor", "point": point(3, 2.5, 2.0, 3.5), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": "better"},
-    # 19.4 < 19.5, the p99 floor of grpc-rapira, although 19.4 is above the p99 floor 3 and the band is above zero.
-    {"name": "grpc p99 under the grpc floor", "point": point(3, 19.4, 17.0, 21.0), "target": "grpc-rapira", "measure": "p99", "rounds": 3, "expected": ""},
-    # 19.5 >= 19.5, band 17.0 to 21.0 above zero, and a higher p99 is worse.
-    {"name": "grpc p99 at the grpc floor is worse", "point": point(3, 19.5, 17.0, 21.0), "target": "grpc-rapira", "measure": "p99", "rounds": 3, "expected": "worse"},
-    # grpc-rapira has its own p99 floor only, so its capacity uses the capacity floor: 2.5 >= 2.5.
-    {"name": "grpc capacity uses the capacity floor", "point": point(3, 2.5, 2.0, 3.5), "target": "grpc-rapira", "measure": "capacity", "rounds": 3, "expected": "better"},
-    # 1 of 1 pairs in a suite of 1 round, band -11.0 to -11.0 below zero, 11.0 >= 3.
-    {"name": "1 pair in a suite of 1 round", "point": point(1, -11.0, -11.0, -11.0), "target": HELLO, "measure": "p99", "rounds": 1, "expected": "better"},
-    # Every pair of the measure was void, so the summary numbers are null.
-    {"name": "0 pairs", "point": {"pairs": 0, "delta_pct": None, "min_pct": None, "max_pct": None, "base": None, "new": None, "flags": []}, "target": HELLO, "measure": "capacity", "rounds": 3, "expected": ""},
-    # A target that the run does not have.
+    {"name": "capacity up above the floor is better", "point": point(3, 9.0), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": "better"},
+    {"name": "capacity down above the floor is worse", "point": point(3, -9.0), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": "worse"},
+    {"name": "capacity at the floor counts", "point": point(3, 8.0), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": "better"},
+    {"name": "capacity under the floor", "point": point(3, 7.9), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": ""},
+    {"name": "p99 down above the floor is better", "point": point(3, -17.5), "target": HELLO, "measure": "p99", "rounds": 3, "expected": "better"},
+    {"name": "hello p99 at the p99 floor is worse", "point": point(3, 17.0), "target": HELLO, "measure": "p99", "rounds": 3, "expected": "worse"},
+    {"name": "hello p99 under the p99 floor", "point": point(3, 16.9), "target": HELLO, "measure": "p99", "rounds": 3, "expected": ""},
+    {"name": "rss up at the floor is worse", "point": point(3, 4.5), "target": HELLO, "measure": "rss", "rounds": 3, "expected": "worse"},
+    {"name": "rss down above the floor is better", "point": point(3, -5.0), "target": HELLO, "measure": "rss", "rounds": 3, "expected": "better"},
+    {"name": "rss under the floor", "point": point(3, -4.4), "target": HELLO, "measure": "rss", "rounds": 3, "expected": ""},
+    # 34.4 is above the p99 floor 17, but under the p99 floor of grpc-rapira.
+    {"name": "grpc p99 under the grpc floor", "point": point(3, 34.4), "target": "grpc-rapira", "measure": "p99", "rounds": 3, "expected": ""},
+    {"name": "grpc p99 at the grpc floor is worse", "point": point(3, 34.5), "target": "grpc-rapira", "measure": "p99", "rounds": 3, "expected": "worse"},
+    # grpc-rapira has its own p99 floor only, so its capacity uses the capacity floor.
+    {"name": "grpc capacity uses the capacity floor", "point": point(3, 8.0), "target": "grpc-rapira", "measure": "capacity", "rounds": 3, "expected": "better"},
+    # One pair was void or dropped, so the point is gray although the change is above the floor.
+    {"name": "2 pairs of 3 rounds", "point": point(2, 10.0), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": ""},
+    {"name": "1 pair in a suite of 1 round", "point": point(1, -20.0), "target": HELLO, "measure": "p99", "rounds": 1, "expected": "better"},
+    # The baseline point is 0%.
+    {"name": "the baseline point", "point": point(3, 0), "target": HELLO, "measure": "capacity", "rounds": 3, "expected": ""},
+    # A gap: the run does not have the target, or the measure has 0 pairs.
     {"name": "null point", "point": None, "target": HELLO, "measure": "p99", "rounds": 3, "expected": ""},
 ]
 
@@ -158,44 +146,63 @@ def line(text, tone=""):
     return {"text": text, "tone": tone}
 
 
-# The hover lines of one point: the run, the pull request title when the run has one, the new and the base median
-# in the unit of the measure, the delta with its band and pair count in the tone of the point, and the flags when
-# the point has any. The units: capacity in req/s, p99 in ms from us, RSS in MiB from KiB.
+# Run b with a hello capacity 10% above that of run a: 114400 / 104000 = 1.1.
+SERIES_UP = deepcopy(SERIES_AB)
+SERIES_UP["targets"]["hello-rapira-worker"]["capacity"][1] = later({**SUMMARY_B["hello-rapira-worker"]["capacity"], "new": 114400.0}, SUMMARY_A["hello-rapira-worker"]["capacity"], SHA_A)
+
+# The hover lines of one point: the run, the pull request title when the run has one, the change from the baseline
+# build with its new median in the tone of the point, the measured base build, the new and the base median of the run
+# in the unit of the measure, the paired delta with its band and pair count, and the flags when the point has any.
+# The units: capacity in req/s, p99 in ms from us, RSS in MiB from KiB.
 TOOLTIP_CASES = [
     {
-        # Run a, hello capacity: base 100000, new 104000 req/s. 3 of 3 pairs, band above zero, 4.0 >= 2.5.
-        "name": "capacity, pull request title, initial point with its original comparison",
+        # Run a, hello capacity: base 100000, new 104000 req/s. Run a is the baseline run.
+        "name": "capacity, pull request title, baseline point with its paired comparison",
         "target": "hello-rapira-worker", "measure": "capacity", "index": 0,
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
-            line("change vs aaaaaaa 0.0% (starting point)"),
+            line("change vs aaaaaaa (104000 req/s) 0.0% (starting point)"),
             line("measured base ccccccc"),
             line("new 104000 vs base 100000 req/s"),
             line("paired delta +4.0% (min +3.5%, max +4.6%, 3 pairs)"),
         ],
     },
     {
-        # Run b, hello p99: 1050 us = 1.05 ms, 1200 us = 1.20 ms. 2 of 3 pairs, so the tone is gray.
-        "name": "p99, run without a pull request, direct comparison, 2 pairs",
+        # Run b, hello p99: 1050 us = 1.05 ms, as in run a, so the change is 0.0%. The base build of run b gave
+        # 1200 us = 1.20 ms on the same instances, so the paired delta is -12.5%.
+        "name": "p99, run without a pull request, the paired delta does not move the change",
         "target": "hello-rapira-worker", "measure": "p99", "index": 1,
         "expected": [
             line("2026-09-27 01:00 UTC - bbbbbbb"),
-            line("change vs aaaaaaa -12.5%"),
+            line("change vs aaaaaaa (1.05 ms) 0.0%"),
             line("measured base aaaaaaa"),
             line("new 1.05 vs base 1.20 ms"),
             line("paired delta -12.5% (min -14.0%, max -11.0%, 2 pairs)"),
         ],
     },
     {
-        # Run a, hello RSS: 208896 / 1024 = 204.0 MiB, 204800 / 1024 = 200.0 MiB. 3 of 3 pairs, band above zero,
-        # 2.0 >= 2, and a higher RSS is worse.
-        "name": "RSS, initial point, one flag",
+        # Run b with the hello capacity of SERIES_UP: +10.0% from run a, 3 of 3 pairs, 10.0 >= 8. The paired delta
+        # has no tone.
+        "name": "capacity above the floor, a tone on the change only",
+        "series": SERIES_UP,
+        "target": "hello-rapira-worker", "measure": "capacity", "index": 1,
+        "expected": [
+            line("2026-09-27 01:00 UTC - bbbbbbb"),
+            line("change vs aaaaaaa (104000 req/s) +10.0%", "better"),
+            line("measured base aaaaaaa"),
+            line("new 114400 vs base 104000 req/s"),
+            line("paired delta -0.5% (min -1.0%, max +0.2%, 3 pairs)"),
+        ],
+    },
+    {
+        # Run a, hello RSS: 208896 / 1024 = 204.0 MiB, 204800 / 1024 = 200.0 MiB.
+        "name": "RSS, baseline point, one flag",
         "target": "hello-rapira-worker", "measure": "rss", "index": 0,
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
-            line("change vs aaaaaaa 0.0% (starting point)"),
+            line("change vs aaaaaaa (204.0 MiB) 0.0% (starting point)"),
             line("measured base ccccccc"),
             line("new 204.0 vs base 200.0 MiB"),
             line("paired delta +2.0% (min +1.5%, max +2.5%, 3 pairs)"),
@@ -203,13 +210,12 @@ TOOLTIP_CASES = [
         ],
     },
     {
-        # Run a, grpc capacity: the band -0.8 to 1.2 crosses zero, so the tone is gray.
-        "name": "capacity, band across zero, two flags",
+        "name": "capacity, baseline point, two flags",
         "target": "grpc-rapira", "measure": "capacity", "index": 0,
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
-            line("change vs aaaaaaa 0.0% (starting point)"),
+            line("change vs aaaaaaa (150750 req/s) 0.0% (starting point)"),
             line("measured base ccccccc"),
             line("new 150750 vs base 150000 req/s"),
             line("paired delta +0.5% (min -0.8%, max +1.2%, 3 pairs)"),
@@ -217,12 +223,12 @@ TOOLTIP_CASES = [
         ],
     },
     {
-        # Run b, hello dispatcher capacity: 1 of 3 pairs, so the tone is gray.
-        "name": "capacity, 1 pair",
+        # Run b, hello dispatcher capacity: run a does not have the target, so its baseline value is in run b. 1 pair.
+        "name": "capacity of a target that starts after the baseline run, 1 pair",
         "target": "hello-rapira-dispatcher", "measure": "capacity", "index": 1,
         "expected": [
             line("2026-09-27 01:00 UTC - bbbbbbb"),
-            line("change vs aaaaaaa -4.0%"),
+            line("change vs bbbbbbb (24000 req/s) 0.0% (starting point)"),
             line("measured base aaaaaaa"),
             line("new 24000 vs base 25000 req/s"),
             line("paired delta -4.0% (min -4.0%, max -4.0%, 1 pair)"),
@@ -291,7 +297,7 @@ class TooltipLinesTest(unittest.TestCase):
     def test_tooltip_lines(self):
         for case in TOOLTIP_CASES:
             with self.subTest(name=case["name"]):
-                lines = call_js("tooltipLines", SERIES_AB, case["target"], case["measure"], case["index"])
+                lines = call_js("tooltipLines", case.get("series", SERIES_AB), case["target"], case["measure"], case["index"])
                 self.assertEqual(lines, case["expected"])
 
 

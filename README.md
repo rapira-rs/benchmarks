@@ -2,7 +2,7 @@
 
 The benchmark rig of [rapira](https://github.com/rapira-rs/rapira). It runs on Amazon EC2: one c7a.2xlarge server and two c7a.xlarge loaders. Each run measures the new build and the selected base build, one after the other on the same instances. CI selects the newest other non-smoke board build as the base by default.
 
-The board shows every change from the first build of the current benchmark method, fixed at 0%. Comparisons through other builds appear as cumulative estimates. The tooltip includes the original measured values.
+The board compares the new build of each run with the first run of the current benchmark method, fixed at 0%. The tooltip includes the measured values and the paired comparison of the run.
 
 ## What is tested
 
@@ -12,7 +12,7 @@ Each target runs two stage kinds for each build. The rate stage runs one rapira 
 
 ## Where the results are
 
-- The board: https://rapira.rs/benchmarks/ (one row per target with the change of the capacity, the p99, and the RSS against the base build in percent, the spread of the pairs as a band, and the merged pull requests on the x axis).
+- The board: https://rapira.rs/benchmarks/ (one row per target with the change of the capacity, the p99, and the RSS from the first run in percent, and the merged pull requests on the x axis).
 - The run files: `run.json` and the raw evidence of every CI run, as workflow artifacts and in the `gh-pages` branch under `data/`.
 - [NOTES.md](NOTES.md): dated records, including the numbers of the earlier methods.
 

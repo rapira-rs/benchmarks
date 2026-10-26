@@ -2,6 +2,24 @@
 
 Dated records and the decisions the code cannot show. Methodology lives in METHOD.md, operations in docs/operations.md. Numbers from different rigs or instance sizes never mix into one table.
 
+## Board change, 2026-10-26
+
+- Each board point now compares the `new` median of its run with the `new` median of the baseline run `20260927T193322Z-ci-0cafb5b` (#150): `100 x (new / new_A - 1)`. Before, the board multiplied the factors `1 + delta_pct / 100` of the runs between A and the point. The tarball of A is not in the `binaries` release, so no run can measure A again.
+- The product moved away from the change of the `new` median over the runs. After 25 runs, it was +73.1% for the p99 of grpc-rapira, but the `new` median of the last run is 5.55 ms against 5.80 ms in the baseline run, which is -4.3%. For the p99 of hello-rapira-worker, the product was -18.2%, and the change of the median was +2.7%. The product adds the noise of each paired delta, and also the mean of the paired deltas: +2.4% per run for the p99 of grpc-rapira and -0.8% per run for the p99 of hello-rapira-worker, over the 25 runs.
+- A CI run measures the build of the run before it as its base build. So each build has a `new` median in one run and a `base` median in the next run, on other instances. The 26 runs from 2026-09-27 to 2026-10-26 give 25 such differences for each target and measure. The largest `|100 x (base / new - 1)|` is the difference between two rigs.
+- The largest p99 differences of grpc-rapira (+32.0%), hello-rapira-worker (+11.5%), and hello-rapira-dispatcher (+8.1%) come from one build: its `new` median in run `20260928T201742Z-ci-f41ff1d` (#156) against its `base` median in the next run. The rig of #156 gave a low p99 to both of its builds: 4.18 ms and 4.22 ms for grpc-rapira.
+- Every point also includes the offset of the rig of the baseline run. As the base build of the next run (#152), the baseline build gave other values than in the baseline run: for example -3.45% capacity and +5.47% p99 for hello-rapira-dispatcher. With the difference between two rigs alone as the floor (capacity 4.5%), five capacity points of hello-rapira-dispatcher would be red at -4.5% to -5.1%, although their paired deltas are -1.3% to +0.7%. So each floor adds the largest offset of the baseline build.
+
+| measure | two rigs, all targets | two rigs, HTTP/1.1 targets | two rigs, grpc-rapira | baseline offset | floor |
+| --- | --- | --- | --- | --- | --- |
+| capacity | 4.12% (dispatcher-static) | 4.12% | 2.38% | 3.45% (dispatcher) | 8.0% |
+| p99 | 32.03% (grpc) | 11.51% (worker) | 32.03% | 5.47% (dispatcher), grpc-rapira 2.45% | 17.0%, grpc-rapira 34.5% |
+| RSS | 3.34% (worker) | 3.34% | 2.01% | 0.80% (grpc) | 4.5% |
+
+- These floors replace the A/A floors of the section "A/A calibration, 2026-09-27" on the board. A capacity change under 8%, and a p99 change under 17% of an HTTP/1.1 target, stay gray. The paired delta in the tooltip compares the two builds of one run on the same instances.
+- The 26 runs used 14 AMIs, the kernels 7.2.7 to 7.2.11, and PHP 8.5.11 and 8.5.12 in the nightly tarballs. The points include these differences. The floors include only the differences between two successive runs and the offset of the baseline run.
+- With these floors, the RSS of every target is green from #152 on, 10% to 17% under the baseline run. All capacity and p99 points are gray.
+
 ## Method change 3, 2026-09-27
 
 - From this date each run measures two builds on the same instances: the new nightly build and the selected base build. The default base is the newest other non-smoke board build. The rig is one c7a.2xlarge server and two c7a.xlarge loaders in eu-central-1a. The base build comes from the `binaries` release of this repository.
