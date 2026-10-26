@@ -258,14 +258,18 @@ jobs:
           git diff --cached --quiet || git commit -s -m "chore: publish run $id"
           git push
 
+      # The run keeps the artifacts of earlier attempts, and deploy-pages refuses two artifacts with one name.
       - name: Upload the Pages site
         uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
         with:
+          name: github-pages-${{ github.run_attempt }}
           path: pages
 
       - name: Deploy the Pages site
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
+        with:
+          artifact_name: github-pages-${{ github.run_attempt }}
 
       # The prune step runs after deployment, so a failed delete does not stop the publish.
       - name: Prune the binaries release

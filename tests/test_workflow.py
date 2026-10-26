@@ -36,6 +36,11 @@ UP_CASES = [
     {"name": "capacity retry keeps the captured directory", "retry": "1", "zones": ["AZ=eu-central-1a", "AZ=eu-central-1b"]},
 ]
 
+PAGES_CASES = [
+    {"name": "first attempt deploys its own upload", "attempt": 1},
+    {"name": "rerun after a deployed attempt deploys its own upload", "attempt": 2},
+]
+
 GH = '''
 import json, os, shutil, sys
 from pathlib import Path
@@ -164,3 +169,14 @@ class WorkflowTest(unittest.TestCase):
                 for args, zone in zip(ups, case["zones"]):
                     self.assertIn(f"NIGHTLY_DIR={root / 'runner/binary'}", args)
                     self.assertIn(zone, args)
+
+    def test_publish_deploys_the_pages_artifact_of_its_attempt(self):
+        # The run keeps the artifacts of earlier attempts, and deploy-pages needs exactly one artifact with its name:
+        # https://github.com/actions/deploy-pages/blob/368f82528645a54fb793d4d04e342629a3f51346/src/internal/api-client.js#L79-L92
+        # Both actions name the artifact github-pages by default.
+        upload = field(step("Upload the Pages site"), "name", 10) or "github-pages"
+        deploy = field(step("Deploy the Pages site"), "artifact_name", 10) or "github-pages"
+        for case in PAGES_CASES:
+            with self.subTest(name=case["name"]):
+                artifacts = [upload.replace("${{ github.run_attempt }}", str(attempt)) for attempt in range(1, case["attempt"] + 1)]
+                self.assertEqual(artifacts.count(deploy.replace("${{ github.run_attempt }}", str(case["attempt"]))), 1)
