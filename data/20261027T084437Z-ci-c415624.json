@@ -1,0 +1,7321 @@
+{
+ "schema": "rapira-bench-run/3",
+ "id": "20261027T084437Z-ci-c415624",
+ "suite": {
+  "name": "ci",
+  "file_sha256": "2caf10834eab6739ce1c52c968abfd2455653f28d3ca87a8a2010048cbe3ff52",
+  "rounds": 3,
+  "connections": {
+   "http1": 1000,
+   "grpc": 100
+  },
+  "stages": {
+   "rate": {
+    "warmup_s": 11,
+    "duration_s": 15,
+    "processes": null,
+    "rates": {
+     "hello-rapira-classic": 110000,
+     "hello-rapira-worker": 200000,
+     "hello-rapira-dispatcher": 200000,
+     "hello-rapira-dispatcher-static": 150000,
+     "grpc-rapira": 153000
+    }
+   },
+   "cap": {
+    "warmup_s": 5,
+    "duration_s": 15,
+    "processes": 2,
+    "rates": {
+     "hello-rapira-classic": 270000,
+     "hello-rapira-worker": 750000,
+     "hello-rapira-dispatcher": 770000,
+     "hello-rapira-dispatcher-static": 510000,
+     "grpc-rapira": 340000
+    }
+   }
+  }
+ },
+ "smoke": false,
+ "started": "2026-10-27T08:44:39Z",
+ "finished": "2026-10-27T09:15:51Z",
+ "rig": {
+  "server_type": "c7a.2xlarge",
+  "loader_type": "c7a.xlarge",
+  "loader_count": 2,
+  "az": "eu-central-1a",
+  "ami": "ami-0c4282087cb4b3d16",
+  "kernel": "7.2.12-200.fc44.x86_64",
+  "placement_group": "rapira-bench",
+  "server_instance_id": "i-09d94e801b8251d69"
+ },
+ "rapira": {
+  "ref": "nightly",
+  "sha": "c415624df5d2143b7b7591b8f188459c9e9a816d",
+  "version": "0.9.1-nightly.c415624",
+  "build": "nightly",
+  "asset": "rapira-v0.9.1-nightly.c415624-php8.5-linux-x86_64.tar.gz",
+  "binary_sha256": "e881e3bf80727d1882ce66c9d6cf6ca3eeb698490a6ed775a2b604c58ef886e0",
+  "rustflags": null,
+  "dir": "/opt/bench/rapira/c415624",
+  "pr": {
+   "number": 245,
+   "url": "https://github.com/rapira-rs/rapira/pull/245",
+   "title": "fix(sapi,http,grpc): fix contract defects at the plugin bridge"
+  }
+ },
+ "base": {
+  "ref": "cache",
+  "sha": "f6d2744e60f2c9fe3c7c307a0148ad136954032a",
+  "version": "0.9.1-nightly.f6d2744",
+  "build": "cache",
+  "asset": "rapira-v0.9.1-nightly.f6d2744-php8.5-linux-x86_64.tar.gz",
+  "binary_sha256": "8927a8d930215b0b1b1d9b390876cbfd8326c8351554405380fa95c3bda3e393",
+  "rustflags": null,
+  "dir": "/opt/bench/rapira/base-f6d2744"
+ },
+ "servers": {
+  "php": "PHP 8.5.12 (rapira-v0.9.1-nightly.c415624-php8.5-linux-x86_64.tar.gz)",
+  "protobuf": "v5.36.2",
+  "php_ini": "; The php.ini of every PHP process of the rig. rapira loads it through PHPRC. The run file records this text.\nopcache.enable=1\nopcache.enable_cli=1\nopcache.validate_timestamps=0\nopcache.jit=disable\nopcache.memory_consumption=256\nmemory_limit=256M\nrealpath_cache_size=4096K\nrealpath_cache_ttl=600\nexpose_php=0\n; Notices go to the log, never into a response body.\ndisplay_errors=0\nlog_errors=1\nerror_reporting=E_ALL & ~E_DEPRECATED\nerror_log=/dev/stderr\n"
+ },
+ "apps": {
+  "apps/grpc/bench.binpb": "659b413e7877f65c12cae6644088a60cf1eadfdc0912c64f30cb6f2b76c4e894",
+  "apps/grpc/bench.proto": "2de2238f8730bcf6317485e62b5fc72f70841e2ed815e9b3a47be6b7e72b59b1",
+  "apps/grpc/buf.gen.yaml": "45cdedbc9559dd9db21fcd79fa049c0471e46b31ba559dd2588a0063b11efcca",
+  "apps/grpc/composer.json": "c851957eff2ac7d7edf46f798921e9a37d19bd86eb615f072851155d40adfcc1",
+  "apps/grpc/composer.lock": "8e81425738612df14629fc3b9a2d2aa4fc2070be3abf22c64854197159290b0e",
+  "apps/grpc/echo.grpc": "744ac8813997104af2cfdde65daf715df869573d87b70a07a4cd7ebc1a1033e7",
+  "apps/grpc/expect.grpc": "7409e6ad24b0fbe553eece12702d4d0dc2f8d9015d77221daaf83a62e62d9e3d",
+  "apps/grpc/fixtures.py": "3b8991f4fc631bcd7df0eb901d3fcced91059402d824d12d019ff33ce45c1fe9",
+  "apps/grpc/php/autoload.php": "564b21f6848ca37df0370023ffe38ffc3a246ef9a999aa90911cb8fe857e5ac2",
+  "apps/grpc/php/dispatcher.php": "bc9c044540d16c78c05f756ac8aadfc50957f536edcafa263250dc165828ba2d",
+  "apps/grpc/php/gen/Bench/V1/EchoRequest.php": "d6bf44ea27442eec72904d0f934e632b24bcb1528190b204d6aadad59cd10b79",
+  "apps/grpc/php/gen/Bench/V1/EchoResponse.php": "46a6042a85db653e5eff0ebd111584c0865b3ed491632adff1b0f1c8c8fefc2f",
+  "apps/grpc/php/gen/GPBMetadata/Bench.php": "e902157504bbb295ee42b36a8d3a937fc41a82f58ffd9db8166b1ef409e520c9",
+  "apps/hello/classic.php": "0dddebc6e8bb92a3ac96deefe028160743adb8bb811196f7c3812c85b2090dca",
+  "apps/hello/dispatcher.php": "7cf8e431df45785d3667b8fbc6ea1a98f6b69f2d732f0804bbe1f7dc078eb315",
+  "apps/hello/expect.txt": "294902b9785136138cc2a6f7ffe6123a617f41ae647cae58739ccd5be23abcd4",
+  "apps/hello/worker.php": "003af3c44889509ceacffc09e6d0ebabcf89fc64346ad8951633ba68d58d2b21"
+ },
+ "loaders": [
+  {
+   "name": "loader-1",
+   "instance_id": "i-0654ba69a2d1f4512",
+   "private_ip": "172.31.24.78",
+   "kernel": "7.2.12-200.fc44.x86_64",
+   "wrk2": "44a94c17d8e6a0bac8559b53da76848e430cb7a7",
+   "h2load": "h2load nghttp2/1.68.0"
+  },
+  {
+   "name": "loader-2",
+   "instance_id": "i-0dfcb59d128fe5a3b",
+   "private_ip": "172.31.23.102",
+   "kernel": "7.2.12-200.fc44.x86_64",
+   "wrk2": "44a94c17d8e6a0bac8559b53da76848e430cb7a7",
+   "h2load": "h2load nghttp2/1.68.0"
+  }
+ ],
+ "plan": [
+  "r1-base-rate-hello-rapira-classic",
+  "r1-new-rate-hello-rapira-classic",
+  "r1-base-cap-hello-rapira-classic",
+  "r1-new-cap-hello-rapira-classic",
+  "r1-base-rate-hello-rapira-worker",
+  "r1-new-rate-hello-rapira-worker",
+  "r1-base-cap-hello-rapira-worker",
+  "r1-new-cap-hello-rapira-worker",
+  "r1-base-rate-hello-rapira-dispatcher",
+  "r1-new-rate-hello-rapira-dispatcher",
+  "r1-base-cap-hello-rapira-dispatcher",
+  "r1-new-cap-hello-rapira-dispatcher",
+  "r1-base-rate-hello-rapira-dispatcher-static",
+  "r1-new-rate-hello-rapira-dispatcher-static",
+  "r1-base-cap-hello-rapira-dispatcher-static",
+  "r1-new-cap-hello-rapira-dispatcher-static",
+  "r1-base-rate-grpc-rapira",
+  "r1-new-rate-grpc-rapira",
+  "r1-base-cap-grpc-rapira",
+  "r1-new-cap-grpc-rapira",
+  "r2-new-rate-hello-rapira-worker",
+  "r2-base-rate-hello-rapira-worker",
+  "r2-new-cap-hello-rapira-worker",
+  "r2-base-cap-hello-rapira-worker",
+  "r2-new-rate-hello-rapira-dispatcher",
+  "r2-base-rate-hello-rapira-dispatcher",
+  "r2-new-cap-hello-rapira-dispatcher",
+  "r2-base-cap-hello-rapira-dispatcher",
+  "r2-new-rate-hello-rapira-dispatcher-static",
+  "r2-base-rate-hello-rapira-dispatcher-static",
+  "r2-new-cap-hello-rapira-dispatcher-static",
+  "r2-base-cap-hello-rapira-dispatcher-static",
+  "r2-new-rate-grpc-rapira",
+  "r2-base-rate-grpc-rapira",
+  "r2-new-cap-grpc-rapira",
+  "r2-base-cap-grpc-rapira",
+  "r2-new-rate-hello-rapira-classic",
+  "r2-base-rate-hello-rapira-classic",
+  "r2-new-cap-hello-rapira-classic",
+  "r2-base-cap-hello-rapira-classic",
+  "r3-base-rate-hello-rapira-dispatcher",
+  "r3-new-rate-hello-rapira-dispatcher",
+  "r3-base-cap-hello-rapira-dispatcher",
+  "r3-new-cap-hello-rapira-dispatcher",
+  "r3-base-rate-hello-rapira-dispatcher-static",
+  "r3-new-rate-hello-rapira-dispatcher-static",
+  "r3-base-cap-hello-rapira-dispatcher-static",
+  "r3-new-cap-hello-rapira-dispatcher-static",
+  "r3-base-rate-grpc-rapira",
+  "r3-new-rate-grpc-rapira",
+  "r3-base-cap-grpc-rapira",
+  "r3-new-cap-grpc-rapira",
+  "r3-base-rate-hello-rapira-classic",
+  "r3-new-rate-hello-rapira-classic",
+  "r3-base-cap-hello-rapira-classic",
+  "r3-new-cap-hello-rapira-classic",
+  "r3-base-rate-hello-rapira-worker",
+  "r3-new-rate-hello-rapira-worker",
+  "r3-base-cap-hello-rapira-worker",
+  "r3-new-cap-hello-rapira-worker"
+ ],
+ "cells": [
+  {
+   "key": "r1-base-rate-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 110000,
+   "achieved_rps": 108699.26923076923,
+   "successful_rps": 108699.26923076923,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1228.0,
+    "p90": 2087.0,
+    "p99": 2625.0,
+    "p999": 2991.0,
+    "max": 4392.0
+   },
+   "rss_kb": 249432,
+   "held": true,
+   "cpu": {
+    "server_busy": 48,
+    "loader_busy": 37
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1413094,
+     "bytes": 197833160,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1287.094,
+      "p50": 1228.0,
+      "p90": 2087.0,
+      "p95": 2287.0,
+      "p99": 2615.0,
+      "p999": 2937.0,
+      "max": 3586.0
+     },
+     "requests_per_sec": 54348.513,
+     "calibration_ms": [
+      1.218,
+      1.231,
+      1.225,
+      1.229
+     ],
+     "busy_cpu": 37,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1413087,
+     "bytes": 197832180,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1235.375,
+      "p50": 1172.0,
+      "p90": 2018.0,
+      "p95": 2233.0,
+      "p99": 2625.0,
+      "p999": 2991.0,
+      "max": 4392.0
+     },
+     "requests_per_sec": 54349.521,
+     "calibration_ms": [
+      1.208,
+      1.211,
+      1.212,
+      1.207
+     ],
+     "busy_cpu": 30,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-new-rate-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 110000,
+   "achieved_rps": 108699.73076923077,
+   "successful_rps": 108699.73076923077,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1204.0,
+    "p90": 2041.0,
+    "p99": 2553.0,
+    "p999": 2965.0,
+    "max": 3598.0
+   },
+   "rss_kb": 248740,
+   "held": true,
+   "cpu": {
+    "server_busy": 50,
+    "loader_busy": 37
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1413100,
+     "bytes": 197834000,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1197.156,
+      "p50": 1138.0,
+      "p90": 1950.0,
+      "p95": 2143.0,
+      "p99": 2553.0,
+      "p999": 2965.0,
+      "max": 3598.0
+     },
+     "requests_per_sec": 54349.404,
+     "calibration_ms": [
+      1.228,
+      1.231,
+      1.224,
+      1.226
+     ],
+     "busy_cpu": 37,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1413093,
+     "bytes": 197833020,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1259.043,
+      "p50": 1204.0,
+      "p90": 2041.0,
+      "p95": 2229.0,
+      "p99": 2547.0,
+      "p999": 2839.0,
+      "max": 3418.0
+     },
+     "requests_per_sec": 54348.368,
+     "calibration_ms": [
+      1.282,
+      1.281,
+      1.283,
+      1.278
+     ],
+     "busy_cpu": 29,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-base-cap-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 270000,
+   "achieved_rps": 127906.35,
+   "successful_rps": 127906.35,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7770111.0,
+    "p90": 9732095.0,
+    "p99": 10280959.0,
+    "p999": 10379263.0,
+    "max": 10395648.0
+   },
+   "rss_kb": 122648,
+   "held": false,
+   "cpu": {
+    "server_busy": 53,
+    "loader_busy": 22
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1279812,
+     "bytes": 179173680,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7758138.453,
+      "p50": 7761919.0,
+      "p90": 9715711.0,
+      "p95": 9961471.0,
+      "p99": 10272767.0,
+      "p999": 10379263.0,
+      "max": 10387456.0
+     },
+     "requests_per_sec": 63992.171,
+     "calibration_ms": [
+      2575.657,
+      2574.356,
+      2572.582,
+      2571.573
+     ],
+     "busy_cpu": 22,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1278315,
+     "bytes": 178964100,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7767058.078,
+      "p50": 7770111.0,
+      "p90": 9732095.0,
+      "p95": 9977855.0,
+      "p99": 10280959.0,
+      "p999": 10379263.0,
+      "max": 10395648.0
+     },
+     "requests_per_sec": 63917.23,
+     "calibration_ms": [
+      2571.353,
+      2577.209,
+      2571.529,
+      2588.267
+     ],
+     "busy_cpu": 22,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-new-cap-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 270000,
+   "achieved_rps": 129615.15,
+   "successful_rps": 129615.15,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7667711.0,
+    "p90": 9609215.0,
+    "p99": 10051583.0,
+    "p999": 10149887.0,
+    "max": 10158080.0
+   },
+   "rss_kb": 122172,
+   "held": false,
+   "cpu": {
+    "server_busy": 53,
+    "loader_busy": 23
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1295762,
+     "bytes": 181406680,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7668402.827,
+      "p50": 7667711.0,
+      "p90": 9609215.0,
+      "p95": 9854975.0,
+      "p99": 10051583.0,
+      "p999": 10149887.0,
+      "max": 10158080.0
+     },
+     "requests_per_sec": 64790.005,
+     "calibration_ms": [
+      2550.696,
+      2550.854,
+      2551.955,
+      2552.395
+     ],
+     "busy_cpu": 23,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1296541,
+     "bytes": 181515740,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7663693.432,
+      "p50": 7663615.0,
+      "p90": 9609215.0,
+      "p95": 9846783.0,
+      "p99": 10051583.0,
+      "p999": 10149887.0,
+      "max": 10158080.0
+     },
+     "requests_per_sec": 64828.92,
+     "calibration_ms": [
+      2550.462,
+      2550.786,
+      2551.01,
+      2550.432
+     ],
+     "busy_cpu": 23,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-base-rate-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 197627.46153846153,
+   "successful_rps": 197627.46153846153,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1596.0,
+    "p90": 2455.0,
+    "p99": 3131.0,
+    "p999": 3665.0,
+    "max": 5100.0
+   },
+   "rss_kb": 266768,
+   "held": true,
+   "cpu": {
+    "server_busy": 50,
+    "loader_busy": 39
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569299,
+     "bytes": 359701860,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1592.718,
+      "p50": 1549.0,
+      "p90": 2357.0,
+      "p95": 2623.0,
+      "p99": 3113.0,
+      "p999": 3555.0,
+      "max": 5100.0
+     },
+     "requests_per_sec": 98810.106,
+     "calibration_ms": [
+      1.525,
+      1.545,
+      1.619,
+      1.609
+     ],
+     "busy_cpu": 39,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569015,
+     "bytes": 359662100,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1625.861,
+      "p50": 1596.0,
+      "p90": 2455.0,
+      "p95": 2685.0,
+      "p99": 3131.0,
+      "p999": 3665.0,
+      "max": 5084.0
+     },
+     "requests_per_sec": 98804.393,
+     "calibration_ms": [
+      1.527,
+      1.506,
+      1.7,
+      1.697
+     ],
+     "busy_cpu": 36,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-new-rate-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 197627.23076923078,
+   "successful_rps": 197627.23076923078,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1584.0,
+    "p90": 2453.0,
+    "p99": 3137.0,
+    "p999": 3695.0,
+    "max": 4604.0
+   },
+   "rss_kb": 265932,
+   "held": true,
+   "cpu": {
+    "server_busy": 51,
+    "loader_busy": 39
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569157,
+     "bytes": 359681980,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1578.061,
+      "p50": 1534.0,
+      "p90": 2341.0,
+      "p95": 2611.0,
+      "p99": 3089.0,
+      "p999": 3505.0,
+      "max": 4224.0
+     },
+     "requests_per_sec": 98804.732,
+     "calibration_ms": [
+      1.555,
+      1.544,
+      1.585,
+      1.586
+     ],
+     "busy_cpu": 39,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569151,
+     "bytes": 359681140,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1613.41,
+      "p50": 1584.0,
+      "p90": 2453.0,
+      "p95": 2683.0,
+      "p99": 3137.0,
+      "p999": 3695.0,
+      "max": 4604.0
+     },
+     "requests_per_sec": 98804.999,
+     "calibration_ms": [
+      1.503,
+      1.521,
+      1.668,
+      1.682
+     ],
+     "busy_cpu": 36,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-base-cap-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 750000,
+   "achieved_rps": 361731.55,
+   "successful_rps": 361731.55,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7643135.0,
+    "p90": 9576447.0,
+    "p99": 10010623.0,
+    "p999": 10076159.0,
+    "max": 10117120.0
+   },
+   "rss_kb": 126608,
+   "held": false,
+   "cpu": {
+    "server_busy": 73,
+    "loader_busy": 55
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3618007,
+     "bytes": 506520980,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7634769.392,
+      "p50": 7643135.0,
+      "p90": 9576447.0,
+      "p95": 9805823.0,
+      "p99": 10002431.0,
+      "p999": 10067967.0,
+      "max": 10108928.0
+     },
+     "requests_per_sec": 180905.551,
+     "calibration_ms": [
+      2543.323,
+      2542.252,
+      2540.769,
+      2543.579
+     ],
+     "busy_cpu": 53,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3616624,
+     "bytes": 506327360,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7638080.662,
+      "p50": 7643135.0,
+      "p90": 9576447.0,
+      "p95": 9814015.0,
+      "p99": 10010623.0,
+      "p999": 10076159.0,
+      "max": 10117120.0
+     },
+     "requests_per_sec": 180836.67,
+     "calibration_ms": [
+      2543.42,
+      2544.288,
+      2542.87,
+      2544.738
+     ],
+     "busy_cpu": 55,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-new-cap-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 750000,
+   "achieved_rps": 364271.2,
+   "successful_rps": 364271.2,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7589887.0,
+    "p90": 9494527.0,
+    "p99": 10059775.0,
+    "p999": 10166271.0,
+    "max": 10215424.0
+   },
+   "rss_kb": 126592,
+   "held": false,
+   "cpu": {
+    "server_busy": 73,
+    "loader_busy": 56
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3643007,
+     "bytes": 510020980,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7588176.654,
+      "p50": 7589887.0,
+      "p90": 9494527.0,
+      "p95": 9740287.0,
+      "p99": 10059775.0,
+      "p999": 10166271.0,
+      "max": 10207232.0
+     },
+     "requests_per_sec": 182155.623,
+     "calibration_ms": [
+      2528.274,
+      2525.178,
+      2513.482,
+      2517.577
+     ],
+     "busy_cpu": 54,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3642417,
+     "bytes": 509938380,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7588933.113,
+      "p50": 7589887.0,
+      "p90": 9494527.0,
+      "p95": 9740287.0,
+      "p99": 10059775.0,
+      "p999": 10166271.0,
+      "max": 10215424.0
+     },
+     "requests_per_sec": 182126.423,
+     "calibration_ms": [
+      2517.671,
+      2520.693,
+      2514.842,
+      2521.835
+     ],
+     "busy_cpu": 56,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-base-rate-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 197622.5,
+   "successful_rps": 197622.5,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1544.0,
+    "p90": 2417.0,
+    "p99": 3079.0,
+    "p999": 3457.0,
+    "max": 4052.0
+   },
+   "rss_kb": 259084,
+   "held": true,
+   "cpu": {
+    "server_busy": 47,
+    "loader_busy": 40
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569017,
+     "bytes": 323696142,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1583.576,
+      "p50": 1544.0,
+      "p90": 2417.0,
+      "p95": 2623.0,
+      "p99": 2939.0,
+      "p999": 3205.0,
+      "max": 3692.0
+     },
+     "requests_per_sec": 98803.034,
+     "calibration_ms": [
+      1.635,
+      1.632,
+      1.638,
+      1.379
+     ],
+     "busy_cpu": 40,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569168,
+     "bytes": 323715168,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1492.276,
+      "p50": 1427.0,
+      "p90": 2347.0,
+      "p95": 2625.0,
+      "p99": 3079.0,
+      "p999": 3457.0,
+      "max": 4052.0
+     },
+     "requests_per_sec": 98805.151,
+     "calibration_ms": [
+      1.485,
+      1.501,
+      1.504,
+      1.394
+     ],
+     "busy_cpu": 37,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-new-rate-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 196958.07692307694,
+   "successful_rps": 196958.07692307694,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1461.0,
+    "p90": 2297.0,
+    "p99": 2947.0,
+    "p999": 3403.0,
+    "max": 4192.0
+   },
+   "rss_kb": 255352,
+   "held": true,
+   "cpu": {
+    "server_busy": 49,
+    "loader_busy": 41
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2551879,
+     "bytes": 321536754,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1501.402,
+      "p50": 1461.0,
+      "p90": 2297.0,
+      "p95": 2503.0,
+      "p99": 2837.0,
+      "p999": 3153.0,
+      "max": 3814.0
+     },
+     "requests_per_sec": 98141.099,
+     "calibration_ms": [
+      1.544,
+      1.565,
+      1.479,
+      1.374
+     ],
+     "busy_cpu": 41,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569031,
+     "bytes": 323697906,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1494.791,
+      "p50": 1448.0,
+      "p90": 2283.0,
+      "p95": 2515.0,
+      "p99": 2947.0,
+      "p999": 3403.0,
+      "max": 4192.0
+     },
+     "requests_per_sec": 98803.249,
+     "calibration_ms": [
+      1.51,
+      1.449,
+      1.479,
+      1.448
+     ],
+     "busy_cpu": 37,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-base-cap-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 770000,
+   "achieved_rps": 383685.8,
+   "successful_rps": 383685.8,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7397375.0,
+    "p90": 9273343.0,
+    "p99": 9781247.0,
+    "p999": 9879551.0,
+    "max": 9936896.0
+   },
+   "rss_kb": 124108,
+   "held": false,
+   "cpu": {
+    "server_busy": 67,
+    "loader_busy": 57
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3835484,
+     "bytes": 483270984,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7395037.39,
+      "p50": 7397375.0,
+      "p90": 9273343.0,
+      "p95": 9502719.0,
+      "p99": 9781247.0,
+      "p999": 9879551.0,
+      "max": 9920512.0
+     },
+     "requests_per_sec": 191780.021,
+     "calibration_ms": [
+      2461.833,
+      2457.549,
+      2461.906,
+      2460.913
+     ],
+     "busy_cpu": 57,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3838232,
+     "bytes": 483617232,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7388923.331,
+      "p50": 7389183.0,
+      "p90": 9265151.0,
+      "p95": 9494527.0,
+      "p99": 9773055.0,
+      "p999": 9879551.0,
+      "max": 9936896.0
+     },
+     "requests_per_sec": 191917.463,
+     "calibration_ms": [
+      2464.468,
+      2455.121,
+      2459.169,
+      2461.857
+     ],
+     "busy_cpu": 57,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-new-cap-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 770000,
+   "achieved_rps": 382192.05,
+   "successful_rps": 382192.05,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7426047.0,
+    "p90": 9297919.0,
+    "p99": 9723903.0,
+    "p999": 9789439.0,
+    "max": 9830400.0
+   },
+   "rss_kb": 124612,
+   "held": false,
+   "cpu": {
+    "server_busy": 66,
+    "loader_busy": 56
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3821402,
+     "bytes": 481496652,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7415921.011,
+      "p50": 7426047.0,
+      "p90": 9297919.0,
+      "p95": 9535487.0,
+      "p99": 9723903.0,
+      "p999": 9789439.0,
+      "max": 9830400.0
+     },
+     "requests_per_sec": 191075.985,
+     "calibration_ms": [
+      2467.82,
+      2465.773,
+      2466.608,
+      2465.844
+     ],
+     "busy_cpu": 56,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3822439,
+     "bytes": 481627314,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7414546.302,
+      "p50": 7421951.0,
+      "p90": 9297919.0,
+      "p95": 9535487.0,
+      "p99": 9723903.0,
+      "p999": 9789439.0,
+      "max": 9822208.0
+     },
+     "requests_per_sec": 191127.693,
+     "calibration_ms": [
+      2468.504,
+      2466.879,
+      2466.413,
+      2467.904
+     ],
+     "busy_cpu": 56,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-base-rate-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 150000,
+   "achieved_rps": 148221.3076923077,
+   "successful_rps": 148221.3076923077,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1204.0,
+    "p90": 2039.0,
+    "p99": 2603.0,
+    "p999": 2983.0,
+    "max": 3550.0
+   },
+   "rss_kb": 258964,
+   "held": true,
+   "cpu": {
+    "server_busy": 56,
+    "loader_busy": 48
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1926891,
+     "bytes": 242788266,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1264.04,
+      "p50": 1204.0,
+      "p90": 2039.0,
+      "p95": 2205.0,
+      "p99": 2547.0,
+      "p999": 2937.0,
+      "max": 3550.0
+     },
+     "requests_per_sec": 74109.576,
+     "calibration_ms": [
+      1.251,
+      1.265,
+      1.25,
+      1.26
+     ],
+     "busy_cpu": 48,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1926863,
+     "bytes": 242784738,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1257.008,
+      "p50": 1190.0,
+      "p90": 2031.0,
+      "p95": 2205.0,
+      "p99": 2603.0,
+      "p999": 2983.0,
+      "max": 3534.0
+     },
+     "requests_per_sec": 74111.894,
+     "calibration_ms": [
+      1.253,
+      1.258,
+      1.237,
+      1.252
+     ],
+     "busy_cpu": 33,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-new-rate-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {
+    "loader_skew": {
+     "loader": "loader-1",
+     "thread_ms": 1.423,
+     "median_ms": 1.2
+    }
+   },
+   "rate": 150000,
+   "achieved_rps": 147723.11538461538,
+   "successful_rps": 147723.11538461538,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1201.0,
+    "p90": 2059.0,
+    "p99": 2623.0,
+    "p999": 3029.0,
+    "max": 3738.0
+   },
+   "rss_kb": 258240,
+   "held": true,
+   "cpu": {
+    "server_busy": 60,
+    "loader_busy": 43
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1913916,
+     "bytes": 241153416,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1266.737,
+      "p50": 1201.0,
+      "p90": 2059.0,
+      "p95": 2245.0,
+      "p99": 2623.0,
+      "p999": 3029.0,
+      "max": 3678.0
+     },
+     "requests_per_sec": 73609.878,
+     "calibration_ms": [
+      1.2,
+      1.206,
+      1.423,
+      1.196
+     ],
+     "busy_cpu": 43,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1926885,
+     "bytes": 242787510,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1247.404,
+      "p50": 1182.0,
+      "p90": 2024.0,
+      "p95": 2199.0,
+      "p99": 2555.0,
+      "p999": 2917.0,
+      "max": 3738.0
+     },
+     "requests_per_sec": 74109.645,
+     "calibration_ms": [
+      1.249,
+      1.249,
+      1.252,
+      1.226
+     ],
+     "busy_cpu": 35,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-base-cap-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 510000,
+   "achieved_rps": 249833.3,
+   "successful_rps": 249833.3,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7524351.0,
+    "p90": 9428991.0,
+    "p99": 9895935.0,
+    "p999": 9994239.0,
+    "max": 10051584.0
+   },
+   "rss_kb": 131000,
+   "held": false,
+   "cpu": {
+    "server_busy": 64,
+    "loader_busy": 41
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2499923,
+     "bytes": 314990298,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7514416.547,
+      "p50": 7516159.0,
+      "p90": 9420799.0,
+      "p95": 9650175.0,
+      "p99": 9879551.0,
+      "p999": 9986047.0,
+      "max": 10051584.0
+     },
+     "requests_per_sec": 124999.925,
+     "calibration_ms": [
+      2492.725,
+      2485.118,
+      2488.152,
+      2487.74
+     ],
+     "busy_cpu": 40,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2496743,
+     "bytes": 314589618,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7524582.6,
+      "p50": 7524351.0,
+      "p90": 9428991.0,
+      "p95": 9666559.0,
+      "p99": 9895935.0,
+      "p999": 9994239.0,
+      "max": 10051584.0
+     },
+     "requests_per_sec": 124840.689,
+     "calibration_ms": [
+      2498.758,
+      2489.571,
+      2491.764,
+      2496.278
+     ],
+     "busy_cpu": 41,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-new-cap-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 1,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 510000,
+   "achieved_rps": 255661.6,
+   "successful_rps": 255661.6,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7352319.0,
+    "p90": 9191423.0,
+    "p99": 9912319.0,
+    "p999": 10018815.0,
+    "max": 10084352.0
+   },
+   "rss_kb": 130580,
+   "held": false,
+   "cpu": {
+    "server_busy": 64,
+    "loader_busy": 42
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2559517,
+     "bytes": 322499142,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7339678.668,
+      "p50": 7335935.0,
+      "p90": 9175039.0,
+      "p95": 9494527.0,
+      "p99": 9904127.0,
+      "p999": 10018815.0,
+      "max": 10084352.0
+     },
+     "requests_per_sec": 127979.734,
+     "calibration_ms": [
+      2458.084,
+      2436.0,
+      2447.698,
+      2460.776
+     ],
+     "busy_cpu": 41,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2553715,
+     "bytes": 321768090,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7356826.477,
+      "p50": 7352319.0,
+      "p90": 9191423.0,
+      "p95": 9527295.0,
+      "p99": 9912319.0,
+      "p999": 10018815.0,
+      "max": 10084352.0
+     },
+     "requests_per_sec": 127689.555,
+     "calibration_ms": [
+      2458.102,
+      2447.125,
+      2447.666,
+      2464.216
+     ],
+     "busy_cpu": 42,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-base-rate-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 1,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 153000,
+   "achieved_rps": 153001.73333333334,
+   "successful_rps": 153001.73333333334,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 2961.0,
+    "p90": 4394.0,
+    "p99": 5517.0,
+    "p999": 6364.0,
+    "max": 8141.0
+   },
+   "rss_kb": 300296,
+   "held": true,
+   "cpu": {
+    "server_busy": 48,
+    "loader_busy": 18
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147519,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 2959.074290708912,
+      "p50": 2961.0,
+      "p90": 4394.0,
+      "p95": 4782.0,
+      "p99": 5517.0,
+      "p999": 6364.0,
+      "max": 7857.0
+     },
+     "requests_per_sec": 76501.267,
+     "calibration_ms": [],
+     "busy_cpu": 18,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147507,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 2106.969526983278,
+      "p50": 1935.0,
+      "p90": 3979.0,
+      "p95": 4410.0,
+      "p99": 5187.0,
+      "p999": 6216.0,
+      "max": 8141.0
+     },
+     "requests_per_sec": 76500.467,
+     "calibration_ms": [],
+     "busy_cpu": 18,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-new-rate-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 1,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 153000,
+   "achieved_rps": 152998.53333333333,
+   "successful_rps": 152998.53333333333,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 3009.0,
+    "p90": 4535.0,
+    "p99": 5815.0,
+    "p999": 6725.0,
+    "max": 7854.0
+   },
+   "rss_kb": 297216,
+   "held": true,
+   "cpu": {
+    "server_busy": 49,
+    "loader_busy": 18
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147490,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 3017.3088497503245,
+      "p50": 3009.0,
+      "p90": 4535.0,
+      "p95": 4965.0,
+      "p99": 5815.0,
+      "p999": 6725.0,
+      "max": 7854.0
+     },
+     "requests_per_sec": 76499.333,
+     "calibration_ms": [],
+     "busy_cpu": 18,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147488,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 2238.41890198416,
+      "p50": 2138.0,
+      "p90": 4030.0,
+      "p95": 4464.0,
+      "p99": 5297.0,
+      "p999": 6370.0,
+      "max": 7707.0
+     },
+     "requests_per_sec": 76499.2,
+     "calibration_ms": [],
+     "busy_cpu": 18,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-base-cap-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 1,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 340000,
+   "achieved_rps": 161372.66666666666,
+   "successful_rps": 161372.66666666666,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 29185.0,
+    "p90": 149339.0,
+    "p99": 323613.0,
+    "p999": 500917.0,
+    "max": 1097132.0
+   },
+   "rss_kb": 227976,
+   "held": false,
+   "cpu": {
+    "server_busy": 72,
+    "loader_busy": 34
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1212769,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 61835.72494432163,
+      "p50": 29009.0,
+      "p90": 148607.0,
+      "p95": 200982.0,
+      "p99": 322485.0,
+      "p999": 498418.0,
+      "max": 1092763.0
+     },
+     "requests_per_sec": 80851.267,
+     "calibration_ms": [],
+     "busy_cpu": 33,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1207821,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 62098.27508629176,
+      "p50": 29185.0,
+      "p90": 149339.0,
+      "p95": 201770.0,
+      "p99": 323613.0,
+      "p999": 500917.0,
+      "max": 1097132.0
+     },
+     "requests_per_sec": 80521.4,
+     "calibration_ms": [],
+     "busy_cpu": 34,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r1-new-cap-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 1,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 340000,
+   "achieved_rps": 165959.93333333332,
+   "successful_rps": 165959.93333333332,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 29667.0,
+    "p90": 142701.0,
+    "p99": 308164.0,
+    "p999": 474321.0,
+    "max": 1273989.0
+   },
+   "rss_kb": 227156,
+   "held": false,
+   "cpu": {
+    "server_busy": 72,
+    "loader_busy": 34
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1246697,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 60161.10313652796,
+      "p50": 29527.0,
+      "p90": 142271.0,
+      "p95": 191713.0,
+      "p99": 306174.0,
+      "p999": 471076.0,
+      "max": 997928.0
+     },
+     "requests_per_sec": 83113.133,
+     "calibration_ms": [],
+     "busy_cpu": 33,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1242702,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 60351.850881385886,
+      "p50": 29667.0,
+      "p90": 142701.0,
+      "p95": 192253.0,
+      "p99": 308164.0,
+      "p999": 474321.0,
+      "max": 1273989.0
+     },
+     "requests_per_sec": 82846.8,
+     "calibration_ms": [],
+     "busy_cpu": 34,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-new-rate-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 196956.96153846153,
+   "successful_rps": 196956.96153846153,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1499.0,
+    "p90": 2337.0,
+    "p99": 3089.0,
+    "p999": 3641.0,
+    "max": 4704.0
+   },
+   "rss_kb": 265200,
+   "held": true,
+   "cpu": {
+    "server_busy": 54,
+    "loader_busy": 39
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569069,
+     "bytes": 359669660,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1541.25,
+      "p50": 1499.0,
+      "p90": 2279.0,
+      "p95": 2539.0,
+      "p99": 2993.0,
+      "p999": 3391.0,
+      "max": 4360.0
+     },
+     "requests_per_sec": 98802.028,
+     "calibration_ms": [
+      1.522,
+      1.542,
+      1.518,
+      1.525
+     ],
+     "busy_cpu": 39,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2551812,
+     "bytes": 357253680,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1503.989,
+      "p50": 1444.0,
+      "p90": 2337.0,
+      "p95": 2585.0,
+      "p99": 3089.0,
+      "p999": 3641.0,
+      "max": 4704.0
+     },
+     "requests_per_sec": 98141.119,
+     "calibration_ms": [
+      1.525,
+      1.533,
+      1.607,
+      1.319
+     ],
+     "busy_cpu": 37,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-base-rate-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 197626.0,
+   "successful_rps": 197626.0,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1533.0,
+    "p90": 2451.0,
+    "p99": 3257.0,
+    "p999": 3735.0,
+    "max": 4480.0
+   },
+   "rss_kb": 265352,
+   "held": true,
+   "cpu": {
+    "server_busy": 51,
+    "loader_busy": 40
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569025,
+     "bytes": 359663500,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1526.291,
+      "p50": 1480.0,
+      "p90": 2261.0,
+      "p95": 2533.0,
+      "p99": 2977.0,
+      "p999": 3339.0,
+      "max": 4096.0
+     },
+     "requests_per_sec": 98800.974,
+     "calibration_ms": [
+      1.589,
+      1.536,
+      1.469,
+      1.474
+     ],
+     "busy_cpu": 40,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569251,
+     "bytes": 359695140,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1588.875,
+      "p50": 1533.0,
+      "p90": 2451.0,
+      "p95": 2727.0,
+      "p99": 3257.0,
+      "p999": 3735.0,
+      "max": 4480.0
+     },
+     "requests_per_sec": 98807.663,
+     "calibration_ms": [
+      1.58,
+      1.567,
+      1.569,
+      1.613
+     ],
+     "busy_cpu": 38,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-new-cap-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 750000,
+   "achieved_rps": 363996.85,
+   "successful_rps": 363996.85,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7610367.0,
+    "p90": 9519103.0,
+    "p99": 9945087.0,
+    "p999": 10027007.0,
+    "max": 10067968.0
+   },
+   "rss_kb": 126336,
+   "held": false,
+   "cpu": {
+    "server_busy": 73,
+    "loader_busy": 54
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3640539,
+     "bytes": 509675460,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7602306.832,
+      "p50": 7610367.0,
+      "p90": 9510911.0,
+      "p95": 9748479.0,
+      "p99": 9945087.0,
+      "p999": 10027007.0,
+      "max": 10067968.0
+     },
+     "requests_per_sec": 182032.174,
+     "calibration_ms": [
+      2537.165,
+      2541.003,
+      2537.778,
+      2540.099
+     ],
+     "busy_cpu": 54,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3639398,
+     "bytes": 509515720,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7605255.546,
+      "p50": 7610367.0,
+      "p90": 9519103.0,
+      "p95": 9756671.0,
+      "p99": 9945087.0,
+      "p999": 10027007.0,
+      "max": 10067968.0
+     },
+     "requests_per_sec": 181975.223,
+     "calibration_ms": [
+      2539.388,
+      2539.687,
+      2541.526,
+      2542.583
+     ],
+     "busy_cpu": 54,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-base-cap-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 750000,
+   "achieved_rps": 362300.9,
+   "successful_rps": 362300.9,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7610367.0,
+    "p90": 9543679.0,
+    "p99": 9994239.0,
+    "p999": 10092543.0,
+    "max": 10149888.0
+   },
+   "rss_kb": 126552,
+   "held": false,
+   "cpu": {
+    "server_busy": 73,
+    "loader_busy": 54
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3622834,
+     "bytes": 507196760,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7612171.319,
+      "p50": 7610367.0,
+      "p90": 9543679.0,
+      "p95": 9797631.0,
+      "p99": 9994239.0,
+      "p999": 10092543.0,
+      "max": 10149888.0
+     },
+     "requests_per_sec": 181147.107,
+     "calibration_ms": [
+      2522.146,
+      2519.139,
+      2518.967,
+      2523.425
+     ],
+     "busy_cpu": 54,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3623184,
+     "bytes": 507245760,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7610880.282,
+      "p50": 7610367.0,
+      "p90": 9543679.0,
+      "p95": 9797631.0,
+      "p99": 9994239.0,
+      "p999": 10084351.0,
+      "max": 10133504.0
+     },
+     "requests_per_sec": 181164.807,
+     "calibration_ms": [
+      2519.986,
+      2513.518,
+      2520.011,
+      2526.875
+     ],
+     "busy_cpu": 54,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-new-rate-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 197625.46153846153,
+   "successful_rps": 197625.46153846153,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1534.0,
+    "p90": 2373.0,
+    "p99": 3125.0,
+    "p999": 3529.0,
+    "max": 4180.0
+   },
+   "rss_kb": 257500,
+   "held": true,
+   "cpu": {
+    "server_busy": 49,
+    "loader_busy": 39
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569152,
+     "bytes": 323713152,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1569.365,
+      "p50": 1534.0,
+      "p90": 2365.0,
+      "p95": 2561.0,
+      "p99": 2875.0,
+      "p999": 3151.0,
+      "max": 3674.0
+     },
+     "requests_per_sec": 98807.834,
+     "calibration_ms": [
+      1.612,
+      1.621,
+      1.637,
+      1.352
+     ],
+     "busy_cpu": 39,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569110,
+     "bytes": 323707860,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1515.064,
+      "p50": 1452.0,
+      "p90": 2373.0,
+      "p95": 2649.0,
+      "p99": 3125.0,
+      "p999": 3529.0,
+      "max": 4180.0
+     },
+     "requests_per_sec": 98807.777,
+     "calibration_ms": [
+      1.501,
+      1.502,
+      1.53,
+      1.461
+     ],
+     "busy_cpu": 37,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-base-rate-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 197623.65384615384,
+   "successful_rps": 197623.65384615384,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1491.0,
+    "p90": 2349.0,
+    "p99": 3055.0,
+    "p999": 3561.0,
+    "max": 4772.0
+   },
+   "rss_kb": 255092,
+   "held": true,
+   "cpu": {
+    "server_busy": 51,
+    "loader_busy": 38
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569164,
+     "bytes": 323714664,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1366.35,
+      "p50": 1328.0,
+      "p90": 1984.0,
+      "p95": 2219.0,
+      "p99": 2713.0,
+      "p999": 3141.0,
+      "max": 4772.0
+     },
+     "requests_per_sec": 98805.784,
+     "calibration_ms": [
+      1.391,
+      1.332,
+      1.337,
+      1.344
+     ],
+     "busy_cpu": 38,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569051,
+     "bytes": 323700426,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1531.944,
+      "p50": 1491.0,
+      "p90": 2349.0,
+      "p95": 2577.0,
+      "p99": 3055.0,
+      "p999": 3561.0,
+      "max": 4416.0
+     },
+     "requests_per_sec": 98805.291,
+     "calibration_ms": [
+      1.535,
+      1.505,
+      1.507,
+      1.572
+     ],
+     "busy_cpu": 37,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-new-cap-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 770000,
+   "achieved_rps": 377546.3,
+   "successful_rps": 377546.3,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7516159.0,
+    "p90": 9420799.0,
+    "p99": 9936895.0,
+    "p999": 10043391.0,
+    "max": 10084352.0
+   },
+   "rss_kb": 124956,
+   "held": false,
+   "cpu": {
+    "server_busy": 66,
+    "loader_busy": 55
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3776177,
+     "bytes": 475798302,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7510774.071,
+      "p50": 7512063.0,
+      "p90": 9420799.0,
+      "p95": 9650175.0,
+      "p99": 9936895.0,
+      "p999": 10043391.0,
+      "max": 10084352.0
+     },
+     "requests_per_sec": 188814.429,
+     "calibration_ms": [
+      2498.408,
+      2489.034,
+      2489.366,
+      2490.709
+     ],
+     "busy_cpu": 55,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3774749,
+     "bytes": 475618374,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7513158.767,
+      "p50": 7516159.0,
+      "p90": 9420799.0,
+      "p95": 9658367.0,
+      "p99": 9936895.0,
+      "p999": 10043391.0,
+      "max": 10084352.0
+     },
+     "requests_per_sec": 188743.207,
+     "calibration_ms": [
+      2497.006,
+      2489.002,
+      2494.427,
+      2495.568
+     ],
+     "busy_cpu": 55,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-base-cap-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 770000,
+   "achieved_rps": 377658.1,
+   "successful_rps": 377658.1,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7524351.0,
+    "p90": 9420799.0,
+    "p99": 9854975.0,
+    "p999": 9953279.0,
+    "max": 10010624.0
+   },
+   "rss_kb": 124324,
+   "held": false,
+   "cpu": {
+    "server_busy": 66,
+    "loader_busy": 56
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3777421,
+     "bytes": 475955046,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7523223.908,
+      "p50": 7520255.0,
+      "p90": 9412607.0,
+      "p95": 9650175.0,
+      "p99": 9854975.0,
+      "p999": 9953279.0,
+      "max": 9994240.0
+     },
+     "requests_per_sec": 188876.792,
+     "calibration_ms": [
+      2503.481,
+      2503.146,
+      2504.484,
+      2501.724
+     ],
+     "busy_cpu": 56,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3775741,
+     "bytes": 475743366,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7526156.475,
+      "p50": 7524351.0,
+      "p90": 9420799.0,
+      "p95": 9650175.0,
+      "p99": 9854975.0,
+      "p999": 9953279.0,
+      "max": 10010624.0
+     },
+     "requests_per_sec": 188792.129,
+     "calibration_ms": [
+      2505.333,
+      2502.566,
+      2504.484,
+      2505.207
+     ],
+     "busy_cpu": 56,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-new-rate-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 150000,
+   "achieved_rps": 148222.07692307694,
+   "successful_rps": 148222.07692307694,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1213.0,
+    "p90": 2067.0,
+    "p99": 2605.0,
+    "p999": 3001.0,
+    "max": 3574.0
+   },
+   "rss_kb": 257624,
+   "held": true,
+   "cpu": {
+    "server_busy": 48,
+    "loader_busy": 49
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1926896,
+     "bytes": 242788896,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1265.559,
+      "p50": 1199.0,
+      "p90": 2047.0,
+      "p95": 2213.0,
+      "p99": 2605.0,
+      "p999": 3001.0,
+      "max": 3422.0
+     },
+     "requests_per_sec": 74109.717,
+     "calibration_ms": [
+      1.263,
+      1.258,
+      1.262,
+      1.266
+     ],
+     "busy_cpu": 49,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1926878,
+     "bytes": 242786628,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1276.859,
+      "p50": 1213.0,
+      "p90": 2067.0,
+      "p95": 2237.0,
+      "p99": 2585.0,
+      "p999": 2939.0,
+      "max": 3574.0
+     },
+     "requests_per_sec": 74112.477,
+     "calibration_ms": [
+      1.272,
+      1.271,
+      1.27,
+      1.26
+     ],
+     "busy_cpu": 32,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-base-rate-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 150000,
+   "achieved_rps": 148216.76923076922,
+   "successful_rps": 148216.76923076922,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1211.0,
+    "p90": 2061.0,
+    "p99": 2611.0,
+    "p999": 2999.0,
+    "max": 3966.0
+   },
+   "rss_kb": 257400,
+   "held": true,
+   "cpu": {
+    "server_busy": 47,
+    "loader_busy": 49
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1926815,
+     "bytes": 242778690,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1276.24,
+      "p50": 1211.0,
+      "p90": 2061.0,
+      "p95": 2229.0,
+      "p99": 2611.0,
+      "p999": 2999.0,
+      "max": 3586.0
+     },
+     "requests_per_sec": 74109.774,
+     "calibration_ms": [
+      1.27,
+      1.274,
+      1.274,
+      1.267
+     ],
+     "busy_cpu": 49,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1926821,
+     "bytes": 242779446,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1274.372,
+      "p50": 1210.0,
+      "p90": 2057.0,
+      "p95": 2229.0,
+      "p99": 2581.0,
+      "p999": 2949.0,
+      "max": 3966.0
+     },
+     "requests_per_sec": 74108.682,
+     "calibration_ms": [
+      1.267,
+      1.27,
+      1.261,
+      1.262
+     ],
+     "busy_cpu": 33,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-new-cap-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 510000,
+   "achieved_rps": 244977.6,
+   "successful_rps": 244977.6,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7655423.0,
+    "p90": 9592831.0,
+    "p99": 10190847.0,
+    "p999": 10297343.0,
+    "max": 10346496.0
+   },
+   "rss_kb": 130692,
+   "held": false,
+   "cpu": {
+    "server_busy": 63,
+    "loader_busy": 40
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2450441,
+     "bytes": 308755566,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7656394.37,
+      "p50": 7651327.0,
+      "p90": 9592831.0,
+      "p95": 9838591.0,
+      "p99": 10182655.0,
+      "p999": 10289151.0,
+      "max": 10338304.0
+     },
+     "requests_per_sec": 122525.897,
+     "calibration_ms": [
+      2552.18,
+      2538.83,
+      2537.212,
+      2537.745
+     ],
+     "busy_cpu": 40,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2449111,
+     "bytes": 308587986,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7660013.065,
+      "p50": 7655423.0,
+      "p90": 9592831.0,
+      "p95": 9838591.0,
+      "p99": 10190847.0,
+      "p999": 10297343.0,
+      "max": 10346496.0
+     },
+     "requests_per_sec": 122459.101,
+     "calibration_ms": [
+      2548.781,
+      2548.541,
+      2534.904,
+      2546.876
+     ],
+     "busy_cpu": 39,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-base-cap-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 510000,
+   "achieved_rps": 250899.85,
+   "successful_rps": 250899.85,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7487487.0,
+    "p90": 9379839.0,
+    "p99": 9994239.0,
+    "p999": 10092543.0,
+    "max": 10166272.0
+   },
+   "rss_kb": 130060,
+   "held": false,
+   "cpu": {
+    "server_busy": 64,
+    "loader_busy": 41
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2507126,
+     "bytes": 315897876,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7489293.447,
+      "p50": 7487487.0,
+      "p90": 9379839.0,
+      "p95": 9625599.0,
+      "p99": 9994239.0,
+      "p999": 10092543.0,
+      "max": 10166272.0
+     },
+     "requests_per_sec": 125360.023,
+     "calibration_ms": [
+      2494.796,
+      2490.555,
+      2490.217,
+      2497.642
+     ],
+     "busy_cpu": 41,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2510871,
+     "bytes": 316369746,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7476559.416,
+      "p50": 7471103.0,
+      "p90": 9363455.0,
+      "p95": 9609215.0,
+      "p99": 9986047.0,
+      "p999": 10092543.0,
+      "max": 10141696.0
+     },
+     "requests_per_sec": 125547.247,
+     "calibration_ms": [
+      2484.482,
+      2500.067,
+      2480.281,
+      2490.634
+     ],
+     "busy_cpu": 40,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-new-rate-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 2,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 153000,
+   "achieved_rps": 153000.33333333334,
+   "successful_rps": 153000.33333333334,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 2993.0,
+    "p90": 4397.0,
+    "p99": 5417.0,
+    "p999": 6207.0,
+    "max": 7490.0
+   },
+   "rss_kb": 295124,
+   "held": true,
+   "cpu": {
+    "server_busy": 47,
+    "loader_busy": 18
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147499,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 2946.857144973547,
+      "p50": 2993.0,
+      "p90": 4397.0,
+      "p95": 4746.0,
+      "p99": 5417.0,
+      "p999": 6207.0,
+      "max": 7490.0
+     },
+     "requests_per_sec": 76499.933,
+     "calibration_ms": [],
+     "busy_cpu": 18,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147506,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 2236.668980380059,
+      "p50": 2077.0,
+      "p90": 4127.0,
+      "p95": 4538.0,
+      "p99": 5286.0,
+      "p999": 6105.0,
+      "max": 7472.0
+     },
+     "requests_per_sec": 76500.4,
+     "calibration_ms": [],
+     "busy_cpu": 18,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-base-rate-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 2,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 153000,
+   "achieved_rps": 152997.73333333334,
+   "successful_rps": 152997.73333333334,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 3101.0,
+    "p90": 4544.0,
+    "p99": 5768.0,
+    "p999": 6621.0,
+    "max": 7541.0
+   },
+   "rss_kb": 295060,
+   "held": true,
+   "cpu": {
+    "server_busy": 49,
+    "loader_busy": 18
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147479,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 3092.0470431267154,
+      "p50": 3101.0,
+      "p90": 4544.0,
+      "p95": 4960.0,
+      "p99": 5768.0,
+      "p999": 6621.0,
+      "max": 7496.0
+     },
+     "requests_per_sec": 76498.6,
+     "calibration_ms": [],
+     "busy_cpu": 18,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147487,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 2071.7529540639675,
+      "p50": 1949.0,
+      "p90": 3826.0,
+      "p95": 4281.0,
+      "p99": 5079.0,
+      "p999": 6222.0,
+      "max": 7541.0
+     },
+     "requests_per_sec": 76499.133,
+     "calibration_ms": [],
+     "busy_cpu": 18,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-new-cap-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 2,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 340000,
+   "achieved_rps": 166016.93333333332,
+   "successful_rps": 166016.93333333332,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 29258.0,
+    "p90": 143018.0,
+    "p99": 309507.0,
+    "p999": 475780.0,
+    "max": 969606.0
+   },
+   "rss_kb": 226648,
+   "held": false,
+   "cpu": {
+    "server_busy": 72,
+    "loader_busy": 34
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1245552,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 60202.96152709803,
+      "p50": 29201.0,
+      "p90": 142892.0,
+      "p95": 192793.0,
+      "p99": 309507.0,
+      "p999": 475780.0,
+      "max": 941043.0
+     },
+     "requests_per_sec": 83036.8,
+     "calibration_ms": [],
+     "busy_cpu": 33,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1244702,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 60255.84738355044,
+      "p50": 29258.0,
+      "p90": 143018.0,
+      "p95": 192960.0,
+      "p99": 308269.0,
+      "p999": 474022.0,
+      "max": 969606.0
+     },
+     "requests_per_sec": 82980.133,
+     "calibration_ms": [],
+     "busy_cpu": 34,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-base-cap-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 2,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 340000,
+   "achieved_rps": 165388.0,
+   "successful_rps": 165388.0,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 29299.0,
+    "p90": 144177.0,
+    "p99": 313863.0,
+    "p999": 483677.0,
+    "max": 1055955.0
+   },
+   "rss_kb": 226748,
+   "held": false,
+   "cpu": {
+    "server_busy": 72,
+    "loader_busy": 33
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1237495,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 60609.60010989943,
+      "p50": 29299.0,
+      "p90": 144177.0,
+      "p95": 194994.0,
+      "p99": 313863.0,
+      "p999": 483677.0,
+      "max": 1055955.0
+     },
+     "requests_per_sec": 82499.667,
+     "calibration_ms": [],
+     "busy_cpu": 32,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1243325,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 60322.561943176566,
+      "p50": 29048.0,
+      "p90": 143652.0,
+      "p95": 194443.0,
+      "p99": 312262.0,
+      "p999": 479098.0,
+      "max": 1019530.0
+     },
+     "requests_per_sec": 82888.333,
+     "calibration_ms": [],
+     "busy_cpu": 33,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-new-rate-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 110000,
+   "achieved_rps": 108700.46153846153,
+   "successful_rps": 108700.46153846153,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1181.0,
+    "p90": 1990.0,
+    "p99": 2487.0,
+    "p999": 2903.0,
+    "max": 3660.0
+   },
+   "rss_kb": 247412,
+   "held": true,
+   "cpu": {
+    "server_busy": 48,
+    "loader_busy": 38
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1413114,
+     "bytes": 197835960,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1209.769,
+      "p50": 1154.0,
+      "p90": 1961.0,
+      "p95": 2131.0,
+      "p99": 2487.0,
+      "p999": 2903.0,
+      "max": 3536.0
+     },
+     "requests_per_sec": 54349.117,
+     "calibration_ms": [
+      1.211,
+      1.206,
+      1.211,
+      1.202
+     ],
+     "busy_cpu": 38,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1413098,
+     "bytes": 197833720,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1232.816,
+      "p50": 1181.0,
+      "p90": 1990.0,
+      "p95": 2157.0,
+      "p99": 2477.0,
+      "p999": 2821.0,
+      "max": 3660.0
+     },
+     "requests_per_sec": 54349.48,
+     "calibration_ms": [
+      1.224,
+      1.223,
+      1.226,
+      1.224
+     ],
+     "busy_cpu": 27,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-base-rate-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 110000,
+   "achieved_rps": 108700.92307692308,
+   "successful_rps": 108700.92307692308,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1182.0,
+    "p90": 1995.0,
+    "p99": 2493.0,
+    "p999": 2893.0,
+    "max": 3868.0
+   },
+   "rss_kb": 248468,
+   "held": true,
+   "cpu": {
+    "server_busy": 48,
+    "loader_busy": 38
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1413111,
+     "bytes": 197835540,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1209.689,
+      "p50": 1155.0,
+      "p90": 1960.0,
+      "p95": 2129.0,
+      "p99": 2483.0,
+      "p999": 2893.0,
+      "max": 3868.0
+     },
+     "requests_per_sec": 54349.677,
+     "calibration_ms": [
+      1.203,
+      1.203,
+      1.208,
+      1.205
+     ],
+     "busy_cpu": 38,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1413113,
+     "bytes": 197835820,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1235.688,
+      "p50": 1182.0,
+      "p90": 1995.0,
+      "p95": 2165.0,
+      "p99": 2493.0,
+      "p999": 2831.0,
+      "max": 3574.0
+     },
+     "requests_per_sec": 54349.413,
+     "calibration_ms": [
+      1.231,
+      1.232,
+      1.229,
+      1.223
+     ],
+     "busy_cpu": 27,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-new-cap-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 270000,
+   "achieved_rps": 129353.65,
+   "successful_rps": 129353.65,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7688191.0,
+    "p90": 9633791.0,
+    "p99": 10092543.0,
+    "p999": 10190847.0,
+    "max": 10199040.0
+   },
+   "rss_kb": 122344,
+   "held": false,
+   "cpu": {
+    "server_busy": 54,
+    "loader_busy": 23
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1293435,
+     "bytes": 181080900,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7688549.687,
+      "p50": 7688191.0,
+      "p90": 9633791.0,
+      "p95": 9871359.0,
+      "p99": 10092543.0,
+      "p999": 10190847.0,
+      "max": 10199040.0
+     },
+     "requests_per_sec": 64673.616,
+     "calibration_ms": [
+      2549.267,
+      2547.528,
+      2550.513,
+      2551.702
+     ],
+     "busy_cpu": 23,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1293638,
+     "bytes": 181109320,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7686697.965,
+      "p50": 7688191.0,
+      "p90": 9633791.0,
+      "p95": 9871359.0,
+      "p99": 10084351.0,
+      "p999": 10190847.0,
+      "max": 10199040.0
+     },
+     "requests_per_sec": 64683.895,
+     "calibration_ms": [
+      2547.96,
+      2548.3,
+      2549.133,
+      2548.746
+     ],
+     "busy_cpu": 22,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r2-base-cap-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 2,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 270000,
+   "achieved_rps": 130004.0,
+   "successful_rps": 130004.0,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7659519.0,
+    "p90": 9584639.0,
+    "p99": 10018815.0,
+    "p999": 10076159.0,
+    "max": 10084352.0
+   },
+   "rss_kb": 122444,
+   "held": false,
+   "cpu": {
+    "server_busy": 53,
+    "loader_busy": 23
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1299952,
+     "bytes": 181993280,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7653656.713,
+      "p50": 7659519.0,
+      "p90": 9584639.0,
+      "p95": 9822207.0,
+      "p99": 10018815.0,
+      "p999": 10076159.0,
+      "max": 10084352.0
+     },
+     "requests_per_sec": 64999.465,
+     "calibration_ms": [
+      2542.809,
+      2543.645,
+      2544.024,
+      2543.981
+     ],
+     "busy_cpu": 23,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1300128,
+     "bytes": 182017920,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7652773.938,
+      "p50": 7659519.0,
+      "p90": 9584639.0,
+      "p95": 9822207.0,
+      "p99": 10018815.0,
+      "p999": 10076159.0,
+      "max": 10076160.0
+     },
+     "requests_per_sec": 65008.067,
+     "calibration_ms": [
+      2541.41,
+      2542.486,
+      2541.405,
+      2541.752
+     ],
+     "busy_cpu": 22,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-base-rate-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 197625.61538461538,
+   "successful_rps": 197625.61538461538,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1528.0,
+    "p90": 2383.0,
+    "p99": 3105.0,
+    "p999": 3503.0,
+    "max": 4096.0
+   },
+   "rss_kb": 256052,
+   "held": true,
+   "cpu": {
+    "server_busy": 48,
+    "loader_busy": 39
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569058,
+     "bytes": 323701308,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1555.242,
+      "p50": 1528.0,
+      "p90": 2339.0,
+      "p95": 2539.0,
+      "p99": 2861.0,
+      "p999": 3133.0,
+      "max": 3558.0
+     },
+     "requests_per_sec": 98801.833,
+     "calibration_ms": [
+      1.619,
+      1.585,
+      1.585,
+      1.382
+     ],
+     "busy_cpu": 39,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569208,
+     "bytes": 323720208,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1516.011,
+      "p50": 1447.0,
+      "p90": 2383.0,
+      "p95": 2653.0,
+      "p99": 3105.0,
+      "p999": 3503.0,
+      "max": 4096.0
+     },
+     "requests_per_sec": 98807.453,
+     "calibration_ms": [
+      1.531,
+      1.525,
+      1.528,
+      1.44
+     ],
+     "busy_cpu": 37,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-new-rate-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 197624.26923076922,
+   "successful_rps": 197624.26923076922,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1509.0,
+    "p90": 2393.0,
+    "p99": 3091.0,
+    "p999": 3493.0,
+    "max": 4620.0
+   },
+   "rss_kb": 258600,
+   "held": true,
+   "cpu": {
+    "server_busy": 48,
+    "loader_busy": 39
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569135,
+     "bytes": 323711010,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1539.796,
+      "p50": 1509.0,
+      "p90": 2319.0,
+      "p95": 2525.0,
+      "p99": 2855.0,
+      "p999": 3155.0,
+      "max": 4042.0
+     },
+     "requests_per_sec": 98805.569,
+     "calibration_ms": [
+      1.596,
+      1.599,
+      1.553,
+      1.376
+     ],
+     "busy_cpu": 39,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569096,
+     "bytes": 323706096,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1524.306,
+      "p50": 1459.0,
+      "p90": 2393.0,
+      "p95": 2655.0,
+      "p99": 3091.0,
+      "p999": 3493.0,
+      "max": 4620.0
+     },
+     "requests_per_sec": 98805.156,
+     "calibration_ms": [
+      1.539,
+      1.534,
+      1.52,
+      1.443
+     ],
+     "busy_cpu": 37,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-base-cap-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 770000,
+   "achieved_rps": 382433.3,
+   "successful_rps": 382433.3,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7405567.0,
+    "p90": 9289727.0,
+    "p99": 9904127.0,
+    "p999": 10002431.0,
+    "max": 10059776.0
+   },
+   "rss_kb": 124080,
+   "held": false,
+   "cpu": {
+    "server_busy": 66,
+    "loader_busy": 55
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3831085,
+     "bytes": 482716710,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7391536.789,
+      "p50": 7376895.0,
+      "p90": 9256959.0,
+      "p95": 9502719.0,
+      "p99": 9887743.0,
+      "p999": 9994239.0,
+      "max": 10059776.0
+     },
+     "requests_per_sec": 191560.236,
+     "calibration_ms": [
+      2475.584,
+      2476.421,
+      2467.713,
+      2471.704
+     ],
+     "busy_cpu": 55,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3817581,
+     "bytes": 481015206,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7418866.553,
+      "p50": 7405567.0,
+      "p90": 9289727.0,
+      "p95": 9543679.0,
+      "p99": 9904127.0,
+      "p999": 10002431.0,
+      "max": 10059776.0
+     },
+     "requests_per_sec": 190884.452,
+     "calibration_ms": [
+      2476.833,
+      2485.686,
+      2482.072,
+      2485.676
+     ],
+     "busy_cpu": 55,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-new-cap-hello-rapira-dispatcher",
+   "target": {
+    "name": "hello-rapira-dispatcher",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 770000,
+   "achieved_rps": 385259.65,
+   "successful_rps": 385259.65,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7380991.0,
+    "p90": 9224191.0,
+    "p99": 9748479.0,
+    "p999": 9846783.0,
+    "max": 9887744.0
+   },
+   "rss_kb": 124452,
+   "held": false,
+   "cpu": {
+    "server_busy": 66,
+    "loader_busy": 56
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3856736,
+     "bytes": 485948736,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7354242.836,
+      "p50": 7364607.0,
+      "p90": 9207807.0,
+      "p95": 9428991.0,
+      "p99": 9732095.0,
+      "p999": 9838591.0,
+      "max": 9887744.0
+     },
+     "requests_per_sec": 192842.19,
+     "calibration_ms": [
+      2446.665,
+      2451.447,
+      2448.319,
+      2444.617
+     ],
+     "busy_cpu": 56,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3848457,
+     "bytes": 484905582,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7371003.689,
+      "p50": 7380991.0,
+      "p90": 9224191.0,
+      "p95": 9453567.0,
+      "p99": 9748479.0,
+      "p999": 9846783.0,
+      "max": 9887744.0
+     },
+     "requests_per_sec": 192427.324,
+     "calibration_ms": [
+      2459.798,
+      2453.444,
+      2448.29,
+      2463.558
+     ],
+     "busy_cpu": 55,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-base-rate-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 150000,
+   "achieved_rps": 148214.73076923078,
+   "successful_rps": 148214.73076923078,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1197.0,
+    "p90": 2049.0,
+    "p99": 2617.0,
+    "p999": 3007.0,
+    "max": 3758.0
+   },
+   "rss_kb": 259108,
+   "held": true,
+   "cpu": {
+    "server_busy": 45,
+    "loader_busy": 49
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1926777,
+     "bytes": 242773902,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1264.228,
+      "p50": 1194.0,
+      "p90": 2049.0,
+      "p95": 2219.0,
+      "p99": 2617.0,
+      "p999": 3007.0,
+      "max": 3758.0
+     },
+     "requests_per_sec": 74107.993,
+     "calibration_ms": [
+      1.266,
+      1.265,
+      1.266,
+      1.256
+     ],
+     "busy_cpu": 49,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1926806,
+     "bytes": 242777556,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1258.161,
+      "p50": 1197.0,
+      "p90": 2037.0,
+      "p95": 2205.0,
+      "p99": 2553.0,
+      "p999": 2905.0,
+      "max": 3414.0
+     },
+     "requests_per_sec": 74107.855,
+     "calibration_ms": [
+      1.257,
+      1.258,
+      1.248,
+      1.264
+     ],
+     "busy_cpu": 32,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-new-rate-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 150000,
+   "achieved_rps": 148220.57692307694,
+   "successful_rps": 148220.57692307694,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1203.0,
+    "p90": 2071.0,
+    "p99": 2637.0,
+    "p999": 3019.0,
+    "max": 3648.0
+   },
+   "rss_kb": 258800,
+   "held": true,
+   "cpu": {
+    "server_busy": 45,
+    "loader_busy": 49
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1926904,
+     "bytes": 242789904,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1275.432,
+      "p50": 1203.0,
+      "p90": 2071.0,
+      "p95": 2239.0,
+      "p99": 2637.0,
+      "p999": 3019.0,
+      "max": 3648.0
+     },
+     "requests_per_sec": 74109.577,
+     "calibration_ms": [
+      1.271,
+      1.257,
+      1.265,
+      1.26
+     ],
+     "busy_cpu": 49,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1926831,
+     "bytes": 242780706,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1267.303,
+      "p50": 1203.0,
+      "p90": 2055.0,
+      "p95": 2227.0,
+      "p99": 2573.0,
+      "p999": 2927.0,
+      "max": 3418.0
+     },
+     "requests_per_sec": 74110.529,
+     "calibration_ms": [
+      1.271,
+      1.262,
+      1.267,
+      1.256
+     ],
+     "busy_cpu": 32,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-base-cap-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 510000,
+   "achieved_rps": 247673.9,
+   "successful_rps": 247673.9,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7581695.0,
+    "p90": 9502719.0,
+    "p99": 10067967.0,
+    "p999": 10174463.0,
+    "max": 10231808.0
+   },
+   "rss_kb": 130756,
+   "held": false,
+   "cpu": {
+    "server_busy": 64,
+    "loader_busy": 39
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2477787,
+     "bytes": 312201162,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7575545.395,
+      "p50": 7573503.0,
+      "p90": 9486335.0,
+      "p95": 9732095.0,
+      "p99": 10059775.0,
+      "p999": 10174463.0,
+      "max": 10231808.0
+     },
+     "requests_per_sec": 123892.844,
+     "calibration_ms": [
+      2514.571,
+      2524.972,
+      2520.284,
+      2519.324
+     ],
+     "busy_cpu": 39,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2475691,
+     "bytes": 311937066,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7584945.629,
+      "p50": 7581695.0,
+      "p90": 9502719.0,
+      "p95": 9740287.0,
+      "p99": 10067967.0,
+      "p999": 10174463.0,
+      "max": 10231808.0
+     },
+     "requests_per_sec": 123788.171,
+     "calibration_ms": [
+      2523.456,
+      2524.18,
+      2537.583,
+      2517.457
+     ],
+     "busy_cpu": 39,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-new-cap-hello-rapira-dispatcher-static",
+   "target": {
+    "name": "hello-rapira-dispatcher-static",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "dispatcher",
+    "proto": "http1",
+    "start": [
+     "dispatcher",
+     "@RIG@/apps/hello/dispatcher.php",
+     "@RIG@/servers/rapira/static.toml.tpl"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/static.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 510000,
+   "achieved_rps": 252399.95,
+   "successful_rps": 252399.95,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7471103.0,
+    "p90": 9338879.0,
+    "p99": 9822207.0,
+    "p999": 9920511.0,
+    "max": 9969664.0
+   },
+   "rss_kb": 129924,
+   "held": false,
+   "cpu": {
+    "server_busy": 64,
+    "loader_busy": 40
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2522798,
+     "bytes": 317872548,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7461728.634,
+      "p50": 7471103.0,
+      "p90": 9338879.0,
+      "p95": 9568255.0,
+      "p99": 9822207.0,
+      "p999": 9920511.0,
+      "max": 9969664.0
+     },
+     "requests_per_sec": 126143.476,
+     "calibration_ms": [
+      2487.078,
+      2488.711,
+      2484.475,
+      2487.221
+     ],
+     "busy_cpu": 40,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2525201,
+     "bytes": 318175326,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7452667.345,
+      "p50": 7462911.0,
+      "p90": 9322495.0,
+      "p95": 9560063.0,
+      "p99": 9814015.0,
+      "p999": 9920511.0,
+      "max": 9969664.0
+     },
+     "requests_per_sec": 126263.743,
+     "calibration_ms": [
+      2478.041,
+      2483.502,
+      2478.929,
+      2479.317
+     ],
+     "busy_cpu": 40,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-base-rate-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 3,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 153000,
+   "achieved_rps": 153000.26666666666,
+   "successful_rps": 153000.26666666666,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 3179.0,
+    "p90": 4628.0,
+    "p99": 5800.0,
+    "p999": 6531.0,
+    "max": 7764.0
+   },
+   "rss_kb": 295364,
+   "held": true,
+   "cpu": {
+    "server_busy": 49,
+    "loader_busy": 18
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147495,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 3168.3341504756013,
+      "p50": 3179.0,
+      "p90": 4628.0,
+      "p95": 5050.0,
+      "p99": 5800.0,
+      "p999": 6531.0,
+      "max": 7635.0
+     },
+     "requests_per_sec": 76499.667,
+     "calibration_ms": [],
+     "busy_cpu": 18,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147509,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 2140.912491318151,
+      "p50": 2035.0,
+      "p90": 3910.0,
+      "p95": 4353.0,
+      "p99": 5214.0,
+      "p999": 6278.0,
+      "max": 7764.0
+     },
+     "requests_per_sec": 76500.6,
+     "calibration_ms": [],
+     "busy_cpu": 18,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-new-rate-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 3,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 153000,
+   "achieved_rps": 153004.46666666667,
+   "successful_rps": 153004.46666666667,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 3089.0,
+    "p90": 4528.0,
+    "p99": 5724.0,
+    "p999": 6461.0,
+    "max": 7900.0
+   },
+   "rss_kb": 294892,
+   "held": true,
+   "cpu": {
+    "server_busy": 48,
+    "loader_busy": 18
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147498,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 3106.8990612619805,
+      "p50": 3089.0,
+      "p90": 4528.0,
+      "p95": 4949.0,
+      "p99": 5724.0,
+      "p999": 6461.0,
+      "max": 7607.0
+     },
+     "requests_per_sec": 76499.867,
+     "calibration_ms": [],
+     "busy_cpu": 18,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1147569,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 2040.317254997303,
+      "p50": 1927.0,
+      "p90": 3752.0,
+      "p95": 4190.0,
+      "p99": 5013.0,
+      "p999": 6217.0,
+      "max": 7900.0
+     },
+     "requests_per_sec": 76504.6,
+     "calibration_ms": [],
+     "busy_cpu": 17,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-base-cap-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 3,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 340000,
+   "achieved_rps": 161543.8,
+   "successful_rps": 161543.8,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 28825.0,
+    "p90": 148956.0,
+    "p99": 322988.0,
+    "p999": 498691.0,
+    "max": 1122605.0
+   },
+   "rss_kb": 228124,
+   "held": false,
+   "cpu": {
+    "server_busy": 72,
+    "loader_busy": 33
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1213369,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 61793.42982967259,
+      "p50": 28612.0,
+      "p90": 148704.0,
+      "p95": 201233.0,
+      "p99": 322869.0,
+      "p999": 495408.0,
+      "max": 1069347.0
+     },
+     "requests_per_sec": 80891.267,
+     "calibration_ms": [],
+     "busy_cpu": 32,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1209788,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 61966.332165635635,
+      "p50": 28825.0,
+      "p90": 148956.0,
+      "p95": 201242.0,
+      "p99": 322988.0,
+      "p999": 498691.0,
+      "max": 1122605.0
+     },
+     "requests_per_sec": 80652.533,
+     "calibration_ms": [],
+     "busy_cpu": 33,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-new-cap-grpc-rapira",
+   "target": {
+    "name": "grpc-rapira",
+    "server": "rapira",
+    "app": "grpc",
+    "mode": "dispatcher",
+    "proto": "grpc",
+    "start": [
+     "grpc",
+     "@RIG@/apps/grpc/php/dispatcher.php"
+    ],
+    "url": "/bench.v1.EchoService/Echo",
+    "expect": "apps/grpc/expect.grpc",
+    "config": "servers/rapira/grpc.toml.tpl",
+    "method": "POST",
+    "headers": {},
+    "body": "apps/grpc/echo.grpc"
+   },
+   "round": 3,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 340000,
+   "achieved_rps": 167687.93333333332,
+   "successful_rps": 167687.93333333332,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 28872.0,
+    "p90": 141679.0,
+    "p99": 306561.0,
+    "p999": 472672.0,
+    "max": 1073107.0
+   },
+   "rss_kb": 228708,
+   "held": false,
+   "cpu": {
+    "server_busy": 72,
+    "loader_busy": 32
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1257450,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 59620.45065171577,
+      "p50": 28835.0,
+      "p90": 141679.0,
+      "p95": 191339.0,
+      "p99": 306561.0,
+      "p999": 470870.0,
+      "max": 1024478.0
+     },
+     "requests_per_sec": 83830.0,
+     "calibration_ms": [],
+     "busy_cpu": 32,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "h2load",
+     "late_ms": 0,
+     "requests": 1257869,
+     "bytes": 0,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 59598.076836300126,
+      "p50": 28872.0,
+      "p90": 141636.0,
+      "p95": 190957.0,
+      "p99": 305856.0,
+      "p999": 472672.0,
+      "max": 1073107.0
+     },
+     "requests_per_sec": 83857.933,
+     "calibration_ms": [],
+     "busy_cpu": 32,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-base-rate-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {
+    "loader_skew": {
+     "loader": "loader-1",
+     "thread_ms": 1.437,
+     "median_ms": 1.152
+    }
+   },
+   "rate": 110000,
+   "achieved_rps": 108334.61538461539,
+   "successful_rps": 108334.61538461539,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1164.0,
+    "p90": 2006.0,
+    "p99": 2643.0,
+    "p999": 3137.0,
+    "max": 4078.0
+   },
+   "rss_kb": 248928,
+   "held": true,
+   "cpu": {
+    "server_busy": 48,
+    "loader_busy": 33
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1403612,
+     "bytes": 196505680,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1227.782,
+      "p50": 1164.0,
+      "p90": 2006.0,
+      "p95": 2217.0,
+      "p99": 2643.0,
+      "p999": 3137.0,
+      "max": 4078.0
+     },
+     "requests_per_sec": 53982.326,
+     "calibration_ms": [
+      1.152,
+      1.152,
+      1.151,
+      1.437
+     ],
+     "busy_cpu": 33,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1413088,
+     "bytes": 197832320,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1191.961,
+      "p50": 1141.0,
+      "p90": 1931.0,
+      "p95": 2093.0,
+      "p99": 2415.0,
+      "p999": 2789.0,
+      "max": 3862.0
+     },
+     "requests_per_sec": 54348.962,
+     "calibration_ms": [
+      1.186,
+      1.18,
+      1.181,
+      1.183
+     ],
+     "busy_cpu": 27,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-new-rate-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 110000,
+   "achieved_rps": 108698.84615384616,
+   "successful_rps": 108698.84615384616,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1176.0,
+    "p90": 1985.0,
+    "p99": 2481.0,
+    "p999": 2869.0,
+    "max": 3628.0
+   },
+   "rss_kb": 248976,
+   "held": true,
+   "cpu": {
+    "server_busy": 49,
+    "loader_busy": 38
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1413058,
+     "bytes": 197828120,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1216.143,
+      "p50": 1161.0,
+      "p90": 1968.0,
+      "p95": 2133.0,
+      "p99": 2477.0,
+      "p999": 2869.0,
+      "max": 3628.0
+     },
+     "requests_per_sec": 54348.742,
+     "calibration_ms": [
+      1.214,
+      1.208,
+      1.212,
+      1.206
+     ],
+     "busy_cpu": 38,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1413112,
+     "bytes": 197835680,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1229.39,
+      "p50": 1176.0,
+      "p90": 1985.0,
+      "p95": 2151.0,
+      "p99": 2481.0,
+      "p999": 2833.0,
+      "max": 3498.0
+     },
+     "requests_per_sec": 54349.228,
+     "calibration_ms": [
+      1.227,
+      1.226,
+      1.222,
+      1.225
+     ],
+     "busy_cpu": 26,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-base-cap-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 270000,
+   "achieved_rps": 128461.3,
+   "successful_rps": 128461.3,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7733247.0,
+    "p90": 9699327.0,
+    "p99": 10141695.0,
+    "p999": 10231807.0,
+    "max": 10240000.0
+   },
+   "rss_kb": 122416,
+   "held": false,
+   "cpu": {
+    "server_busy": 54,
+    "loader_busy": 22
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1284085,
+     "bytes": 179771900,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7737117.108,
+      "p50": 7733247.0,
+      "p90": 9699327.0,
+      "p95": 9945087.0,
+      "p99": 10141695.0,
+      "p999": 10231807.0,
+      "max": 10240000.0
+     },
+     "requests_per_sec": 64206.147,
+     "calibration_ms": [
+      2571.71,
+      2573.637,
+      2570.434,
+      2573.526
+     ],
+     "busy_cpu": 22,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1285141,
+     "bytes": 179919740,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7732159.351,
+      "p50": 7729151.0,
+      "p90": 9691135.0,
+      "p95": 9936895.0,
+      "p99": 10133503.0,
+      "p999": 10223615.0,
+      "max": 10240000.0
+     },
+     "requests_per_sec": 64258.759,
+     "calibration_ms": [
+      2568.649,
+      2570.218,
+      2571.339,
+      2569.232
+     ],
+     "busy_cpu": 22,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-new-cap-hello-rapira-classic",
+   "target": {
+    "name": "hello-rapira-classic",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "classic",
+    "proto": "http1",
+    "start": [
+     "classic",
+     "@RIG@/apps/hello/classic.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 270000,
+   "achieved_rps": 129204.3,
+   "successful_rps": 129204.3,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7708671.0,
+    "p90": 9658367.0,
+    "p99": 10215423.0,
+    "p999": 10313727.0,
+    "max": 10321920.0
+   },
+   "rss_kb": 121752,
+   "held": false,
+   "cpu": {
+    "server_busy": 53,
+    "loader_busy": 22
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1294610,
+     "bytes": 181245400,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7675037.5,
+      "p50": 7675903.0,
+      "p90": 9617407.0,
+      "p95": 9863167.0,
+      "p99": 10199039.0,
+      "p999": 10313727.0,
+      "max": 10321920.0
+     },
+     "requests_per_sec": 64732.542,
+     "calibration_ms": [
+      2543.437,
+      2550.077,
+      2544.26,
+      2541.198
+     ],
+     "busy_cpu": 22,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 1289476,
+     "bytes": 180526640,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7707831.305,
+      "p50": 7708671.0,
+      "p90": 9658367.0,
+      "p95": 9895935.0,
+      "p99": 10215423.0,
+      "p999": 10313727.0,
+      "max": 10321920.0
+     },
+     "requests_per_sec": 64475.315,
+     "calibration_ms": [
+      2548.501,
+      2556.626,
+      2552.167,
+      2558.608
+     ],
+     "busy_cpu": 22,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-base-rate-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "base",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 197623.1923076923,
+   "successful_rps": 197623.1923076923,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1572.0,
+    "p90": 2509.0,
+    "p99": 3309.0,
+    "p999": 3747.0,
+    "max": 5528.0
+   },
+   "rss_kb": 265980,
+   "held": true,
+   "cpu": {
+    "server_busy": 53,
+    "loader_busy": 41
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569087,
+     "bytes": 359672180,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1613.486,
+      "p50": 1572.0,
+      "p90": 2445.0,
+      "p95": 2689.0,
+      "p99": 3053.0,
+      "p999": 3369.0,
+      "max": 5200.0
+     },
+     "requests_per_sec": 98802.781,
+     "calibration_ms": [
+      1.649,
+      1.668,
+      1.646,
+      1.439
+     ],
+     "busy_cpu": 41,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569116,
+     "bytes": 359676240,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1605.351,
+      "p50": 1543.0,
+      "p90": 2509.0,
+      "p95": 2797.0,
+      "p99": 3309.0,
+      "p999": 3747.0,
+      "max": 5528.0
+     },
+     "requests_per_sec": 98802.908,
+     "calibration_ms": [
+      1.583,
+      1.574,
+      1.56,
+      1.614
+     ],
+     "busy_cpu": 37,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-new-rate-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "new",
+   "stage": "rate",
+   "processes": 8,
+   "status": "ok",
+   "flags": {},
+   "rate": 200000,
+   "achieved_rps": 197623.26923076922,
+   "successful_rps": 197623.26923076922,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 1573.0,
+    "p90": 2555.0,
+    "p99": 3335.0,
+    "p999": 3765.0,
+    "max": 4464.0
+   },
+   "rss_kb": 267892,
+   "held": true,
+   "cpu": {
+    "server_busy": 53,
+    "loader_busy": 42
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569102,
+     "bytes": 359674280,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1600.118,
+      "p50": 1562.0,
+      "p90": 2415.0,
+      "p95": 2675.0,
+      "p99": 3069.0,
+      "p999": 3407.0,
+      "max": 4156.0
+     },
+     "requests_per_sec": 98804.653,
+     "calibration_ms": [
+      1.627,
+      1.628,
+      1.627,
+      1.483
+     ],
+     "busy_cpu": 42,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 2569103,
+     "bytes": 359674420,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 1636.144,
+      "p50": 1573.0,
+      "p90": 2555.0,
+      "p95": 2845.0,
+      "p99": 3335.0,
+      "p999": 3765.0,
+      "max": 4464.0
+     },
+     "requests_per_sec": 98804.038,
+     "calibration_ms": [
+      1.625,
+      1.635,
+      1.613,
+      1.63
+     ],
+     "busy_cpu": 37,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-base-cap-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "base",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 750000,
+   "achieved_rps": 360093.45,
+   "successful_rps": 360093.45,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7679999.0,
+    "p90": 9617407.0,
+    "p99": 10051583.0,
+    "p999": 10125311.0,
+    "max": 10182656.0
+   },
+   "rss_kb": 126756,
+   "held": false,
+   "cpu": {
+    "server_busy": 73,
+    "loader_busy": 54
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3601450,
+     "bytes": 504203000,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7672440.513,
+      "p50": 7675903.0,
+      "p90": 9609215.0,
+      "p95": 9854975.0,
+      "p99": 10043391.0,
+      "p999": 10125311.0,
+      "max": 10166272.0
+     },
+     "requests_per_sec": 180077.515,
+     "calibration_ms": [
+      2555.456,
+      2557.669,
+      2556.896,
+      2557.196
+     ],
+     "busy_cpu": 54,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3600419,
+     "bytes": 504058660,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7674917.906,
+      "p50": 7679999.0,
+      "p90": 9617407.0,
+      "p95": 9854975.0,
+      "p99": 10051583.0,
+      "p999": 10125311.0,
+      "max": 10182656.0
+     },
+     "requests_per_sec": 180026.585,
+     "calibration_ms": [
+      2556.024,
+      2564.156,
+      2561.006,
+      2560.108
+     ],
+     "busy_cpu": 52,
+     "ena": {}
+    }
+   ]
+  },
+  {
+   "key": "r3-new-cap-hello-rapira-worker",
+   "target": {
+    "name": "hello-rapira-worker",
+    "server": "rapira",
+    "app": "hello",
+    "mode": "worker",
+    "proto": "http1",
+    "start": [
+     "worker",
+     "@RIG@/apps/hello/worker.php"
+    ],
+    "url": "/?name=you",
+    "expect": "apps/hello/expect.txt",
+    "config": "servers/rapira/http.toml.tpl",
+    "method": "GET",
+    "headers": {},
+    "body": null
+   },
+   "round": 3,
+   "build": "new",
+   "stage": "cap",
+   "processes": 2,
+   "status": "ok",
+   "flags": {},
+   "rate": 750000,
+   "achieved_rps": 366410.5,
+   "successful_rps": 366410.5,
+   "errors": {
+    "connect": 0,
+    "read": 0,
+    "write": 0,
+    "status": 0,
+    "timeout": 0,
+    "dropped": 0
+   },
+   "latency_us": {
+    "p50": 7544831.0,
+    "p90": 9437183.0,
+    "p99": 10133503.0,
+    "p999": 10239999.0,
+    "max": 10280960.0
+   },
+   "rss_kb": 127220,
+   "held": false,
+   "cpu": {
+    "server_busy": 73,
+    "loader_busy": 54
+   },
+   "loaders": [
+    {
+     "loader": "loader-1",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3656881,
+     "bytes": 511963340,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7548221.312,
+      "p50": 7544831.0,
+      "p90": 9437183.0,
+      "p95": 9764863.0,
+      "p99": 10133503.0,
+      "p999": 10239999.0,
+      "max": 10280960.0
+     },
+     "requests_per_sec": 182849.755,
+     "calibration_ms": [
+      2506.573,
+      2503.339,
+      2508.705,
+      2514.497
+     ],
+     "busy_cpu": 54,
+     "ena": {}
+    },
+    {
+     "loader": "loader-2",
+     "tool": "wrk2",
+     "late_ms": 0,
+     "requests": 3671329,
+     "bytes": 513986060,
+     "errors": {
+      "connect": 0,
+      "read": 0,
+      "write": 0,
+      "status": 0,
+      "timeout": 0,
+      "dropped": 0
+     },
+     "latency_us": {
+      "mean": 7519589.544,
+      "p50": 7516159.0,
+      "p90": 9404415.0,
+      "p95": 9699327.0,
+      "p99": 10117119.0,
+      "p999": 10231807.0,
+      "max": 10280960.0
+     },
+     "requests_per_sec": 183571.443,
+     "calibration_ms": [
+      2489.381,
+      2497.542,
+      2503.468,
+      2488.373
+     ],
+     "busy_cpu": 54,
+     "ena": {}
+    }
+   ]
+  }
+ ],
+ "status": "complete",
+ "reasons": [],
+ "summary": {
+  "hello-rapira-classic": {
+   "capacity": {
+    "pairs": 3,
+    "delta_pct": 0.5783843071804504,
+    "min_pct": -0.5002538383434401,
+    "max_pct": 1.3359774553804313,
+    "base": 128461.3,
+    "new": 129353.65,
+    "flags": []
+   },
+   "p99": {
+    "pairs": 2,
+    "delta_pct": -1.491765514870208,
+    "min_pct": -2.742857142857143,
+    "max_pct": -0.24067388688327315,
+    "base": 2559.0,
+    "new": 2520.0,
+    "flags": []
+   },
+   "rss": {
+    "pairs": 3,
+    "delta_pct": -0.27743032169088166,
+    "min_pct": -0.42500442712944925,
+    "max_pct": 0.01928268414963363,
+    "base": 248928,
+    "new": 248740,
+    "flags": [
+     "loader_skew"
+    ]
+   }
+  },
+  "hello-rapira-worker": {
+   "capacity": {
+    "pairs": 3,
+    "delta_pct": 0.7020814192182084,
+    "min_pct": 0.4681053787059191,
+    "max_pct": 1.754280729071853,
+    "base": 361731.55,
+    "new": 364271.2,
+    "flags": []
+   },
+   "p99": {
+    "pairs": 3,
+    "delta_pct": 0.1916320664324497,
+    "min_pct": -5.158120970217992,
+    "max_pct": 0.7857358718646117,
+    "base": 3257.0,
+    "new": 3137.0,
+    "flags": []
+   },
+   "rss": {
+    "pairs": 3,
+    "delta_pct": -0.05728240224305828,
+    "min_pct": -0.3133809152522042,
+    "max_pct": 0.7188510414316865,
+    "base": 265980,
+    "new": 265932,
+    "flags": []
+   }
+  },
+  "hello-rapira-dispatcher": {
+   "capacity": {
+    "pairs": 3,
+    "delta_pct": -0.029603495860406108,
+    "min_pct": -0.38931594549498577,
+    "max_pct": 0.7390439064799104,
+    "base": 382433.3,
+    "new": 382192.05,
+    "flags": []
+   },
+   "p99": {
+    "pairs": 3,
+    "delta_pct": -0.45088566827697263,
+    "min_pct": -4.287106203312764,
+    "max_pct": 2.2913256955810146,
+    "base": 3079.0,
+    "new": 3091.0,
+    "flags": []
+   },
+   "rss": {
+    "pairs": 3,
+    "delta_pct": 0.9439731547833723,
+    "min_pct": -1.440459464883976,
+    "max_pct": 0.995110368206458,
+    "base": 256052,
+    "new": 257500,
+    "flags": []
+   }
+  },
+  "hello-rapira-dispatcher-static": {
+   "capacity": {
+    "pairs": 3,
+    "delta_pct": 1.9081744180553613,
+    "min_pct": -2.3604039619792516,
+    "max_pct": 2.332875561424365,
+    "base": 249833.3,
+    "new": 252399.95,
+    "flags": []
+   },
+   "p99": {
+    "pairs": 2,
+    "delta_pct": 0.2672184214604828,
+    "min_pct": -0.2297970126388357,
+    "max_pct": 0.7642338555598013,
+    "base": 2614.0,
+    "new": 2621.0,
+    "flags": []
+   },
+   "rss": {
+    "pairs": 3,
+    "delta_pct": -0.11886935177609337,
+    "min_pct": -0.27957553945722186,
+    "max_pct": 0.08702408702408702,
+    "base": 258964,
+    "new": 258240,
+    "flags": [
+     "loader_skew"
+    ]
+   }
+  },
+  "grpc-rapira": {
+   "capacity": {
+    "pairs": 3,
+    "delta_pct": 2.8426540636786877,
+    "min_pct": 0.3802774888947927,
+    "max_pct": 3.8033854182787157,
+    "base": 161543.8,
+    "new": 166016.93333333332,
+    "flags": []
+   },
+   "p99": {
+    "pairs": 3,
+    "delta_pct": -1.3103448275862069,
+    "min_pct": -6.085298196948682,
+    "max_pct": 5.401486315026283,
+    "base": 5768.0,
+    "new": 5724.0,
+    "flags": []
+   },
+   "rss": {
+    "pairs": 3,
+    "delta_pct": -0.1598028195717826,
+    "min_pct": -1.025654687375123,
+    "max_pct": 0.021690503626381075,
+    "base": 295364,
+    "new": 295124,
+    "flags": []
+   }
+  }
+ },
+ "reporter": "2"
+}
