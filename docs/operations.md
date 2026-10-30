@@ -37,6 +37,8 @@ A build of `REF` or of `make sync` links the PHP of the Fedora `php-embedded` pa
 
 `make up` checks the vCPU quota, writes `terraform/rig.auto.tfvars`, applies the Terraform stack, and runs `make provision`. `make bench` runs the suite, writes the run file, and prints the report. `make down` destroys the rig.
 
+Run `make pgo` after `make bench` to make a [PGO](https://doc.rust-lang.org/rustc/profile-guided-optimization.html) profile of the new build. The server builds the commit of the new build with instrumentation (`box/pgo.sh`). Each target of the suite then runs the instrumented build for one rate stage with its rate, and the server merges the counters. `make pgo` copies `merged.profdata` and `pgo.json` to `pgo/`. `pgo.json` records the commit, the rustc and llvm-profdata versions, and the rustflags of the instrumented build and of a build that reads the profile. A profile fits only the build of its commit. The pass fails when the profile has no request counts of the workers. A `make sync` build has no commit, so `make pgo` needs a `NIGHTLY` or `REF` rig. The instrumented build is slower, so `make pgo` records no numbers.
+
 `NIGHTLY` is the first 7 characters of the commit SHA of a nightly release asset of `rapira-rs/rapira`. The core Nightly workflow deletes the assets of older builds, so use the SHA of the current `nightly` release. `REF` accepts a branch, a tag, a commit, or `pr/N`. When you set `NIGHTLY`, provisioning ignores `REF`. The new build of the run is the build of `NIGHTLY` or `REF`.
 
 `NIGHTLY_DIR` selects a captured nightly directory with its tarball, SHA256SUMS file, and `nightly.json`. The JSON records `sha` as the full commit SHA, plus `version`, `asset`, and `sums` as the release version and file names. Set `NIGHTLY` to that commit prefix. Keep the directory outside the checkout. Provisioning copies it to the server, checks the checksum, and installs those bytes without another nightly release lookup. CI uses this path so a moved tag or a rebuild cannot change the measured binary.
@@ -162,7 +164,7 @@ Keep `TF_BACKEND=s3` and the variable set for every later target that uses Terra
 
 The instances use on-demand billing per second. In eu-central-1 the default rig costs 0.93704 USD per hour: 0.46852 USD for the c7a.2xlarge server and 0.23426 USD for each c7a.xlarge loader.
 
-The `ci` suite has 60 cells. The measured overhead is about 5.7 s per cell, so a rate cell takes about 32 s and a capacity cell about 26 s. The estimated cell time is about 29 minutes. The rig creation, the provisioning, and the destroy take about 2.0 minutes. A CI run therefore holds the rig for about 31 minutes, which costs about 0.48 USD. The EBS volumes and the public IPv4 addresses add about 0.02 USD. With cells 20% longer, the estimated time is about 36 minutes, which costs about 0.57 USD. The job timeout of 75 minutes stops a run that hangs.
+The `ci` suite has 60 cells. The measured overhead is about 5.7 s per cell, so a rate cell takes about 32 s and a capacity cell about 26 s. The estimated cell time is about 29 minutes. The rig creation, the provisioning, and the destroy take about 2.0 minutes. Without the PGO step, a CI run therefore holds the rig for about 31 minutes, which costs about 0.48 USD. The EBS volumes and the public IPv4 addresses add about 0.02 USD. With cells 20% longer, the estimated time is about 36 minutes, which costs about 0.57 USD. The PGO step holds the rig longer for the instrumented build, which is not measured yet, and one rate stage of about 32 s for each of the 5 targets. The job timeout of 90 minutes stops a run that hangs.
 
 Every box has a lifetime. The bootstrap sets 75 minutes. Provisioning replaces it with `TTL`. `make bench` extends it from the run estimate: for each cell, `warmup_s` plus `duration_s` of its stage kind plus 20 seconds, and 300 seconds for the run. For the `ci` suite that is 30 x (11 + 15 + 20) + 30 x (5 + 15 + 20) + 300 = 2880 seconds. When the lifetime ends, the box shuts down, and a shutdown terminates the instance. A CI runner that stops before the provisioning therefore bills at most about 1.2 USD.
 
@@ -214,7 +216,9 @@ After each successful Nightly run on the rapira main branch, the core repository
 - The resolve step finds the commit of the current `nightly` release, looks up the merged pull request of that commit for the board label, and stops when the board already has that commit. It selects the base build with the `base` input of the dispatch, or else with `python3 -m rig base` on the index of the board. It fails when the index has no other non-smoke run and the `base` input is empty. It checks that the tarball of the base build is in the `binaries` release. It downloads the new tarball and its SHA256SUMS file into `$RUNNER_TEMP`, records the full commit and asset names in `nightly.json`, and keeps that directory as an artifact for 1 day.
 - The rig step creates the rig with the S3 backend and provisions it with `NIGHTLY`, `NIGHTLY_DIR`, and `BASE`. It copies the captured nightly directory to the server only. A capacity error retries once in `eu-central-1b` with the same directory.
 - The suite step runs `suites/ci.toml`. It fails when the run is incomplete or broken.
-- The job uploads `run.json` and `raw/` as artifacts for 90 days. `make down` runs at the end of each bench job that passes the commit check, also after a failure. `make nuke` runs only when `make down` failed.
+- The job uploads `run.json` and `raw/` as artifacts for 90 days.
+- The PGO step runs `python3 -m rig pgo --suite ci` and uploads `pgo/` as the artifact `pgo-<sha7>` for 90 days. The publish job does not wait for it, so a failed PGO step keeps the bench job red and the run still publishes.
+- `make down` runs at the end of each bench job that passes the commit check, also after a failure. `make nuke` runs only when `make down` failed.
 
 The bench job sets its `ready` output only when the suite and all artifact uploads succeed, and cleanup succeeds through `make down` or its `make nuke` fallback. A failed `make down` keeps the bench job red. A successful fallback still permits publication. A cancelled workflow does not publish.
 
@@ -226,7 +230,7 @@ To choose the base build of a manual run, give the `base` input:
 gh workflow run bench.yml -R rapira-rs/benchmarks -f base=<sha7>
 ```
 
-Only one bench run runs at a time. A new dispatch replaces a waiting one and never stops a running one. The bench job stops after 75 minutes. The rig step stops after 30 minutes and the suite step after 55 minutes. A local rig and the CI bench cannot run at the same time, because they use the same resource names and the same tag. Check the Bench runs of this repository before `make up` and before `make nuke`.
+Only one bench run runs at a time. A new dispatch replaces a waiting one and never stops a running one. The bench job stops after 90 minutes. The rig step stops after 30 minutes, the suite step after 55 minutes, and the PGO step after 30 minutes. A local rig and the CI bench cannot run at the same time, because they use the same resource names and the same tag. Check the Bench runs of this repository before `make up` and before `make nuke`.
 
 Do these owner steps once, in this order:
 
