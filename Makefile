@@ -28,7 +28,7 @@ BUF ?= go run github.com/bufbuild/buf/cmd/buf@$(BUF_VERSION)
 TF := terraform -chdir=terraform
 AWSC := aws --region $(REGION)
 
-.PHONY: preflight up provision status bench report extend sync lock down nuke test grpc_fixtures board
+.PHONY: preflight up provision status bench pgo report extend sync lock down nuke test grpc_fixtures board
 
 preflight:
 	@$(AWSC) sts get-caller-identity >/dev/null 2>&1 || \
@@ -77,6 +77,10 @@ status: preflight
 
 bench:
 	@python3 -m rig bench --suite $(SUITE) $(if $(ROUNDS),--rounds $(ROUNDS))
+
+# Make a PGO profile of the new build in pgo/: an instrumented build serves the rate stage of each suite target.
+pgo:
+	@python3 -m rig pgo --suite $(SUITE)
 
 # RUN selects a run directory; the default is the newest one under runs/.
 report:

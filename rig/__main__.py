@@ -9,6 +9,7 @@ from pathlib import Path
 
 from rig import ssh
 from rig.bench import BENCH_DIR, app_hashes, run_suite, server_versions
+from rig.pgo import run_pgo
 from rig.publish import publish
 from rig.registry import load_suite, load_targets, suite_needs
 from rig.report import render
@@ -121,6 +122,17 @@ def cmd_sync(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pgo(args: argparse.Namespace) -> int:
+    rig = from_terraform(TF_DIR)
+    suite = load_suite(SUITES_DIR / f"{args.suite}.toml", load_targets(TARGETS_FILE), len(rig.loaders))
+    for host in rig.hosts:
+        ssh.wait_ssh(host)
+    ssh.stage_tree(rig.hosts)
+    run_pgo(rig, suite, ssh, Path(args.out), server_vcpus=int(ssh.run(rig.server, "nproc")), loader_threads=int(ssh.run(rig.loaders[0], "nproc")))
+    print(f"==> {args.out}")
+    return 0
+
+
 def cmd_ttl(args: argparse.Namespace) -> int:
     rig = from_terraform(TF_DIR)
     if args.set:
@@ -177,6 +189,11 @@ def parser() -> argparse.ArgumentParser:
     p = sub.add_parser("sync", help="build a local rapira tree on the server")
     p.add_argument("--src", default="../core")
     p.set_defaults(func=cmd_sync)
+
+    p = sub.add_parser("pgo", help="make a PGO profile of the new build with the targets of a suite")
+    p.add_argument("--suite", required=True)
+    p.add_argument("--out", default="pgo")
+    p.set_defaults(func=cmd_pgo)
 
     p = sub.add_parser("ttl", help="print or set the TTL of every box")
     p.add_argument("--set", type=int, metavar="MINUTES")

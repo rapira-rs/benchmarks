@@ -27,6 +27,7 @@ READY_CASES = [
     {"name": "failed raw upload blocks publish", "outcomes": {"raw": "failure"}, "status": "failure", "ready": False, "publish": False},
     {"name": "missing raw evidence blocks publish", "outcomes": {"raw": "missing"}, "status": "failure", "ready": False, "publish": False},
     {"name": "failed fallback blocks publish", "outcomes": {"down": "failure", "nuke": "failure"}, "status": "failure", "ready": False, "publish": False},
+    {"name": "failed PGO step stays visible and does not block publish", "outcomes": {"pgo": "failure"}, "status": "failure", "ready": True, "publish": True},
     {"name": "skipped fallback cannot recover failed cleanup", "outcomes": {"down": "failure"}, "status": "failure", "ready": False, "publish": False},
     {"name": "cancelled workflow blocks publish", "outcomes": {}, "status": "cancelled", "ready": True, "publish": False},
 ]
@@ -122,11 +123,11 @@ class WorkflowTest(unittest.TestCase):
     def test_publish_readiness(self):
         for case in READY_CASES:
             with self.subTest(name=case["name"]):
-                outcomes = {"suite": "success", "binary": "success", "run": "success", "raw": "success", "down": "success", "nuke": "skipped", **case["outcomes"]}
+                outcomes = {"suite": "success", "binary": "success", "run": "success", "raw": "success", "pgo": "success", "down": "success", "nuke": "skipped", **case["outcomes"]}
                 for upload, name in {"run": "Upload the run file", "raw": "Upload the raw evidence"}.items():
                     if outcomes[upload] == "missing":
                         outcomes[upload] = "failure" if field(step(name), "if-no-files-found", 10) == "error" else "success"
-                steps = {"suite": "Run the ci suite", "binary": "Upload the new binary", "run": "Upload the run file", "raw": "Upload the raw evidence", "down": "Destroy the rig", "nuke": "Remove tagged leftovers"}
+                steps = {"suite": "Run the ci suite", "binary": "Upload the new binary", "run": "Upload the run file", "raw": "Upload the raw evidence", "pgo": "Make the PGO profile", "down": "Destroy the rig", "nuke": "Remove tagged leftovers"}
                 context = {f"steps.{field(step(steps[name]), 'id', 8)}.outcome": outcome for name, outcome in outcomes.items()}
                 ready = expression(field(job("bench"), "ready", 6), context, case["status"])
                 self.assertEqual(ready, case["ready"])

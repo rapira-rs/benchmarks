@@ -23,3 +23,6 @@ terraform/backend.tf
 # The bootstrap stack keeps its state on the owner machine.
 terraform/ci/.terraform/
 terraform/ci/*.tfstate*
+
+# Local output of `make pgo`.
+pgo/

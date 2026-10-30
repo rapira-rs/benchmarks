@@ -31,7 +31,7 @@ defaults:
 jobs:
   bench:
     runs-on: ubuntu-latest
-    timeout-minutes: 75
+    timeout-minutes: 90
     permissions:
       contents: read
       id-token: write
@@ -123,7 +123,7 @@ jobs:
           role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
           aws-region: eu-central-1
           mask-aws-account-id: true
-          # The credentials must last for the whole 75 minute job, the destroy included.
+          # The credentials must last for the whole 90 minute job, the destroy included.
           role-duration-seconds: 7200
 
       - name: Install terraform
@@ -186,6 +186,23 @@ jobs:
         with:
           name: raw
           path: runs/*/raw/
+          if-no-files-found: error
+          retention-days: 90
+
+      # The publish job does not wait for the profile, so a failed PGO pass keeps the job red and the run still publishes.
+      - name: Make the PGO profile
+        id: pgo
+        if: steps.resolve.outputs.skip == 'false'
+        timeout-minutes: 30
+        run: python3 -m rig pgo --suite ci --out pgo
+
+      # A profile fits only the build of its commit, so the artifact name carries the commit.
+      - name: Upload the PGO profile
+        if: steps.pgo.outcome == 'success'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: pgo-${{ steps.resolve.outputs.sha7 }}
+          path: pgo/
           if-no-files-found: error
           retention-days: 90
 
