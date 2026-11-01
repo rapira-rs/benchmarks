@@ -258,7 +258,7 @@ build_one() {
 
 build_server() {
   local root_kb sha sha7 version
-  local rustflags=""
+  local rustflags="--cfg tokio_unstable"
   root_kb=$(df -Pk / | awk 'NR==2 {print $2}')
   if [ "$root_kb" -lt $((30 * 1024 * 1024)) ]; then
     echo "ERROR: root filesystem is $((root_kb / 1024 / 1024)) GiB; expected >= 30 GiB"
@@ -274,7 +274,7 @@ build_server() {
   fi
   git -C "$CORE" fetch origin --tags --prune --force
   if [ "$FRAME_POINTERS" = 1 ]; then
-    rustflags="-C force-frame-pointers=yes"
+    rustflags="$rustflags -C force-frame-pointers=yes"
   fi
   sha=$(resolve_ref "$REF")
   sha7=$(git -C "$CORE" rev-parse --short=7 "$sha")
