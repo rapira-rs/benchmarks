@@ -493,6 +493,18 @@
    "status": "complete",
    "smoke": false,
    "pr": null
+  },
+  {
+   "id": "20261101T214032Z-ci-199eb2d",
+   "schema": "rapira-bench-run/3",
+   "started": "2026-11-01T21:40:33Z",
+   "suite": "ci",
+   "rapira_sha": "199eb2dba1a1d4332e3e65b7f370b21cd51820d3",
+   "base_sha": "2f0d1936877395f00da0c857391f983079d958f2",
+   "rapira_version": "0.9.2-nightly.199eb2d",
+   "status": "complete",
+   "smoke": false,
+   "pr": 259
   }
  ]
 }
