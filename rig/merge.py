@@ -27,7 +27,6 @@ class LoaderRecord:
     loader: str
     tool: str
     late_ms: int
-    duration_us: int
     requests: int
     bytes: int
     errors: dict[str, int]
@@ -53,7 +52,6 @@ def parse_result(text: str, loader: str) -> LoaderRecord | None:
             loader=loader,
             tool=doc["tool"],
             late_ms=int(doc["late_ms"]),
-            duration_us=int(doc["duration_us"]),
             requests=int(doc["requests"]),
             bytes=int(doc["bytes"]),
             errors={key: int(doc["errors"][key]) for key in ERROR_KEYS},

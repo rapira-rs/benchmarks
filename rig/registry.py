@@ -27,7 +27,6 @@ class Target:
     start: tuple[str, ...]
     url: str
     expect: str
-    config: str
     method: str = "GET"
     headers: tuple[tuple[str, str], ...] = ()
     body: str | None = None

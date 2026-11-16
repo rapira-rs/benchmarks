@@ -4,7 +4,7 @@ from rig.merge import LateLoader, LoaderRecord, Merged, MissingLoader, merge, pa
 
 # The RESULT line of the contract.
 CONTRACT_LINE = (
-    'RESULT {"tool": "wrk2", "late_ms": 0, "duration_us": 20000867, "requests": 39989, "bytes": 5038614,'
+    'RESULT {"tool": "wrk2", "late_ms": 0, "requests": 39989, "bytes": 5038614,'
     ' "errors": {"connect": 0, "read": 0, "write": 0, "status": 0, "timeout": 0, "dropped": 0},'
     ' "latency_us": {"mean": 689.5, "p50": 689, "p90": 1111, "p95": 1175, "p99": 1264, "p999": 1351, "max": 2822},'
     ' "requests_per_sec": 1999.363}'
@@ -51,7 +51,6 @@ def record(loader: str, requests: int, bytes_: int, latency: dict, late_ms: int 
         loader=loader,
         tool="wrk2",
         late_ms=late_ms,
-        duration_us=20000867,
         requests=requests,
         bytes=bytes_,
         errors=NO_ERRORS | errors,
@@ -64,7 +63,6 @@ CONTRACT_RECORD = LoaderRecord(
     loader="loader-1",
     tool="wrk2",
     late_ms=0,
-    duration_us=20000867,
     requests=39989,
     bytes=5038614,
     errors=NO_ERRORS,

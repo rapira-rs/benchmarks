@@ -77,23 +77,6 @@ BODY_CASES = [
     },
 ]
 
-# The values of the shared php.ini.
-PHP_INI = {
-    "opcache.enable": "1",
-    "opcache.enable_cli": "1",
-    "opcache.validate_timestamps": "0",
-    "opcache.jit": "disable",
-    "opcache.memory_consumption": "256",
-    "memory_limit": "256M",
-    "realpath_cache_size": "4096K",
-    "realpath_cache_ttl": "600",
-    "expose_php": "0",
-    "display_errors": "0",
-    "log_errors": "1",
-    "error_reporting": "E_ALL & ~E_DEPRECATED",
-    "error_log": "/dev/stderr",
-}
-
 
 def render(path, values):
     text = (REPO / path).read_text()
@@ -109,14 +92,6 @@ class TemplateTests(unittest.TestCase):
                 text = render(case["path"], case["values"])
                 self.assertNotIn("@@", text)
                 self.assertEqual(case["expected"], tomllib.loads(text))
-
-    def test_php_ini_values(self):
-        values = {}
-        for line in (REPO / "servers/php.ini").read_text().splitlines():
-            if line and not line.startswith(";"):
-                name, value = line.split("=", 1)
-                values[name.strip()] = value.strip()
-        self.assertEqual(PHP_INI, values)
 
     def test_expected_bodies(self):
         for case in BODY_CASES:

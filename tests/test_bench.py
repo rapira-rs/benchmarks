@@ -34,12 +34,11 @@ THREADS = 4
 WORKER = Target(
     name="hello-rapira-worker", server="rapira", app="hello", mode="worker", proto="http1",
     start=("worker", "@RIG@/apps/hello/worker.php"), url="/?name=you", expect="apps/hello/expect.txt",
-    config="servers/rapira/http.toml.tpl",
 )
 GRPC = Target(
     name="grpc-rapira", server="rapira", app="grpc", mode="dispatcher", proto="grpc",
     start=("grpc", "@RIG@/apps/grpc/php/dispatcher.php"), url="/bench.v1.EchoService/Echo",
-    expect="apps/grpc/expect.grpc", config="servers/rapira/grpc.toml.tpl", method="POST", body="apps/grpc/echo.grpc",
+    expect="apps/grpc/expect.grpc", method="POST", body="apps/grpc/echo.grpc",
 )
 URL = "http://10.0.0.1:8080/?name=you"
 GRPC_URL = "http://10.0.0.1:8080/bench.v1.EchoService/Echo"
@@ -75,7 +74,7 @@ def suite(targets, connections=1000, rounds=1):
 
 def result_line(tool, requests, late_ms=0, status=0):
     body = {
-        "tool": tool, "late_ms": late_ms, "duration_us": 70000000 if tool == "wrk2" else 60000000,
+        "tool": tool, "late_ms": late_ms,
         "requests": requests, "bytes": requests * 126 if tool == "wrk2" else 0,
         "errors": {key: 0 for key in ERROR_KEYS} | {"status": status},
         "latency_us": {"mean": 700.0, "p50": 690, "p90": 1100, "p95": 1170, "p99": 1260, "p999": 1350, "max": 2800},

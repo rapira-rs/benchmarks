@@ -27,7 +27,6 @@ CASES = [
         "log": line(1700000000000000, 200, 500) + line(1700000000000100, 200, 900) + line(1700000000000200, -1, 1000) + line(1700000000000300, 200, 700),
         "duration_s": 60,
         "result": {
-            "duration_us": 60000000,
             "requests": 4,
             "bytes": 0,
             "errors": NO_ERRORS | {"status": 1},
@@ -40,7 +39,6 @@ CASES = [
         "log": "",
         "duration_s": 60,
         "result": {
-            "duration_us": 60000000,
             "requests": 0,
             "bytes": 0,
             "errors": NO_ERRORS,
@@ -54,7 +52,6 @@ CASES = [
         "log": line(1700000000000000, 200, 420),
         "duration_s": 30,
         "result": {
-            "duration_us": 30000000,
             "requests": 1,
             "bytes": 0,
             "errors": NO_ERRORS,
@@ -69,7 +66,6 @@ CASES = [
         "log": "".join(line(1700000000000000 + i, 503 if i == 0 else 404 if i == 1 else 200, 1000 - i) for i in range(1000)),
         "duration_s": 60,
         "result": {
-            "duration_us": 60000000,
             "requests": 1000,
             "bytes": 0,
             "errors": NO_ERRORS | {"status": 2},
@@ -83,7 +79,6 @@ CASES = [
         "log": line(1700000000000000, 200, 100) + "\n",
         "duration_s": 60,
         "result": {
-            "duration_us": 60000000,
             "requests": 1,
             "bytes": 0,
             "errors": NO_ERRORS,
@@ -93,7 +88,7 @@ CASES = [
     },
 ]
 
-KEY_ORDER = ["duration_us", "requests", "bytes", "errors", "latency_us", "requests_per_sec"]
+KEY_ORDER = ["requests", "bytes", "errors", "latency_us", "requests_per_sec"]
 
 
 class H2loadReportTest(unittest.TestCase):

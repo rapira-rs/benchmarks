@@ -216,7 +216,7 @@ PROVISION_CLI_CASES = [
 def target(app, server):
     return Target(
         name=f"{app}-{server}-worker", server=server, app=app, mode="worker", proto="http1",
-        start=(), url="/", expect="apps/hello/expect.txt", config="",
+        start=(), url="/", expect="apps/hello/expect.txt",
     )
 
 

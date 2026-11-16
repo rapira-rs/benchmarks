@@ -15,7 +15,6 @@ proto = "grpc"
 start = ["grpc", "@RIG@/apps/grpc/php/dispatcher.php"]
 url = "/bench.v1.EchoService/Echo"
 expect = "apps/grpc/expect.grpc"
-config = "servers/rapira/grpc.toml.tpl"
 method = "POST"
 body = "apps/grpc/echo.grpc"
 
@@ -23,7 +22,7 @@ body = "apps/grpc/echo.grpc"
 x-note = "a:b"
 """
 
-BASE = 'server = "rapira"\napp = "hello"\nmode = "worker"\nproto = "http1"\nstart = []\nurl = "/"\nexpect = "e"\nconfig = "c"\n'
+BASE = 'server = "rapira"\napp = "hello"\nmode = "worker"\nproto = "http1"\nstart = []\nurl = "/"\nexpect = "e"\n'
 
 # Each error case is a valid rapira target with one field changed, added, or removed.
 TARGET_ERROR_CASES = [
@@ -32,6 +31,8 @@ TARGET_ERROR_CASES = [
     {"name": "unknown mode", "toml": "[t]\n" + BASE.replace('mode = "worker"', 'mode = "cgi"'), "message": "unknown mode cgi"},
     {"name": "unknown proto", "toml": "[t]\n" + BASE.replace('proto = "http1"', 'proto = "http2"'), "message": "unknown proto http2"},
     {"name": "binary field of the old registry", "toml": "[t]\n" + BASE + 'binary = "pr"\n', "message": "binary"},
+    # box/target.sh selects the config template from the start arguments.
+    {"name": "config field is not a target key", "toml": "[t]\n" + BASE + 'config = "servers/rapira/http.toml.tpl"\n', "message": "config"},
     {"name": "misspelled field", "toml": "[t]\n" + BASE + 'header = "x: 1"\n', "message": "header"},
     {"name": "missing url", "toml": "[t]\n" + BASE.replace('url = "/"\n', ""), "message": "url"},
 ]
@@ -47,7 +48,6 @@ def target(name: str, app: str = "hello", proto: str = "http1") -> Target:
         start=("worker", "@RIG@/apps/hello/worker.php"),
         url="/?name=you",
         expect="apps/hello/expect.txt",
-        config="servers/rapira/http.toml.tpl",
     )
 
 
@@ -285,7 +285,6 @@ class LoadTargetsTest(unittest.TestCase):
                     start=("grpc", "@RIG@/apps/grpc/php/dispatcher.php"),
                     url="/bench.v1.EchoService/Echo",
                     expect="apps/grpc/expect.grpc",
-                    config="servers/rapira/grpc.toml.tpl",
                     method="POST",
                     headers=(("x-note", "a:b"),),
                     body="apps/grpc/echo.grpc",
