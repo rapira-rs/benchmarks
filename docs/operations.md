@@ -140,14 +140,14 @@ The run status is `complete` when every planned cell ran. A complete run can hol
 
 Each run compares its two builds on the same instances. The same build gives different numbers in two runs. Read [METHOD.md](../METHOD.md) before you publish a number.
 
-The board uses the first non-smoke run of the current method as its fixed chart baseline. It compares the `new` median of each run with the `new` median of that run. The run file and `make report` show the comparison of the two builds in a run.
+A board point is the paired delta of its run: the new build against the baseline build, which is the base build of every CI run. The run file and `make report` show the same comparison of the two builds of a run.
 
 ## Release cache
 
 The release with the tag `binaries` in this repository keeps the php8.5 linux x86_64 nightly tarballs of rapira and the `rapira-v<version>-SHA256SUMS.txt` files of the core nightly release, under their core names. The base build of a run comes from this release, because the core Nightly workflow deletes the assets of older builds.
 
 - Provisioning finds the tarball of `BASE` in this release, verifies it against the cached SHA256SUMS file, and checks its libraries with `ldd`.
-- The publish job of CI uploads the tarball and the SHA256SUMS file of each new build before the publish. After the publish, it deletes all tarballs except the newest 10 with their SHA256SUMS files.
+- The publish job of CI uploads the tarball and the SHA256SUMS file of each new build before the publish. After the publish, it deletes all tarballs except the newest 10 and the baseline build, with their SHA256SUMS files.
 - A `BASE` that is not in the release fails the provisioning. In CI it fails the bench job before `make up`, with an error that names the sha.
 
 ## Remote state
@@ -184,11 +184,11 @@ Run `node --test tests/test_board_browser.cjs` for browser checks. They require 
 Every CI run measures the baseline build as its base build, on the pinned AMI. `base` in `suites/ci.toml` holds the sha7 of the baseline build, and the `binaries` release keeps its tarball. Move the baseline build when it cannot start with the current config templates, or when its PHP is too old for a useful comparison:
 
 1. Select a build of the board whose tarball is in the `binaries` release. The `gh release view` command in "Standard flow" lists the tarballs.
-2. Set `base` in `suites/ci.toml` to its sha7 through a pull request.
+2. Set `base` in `suites/ci.toml` to its sha7 through a pull request. Set the same value in the suite test of `tests/test_registry.py`.
 
 The next CI run starts a new series on the board. The runs of the baseline build before it leave the board, and their run files stay in the `gh-pages` branch.
 
-The `AMI` value of the rig step in `.github/workflows/bench.yml` is the pinned AMI. Fedora sets the deprecation time of an image to 2 years after its creation. This command lists the three newest Fedora 44 images:
+The `AMI` value of the rig step in `.github/workflows/bench.yml` is the pinned AMI, and `tests/test_workflow.py` holds the same value. Fedora sets the deprecation time of an image to 2 years after its creation. This command lists the three newest Fedora 44 images:
 
 ```bash
 aws ec2 describe-images --region eu-central-1 --owners 125523088429 --filters 'Name=name,Values=Fedora-Cloud-Base-AmazonEC2.x86_64-44-*' --query 'sort_by(Images,&CreationDate)[-3:].[ImageId,Name]' --output text

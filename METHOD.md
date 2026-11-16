@@ -17,7 +17,7 @@ This document defines how the rig measures a target, which numbers it reports, w
 - Run one target at a time on the server.
 - Send all load to the private address of the server.
 - Measure both builds of a comparison in one run, on the same instances. The server installs the new build under `/opt/bench/rapira/<sha7>` and the base build under `/opt/bench/rapira/base-<sha7>`, so the two builds have separate binaries also when they come from the same commit.
-- Two runs use different instances, so the same build gives different numbers in two runs. [NOTES.md](NOTES.md) records differences of up to 10%. Compare two builds only inside one run. Each CI run therefore measures the baseline build as its base build, and a board point is the paired delta of that run.
+- Two runs use different instances, so the same build gives different numbers in two runs. [NOTES.md](NOTES.md) records a difference of about 10% for one build in two successive runs. Compare two builds only inside one run. Each CI run therefore measures the baseline build as its base build, and a board point is the paired delta of that run.
 - Each cell starts its own server with the process count of its stage kind. The start script verifies the process count after the start, and a different count fails the start.
 - Every PHP process uses the shared `servers/php.ini`. The run file records its text.
 - A build of `REF` or of `make sync` links the PHP of the Fedora `php-embedded` package. The base build loads the libphp of its nightly tarball. The deltas of such a run therefore include the difference between the two PHP builds. For an A/B of two rapira builds, use `NIGHTLY`.
