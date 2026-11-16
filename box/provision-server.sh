@@ -13,7 +13,7 @@
 #   /opt/bench/rapira/<sha7>/bin/rapira        the new build
 #   /opt/bench/rapira/base-<sha7>/bin/rapira   the base build, with the sha7 of BASE
 #   /opt/bench/meta.json                       the new and the base record for the run file
-#   /opt/bench/versions.json                   one version line per runtime
+#   /opt/bench/versions.json                   one version line per runtime: php of the new build, php_base of the base build
 #   /opt/bench/php.ini                         the shared php.ini
 #   /opt/bench/apps/grpc/vendor                the PHP protobuf runtime of the gRPC app
 set -euo pipefail
@@ -218,6 +218,8 @@ install_base() {
   sha=$(curl -fsSL --retry 3 -H "Accept: application/vnd.github+json" "https://api.github.com/repos/$CORE_SLUG/commits/$BASE" |
     python3 -c 'import json, sys; print(json.load(sys.stdin)["sha"])')
   install_asset "$dir" "https://github.com/$CACHE_SLUG/releases/download/binaries" "$asset" "$sums"
+  # The base build loads the libphp of its tarball.
+  record_version php_base "PHP $(cat "$dir/share/php/PHP_VERSION.txt") ($asset)"
   write_meta base "$dir" cache "$sha" "$version" cache "$asset" ""
 }
 

@@ -39,7 +39,8 @@ curl() {
   if [ -n "$output" ]; then
     cp "$HOME/remote/${url##*/}" "$output"
   else
-    printf '{"object":{"sha":"%s"}}\n' "$REMOTE_SHA"
+    # The tag ref response of install_nightly and the commit response of install_base.
+    printf '{"sha":"%s","object":{"sha":"%s"}}\n' "$REMOTE_SHA" "$REMOTE_SHA"
   fi
 }
 find_asset() {
@@ -47,11 +48,15 @@ find_asset() {
   printf '%s %s %s\n' "$VERSION" "$ASSET" "$SUMS"
 }
 ldd() { return 0; }
-record_version() { return 0; }
+record_version() { printf '%s=%s\n' "$1" "$2" >> "$HOME/versions"; }
 write_meta() { printf '%s\n' "$@" > "$HOME/meta.args"; }
 BENCH=$HOME/installed
-install_nightly
 '''
+
+# The release fixture has PHP 8.5.0 in share/php/PHP_VERSION.txt. A version line is "PHP <version> (<tarball>)".
+BASE_CASES = [
+    {"name": "the base tarball records its PHP version", "versions": [f"php_base=PHP 8.5.0 ({ASSET})"]},
+]
 
 
 def release(directory, binary):
@@ -82,7 +87,7 @@ class ProvisionServerTest(unittest.TestCase):
                 if case["corrupt"]:
                     (captured / ASSET).write_bytes(b"wrong archive")
                 env = dict(os.environ, HOME=tmp, NIGHTLY="abc1234", NIGHTLY_DIR=str(captured) if case["captured"] else "", REMOTE_SHA=case["remote_sha"], VERSION=VERSION, ASSET=ASSET, SUMS=SUMS)
-                proc = subprocess.run(["bash", "-c", functions() + RELEASE_COMMANDS], env=env, text=True, capture_output=True, check=False)
+                proc = subprocess.run(["bash", "-c", functions() + RELEASE_COMMANDS + "install_nightly\n"], env=env, text=True, capture_output=True, check=False)
                 self.assertEqual(proc.returncode == 0, case["success"], proc.stdout + proc.stderr)
                 requests = (home / "requests").read_text().splitlines() if (home / "requests").exists() else []
                 self.assertEqual(len(requests), case["requests"])
@@ -93,6 +98,17 @@ class ProvisionServerTest(unittest.TestCase):
                     self.assertEqual(meta[2:7], ["nightly", SHA, VERSION, "nightly", ASSET])
                 else:
                     self.assertFalse(installed.exists())
+
+    def test_base_install(self):
+        for case in BASE_CASES:
+            with self.subTest(name=case["name"]), tempfile.TemporaryDirectory() as tmp:
+                home = Path(tmp)
+                release(home / "remote", b"base binary")
+                env = dict(os.environ, HOME=tmp, BASE="abc1234", REMOTE_SHA=SHA, VERSION=VERSION, ASSET=ASSET, SUMS=SUMS)
+                proc = subprocess.run(["bash", "-c", functions() + RELEASE_COMMANDS + "install_base\n"], env=env, text=True, capture_output=True, check=False)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                versions = (home / "versions").read_text().splitlines() if (home / "versions").exists() else []
+                self.assertEqual(versions, case["versions"])
 
     def test_build_server_updates_a_moved_nightly_tag(self):
         with tempfile.TemporaryDirectory() as tmp:
