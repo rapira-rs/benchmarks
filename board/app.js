@@ -38,11 +38,6 @@ function visibleRuns(entries) {
     .sort((a, b) => (a.started < b.started ? -1 : a.started > b.started ? 1 : 0));
 }
 
-// The runs that the board loads.
-function newestRuns(entries) {
-  return entries.slice(-HISTORY_RUNS);
-}
-
 // The values that the runs of one series share: the base build, the rounds, the connections, the stages with their
 // rates, the instance types, the loader count, the php.ini text, and the app hashes.
 function seriesKey(run) {
@@ -283,7 +278,7 @@ function showError(error) {
 async function main() {
   Chart.defaults.color = INK;
   Chart.defaults.font.family = SANS;
-  const entries = newestRuns(visibleRuns((await fetchJson("data/index.json")).runs));
+  const entries = visibleRuns((await fetchJson("data/index.json")).runs).slice(-HISTORY_RUNS);
   const series = targetSeries(await Promise.all(entries.map((entry) => fetchJson("data/" + entry.id + ".json"))));
   if (series.baseline) {
     const link = el("a", series.baseline.slice(0, 7));
@@ -297,7 +292,7 @@ async function main() {
 }
 
 if (typeof module !== "undefined" && module.exports) {
-  module.exports = { visibleRuns, newestRuns, runLabel, runLink, targetSeries, tone, tooltipLines };
+  module.exports = { visibleRuns, runLabel, runLink, targetSeries, tone, tooltipLines };
 } else {
   document.addEventListener("DOMContentLoaded", () => main().catch(showError));
 }

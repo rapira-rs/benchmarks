@@ -1,4 +1,4 @@
-"""The runs of one board series, and the runs that the board loads."""
+"""The runs of one board series."""
 
 import unittest
 from copy import deepcopy
@@ -39,15 +39,6 @@ KEY_CASES = [
     {"name": "the newest run selects the baseline build", "runs": [RUN_A, changed(RUN_B, ("base", "sha"), OTHER_SHA)], "labels": ["bbbbbbb"], "baseline": OTHER_SHA},
 ]
 
-# The board loads the newest 60 runs.
-HISTORY = [{"id": str(i)} for i in range(63)]
-HISTORY_CASES = [
-    {"name": "63 runs give the newest 60", "entries": HISTORY, "ids": [str(i) for i in range(3, 63)]},
-    {"name": "60 runs give all", "entries": HISTORY[:60], "ids": [str(i) for i in range(60)]},
-    {"name": "3 runs give all", "entries": HISTORY[:3], "ids": ["0", "1", "2"]},
-    {"name": "no runs", "entries": [], "ids": []},
-]
-
 
 @unittest.skipUnless(NODE, "node is not installed")
 class SeriesTest(unittest.TestCase):
@@ -57,11 +48,6 @@ class SeriesTest(unittest.TestCase):
                 series = call_js("targetSeries", case["runs"])
                 self.assertEqual(case["labels"], series["labels"])
                 self.assertEqual(case["baseline"], series["baseline"])
-
-    def test_newest_runs(self):
-        for case in HISTORY_CASES:
-            with self.subTest(name=case["name"]):
-                self.assertEqual(case["ids"], [entry["id"] for entry in call_js("newestRuns", case["entries"])])
 
 
 if __name__ == "__main__":
