@@ -77,13 +77,11 @@ def cmd_publish(args: argparse.Namespace) -> int:
 
 
 def cmd_base(args: argparse.Namespace) -> int:
-    if args.base:
-        print(args.base)
-        return 0
-    runs = [r for r in load_json(args.index)["runs"] if not r["smoke"] and not r["rapira_sha"].startswith(args.new)]
-    if not runs:
-        raise ValueError("no base build: the index has no other non-smoke run; pass the base input")
-    print(max(runs, key=lambda r: r["started"])["rapira_sha"][:7])
+    # The loader count does not change the base build. The value 1 passes every loader check.
+    suite = load_suite(SUITES_DIR / f"{args.suite}.toml", load_targets(TARGETS_FILE), 1)
+    if not suite.base:
+        raise ValueError(f"suite {suite.name} has no base build")
+    print(suite.base)
     return 0
 
 
@@ -166,10 +164,8 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("run")
     p.set_defaults(func=cmd_publish)
 
-    p = sub.add_parser("base", help="print the sha7 of the base build for a new build")
-    p.add_argument("--index", required=True)
-    p.add_argument("--new", required=True)
-    p.add_argument("--base", default="")
+    p = sub.add_parser("base", help="print the sha7 of the base build of a suite")
+    p.add_argument("--suite", required=True)
     p.set_defaults(func=cmd_base)
 
     p = sub.add_parser("needs", help="print the server kinds and apps of a suite")

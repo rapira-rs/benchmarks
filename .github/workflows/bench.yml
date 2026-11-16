@@ -11,10 +11,6 @@ on:
         description: The nightly version of that commit. The job logs this value.
         required: false
         default: ""
-      base:
-        description: The sha7 of the base build. The binaries release must have its tarball. Empty selects the newest non-smoke board build with another sha.
-        required: false
-        default: ""
 
 # One bench at a time. A new dispatch replaces a waiting one and never cancels a running one.
 concurrency:
@@ -52,7 +48,6 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           INPUT_SHA: ${{ inputs.sha }}
           INPUT_VERSION: ${{ inputs.version }}
-          INPUT_BASE: ${{ inputs.base }}
         run: |
           set -euo pipefail
           # The core Nightly workflow deletes older assets when it moves the tag,
@@ -76,7 +71,8 @@ jobs:
             exit 0
           fi
           echo "sha7=$sha7" >> "$GITHUB_OUTPUT"
-          base7=$(python3 -m rig base --index index.json --new "$sha7" --base "$INPUT_BASE")
+          # Every run measures the baseline build of the suite as its base build.
+          base7=$(python3 -m rig base --suite ci)
           # The server installs the base build from the binaries release of this repository.
           base_asset=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/binaries" --jq '.assets[].name' | grep -E -- "-nightly\.${base7}-php8\.5-linux-x86_64\.tar\.gz$" || true)
           if [ -z "$base_asset" ]; then
@@ -294,9 +290,14 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          # Keep the newest 10 versions. A version is a tarball and its SHA256SUMS file.
+          # Keep the newest 10 versions and the baseline build. A version is a tarball and its SHA256SUMS file.
+          base7=$(python3 -m rig base --suite ci)
           old=$(gh api "repos/$GITHUB_REPOSITORY/releases/tags/binaries" --jq '[.assets[] | select(.name | endswith("-php8.5-linux-x86_64.tar.gz"))] | sort_by(.created_at) | reverse | .[10:] | .[].name')
           for tarball in $old; do
+            # Every later run installs the baseline build from this release.
+            case "$tarball" in
+            *"-nightly.${base7}-"*) continue ;;
+            esac
             version=${tarball#rapira-v}
             version=${version%-php8.5-linux-x86_64.tar.gz}
             gh release delete-asset binaries "$tarball" -y -R "$GITHUB_REPOSITORY"
