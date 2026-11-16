@@ -190,7 +190,8 @@ class WorkflowTest(unittest.TestCase):
             with self.subTest(name=case["name"]), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 executable(root / "make", MAKE)
-                env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}", RETRY=case["retry"], SHA7="abc1234", BASE7="def5678", RUNNER_TEMP=str(root / "runner"))
+                ami = field(step("Create and provision the rig"), "AMI", 10)
+                env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}", RETRY=case["retry"], SHA7="abc1234", BASE7="def5678", AMI=ami, RUNNER_TEMP=str(root / "runner"))
                 proc = subprocess.run(["bash", "-e", "-c", script("Create and provision the rig")], cwd=root, env=env, capture_output=True, text=True, check=False)
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
                 calls = json.loads((root / "make.json").read_text())
@@ -199,6 +200,8 @@ class WorkflowTest(unittest.TestCase):
                 for args, zone in zip(ups, case["zones"]):
                     self.assertIn(f"NIGHTLY_DIR={root / 'runner/binary'}", args)
                     self.assertIn(zone, args)
+                    # Every rig of the board uses the Fedora 44 image of 2026-11-14 with the kernel 7.3.3.
+                    self.assertIn("AMI=ami-0269bcce7e5ed6268", args)
 
     def test_prune_keeps_the_baseline_tarball(self):
         for case in PRUNE_CASES:

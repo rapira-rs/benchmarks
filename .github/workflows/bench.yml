@@ -136,9 +136,11 @@ jobs:
         env:
           SHA7: ${{ steps.resolve.outputs.sha7 }}
           BASE7: ${{ steps.resolve.outputs.base7 }}
+          # One image for every run. Fedora builds a new image each day, and a new image can have another kernel.
+          AMI: ami-0269bcce7e5ed6268
         run: |
           set -euo pipefail
-          if make up NIGHTLY="$SHA7" NIGHTLY_DIR="$RUNNER_TEMP/binary" BASE="$BASE7" AZ=eu-central-1a 2>&1 | tee up.log; then
+          if make up NIGHTLY="$SHA7" NIGHTLY_DIR="$RUNNER_TEMP/binary" BASE="$BASE7" AMI="$AMI" AZ=eu-central-1a 2>&1 | tee up.log; then
             exit 0
           fi
           # A capacity error retries once in the next AZ. Other errors stop the job.
@@ -147,7 +149,7 @@ jobs:
             exit 1
           fi
           make down
-          make up NIGHTLY="$SHA7" NIGHTLY_DIR="$RUNNER_TEMP/binary" BASE="$BASE7" AZ=eu-central-1b
+          make up NIGHTLY="$SHA7" NIGHTLY_DIR="$RUNNER_TEMP/binary" BASE="$BASE7" AMI="$AMI" AZ=eu-central-1b
 
       - name: Run the ci suite
         id: suite
