@@ -116,6 +116,13 @@ def load_cmd(target: Target, url: str, epoch: float, rate: int, plan: dict, suit
     )
 
 
+def load_jobs(rig: Rig, target: Target, plan: dict, suite: Suite, stage: Stage, epoch: float) -> list[tuple[Host, str]]:
+    """The load command of each loader for one stage of the target. Each loader sends its share of the stage rate."""
+    url = f"http://{rig.server.private_ip}:{PORT}{target.url}"
+    rate = stage.rates[target.name] // len(rig.loaders)
+    return [(loader, load_cmd(target, url, epoch, rate, plan, suite, stage)) for loader in rig.loaders]
+
+
 def counted_s(target: Target, stage: Stage) -> int:
     """The seconds that the requests count of the tool covers: wrk2 counts the whole run, h2load the measured window."""
     if target.proto == "grpc":
@@ -196,11 +203,9 @@ def run_stage(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, planned: Planned
     server = rig.server
     target = planned.target
     stage = suite.stages[planned.stage]
-    url = f"http://{server.private_ip}:{PORT}{target.url}"
     rate = stage.rates[target.name]
-    per_loader = rate // len(rig.loaders)
     epoch = time.time() + LEAD_S
-    loads = [(loader, load_cmd(target, url, epoch, per_loader, plan, suite, stage)) for loader in rig.loaders]
+    loads = load_jobs(rig, target, plan, suite, stage, epoch)
     samples = sample_jobs(rig, epoch + stage.warmup_s, stage.duration_s)
     timeout = LEAD_S + stage.warmup_s + stage.duration_s + LOAD_SLACK_S
     results = boxes.run_many(loads + [(host, cmd) for _, host, cmd in samples], timeout=timeout)
@@ -300,7 +305,7 @@ def start_target(boxes: Boxes, rig: Rig, target: Target, cell: dict, cell_dir: P
 
 
 def measure(boxes: Boxes, rig: Rig, suite: Suite, plan: dict, planned: PlannedCell, cell: dict, cell_dir: Path, binary_dir: str) -> None:
-    """Run the cell sequence of spec section 5.1 from the start of the target to the probe after the stage."""
+    """Run the cell sequence of METHOD.md from the start of the target to the probe after the stage."""
     target = planned.target
     start_target(boxes, rig, target, cell, cell_dir, cell["processes"], binary_dir)
     pids_before, log_before = worker_probe(boxes, rig, cell, target)

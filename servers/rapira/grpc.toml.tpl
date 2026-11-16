@@ -1,4 +1,4 @@
-# rapira.toml of the rapira gRPC targets. box/servers/rapira.sh renders the placeholders.
+# rapira.toml of the rapira gRPC targets. box/target.sh renders the placeholders.
 # The paths are absolute because rapira resolves a relative path against the directory of this file.
 # The warn level is necessary: a lost call and a shed request log a WARN line, and the rig voids a
 # rapira cell on a WARN or ERROR line.

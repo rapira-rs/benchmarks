@@ -223,7 +223,7 @@ PLAN_CASES = [
     },
 ]
 
-# The ci row set of the spec, in suite order.
+# The targets of suites/ci.toml, in suite order.
 CI_TARGETS = (
     "hello-rapira-classic",
     "hello-rapira-worker",
@@ -232,7 +232,7 @@ CI_TARGETS = (
     "grpc-rapira",
 )
 
-# The stages of suites/ci.toml in the spec.
+# The stages of suites/ci.toml.
 CI_STAGES = {
     "rate": Stage(
         warmup_s=11,
@@ -348,7 +348,7 @@ class ShippedSuitesTest(unittest.TestCase):
     def setUp(self):
         self.registry = load_targets(ROOT / "suites/targets.toml")
 
-    def test_ci_rows_match_the_spec(self):
+    def test_ci_suite_values(self):
         # The rig has 2 loaders.
         suite = load_suite(ROOT / "suites/ci.toml", self.registry, 2)
         self.assertEqual(tuple(t.name for t in suite.targets), CI_TARGETS)

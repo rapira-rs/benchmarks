@@ -260,6 +260,7 @@ build_one() {
 
 build_server() {
   local root_kb sha sha7 version
+  # rapira uses the io-uring feature of Tokio, which needs this cfg: https://docs.rs/tokio/latest/tokio/#unstable-features
   local rustflags="--cfg tokio_unstable"
   root_kb=$(df -Pk / | awk 'NR==2 {print $2}')
   if [ "$root_kb" -lt $((30 * 1024 * 1024)) ]; then

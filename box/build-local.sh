@@ -6,6 +6,8 @@ set -euo pipefail
 SRC=$HOME/core-sync
 DEST=/opt/bench/rapira/local
 META=/opt/bench/meta.json
+# rapira uses the io-uring feature of Tokio, which needs this cfg: https://docs.rs/tokio/latest/tokio/#unstable-features
+TOKIO_FLAGS="--cfg tokio_unstable"
 
 if [ ! -d "$SRC" ]; then
   echo "ERROR: $SRC missing; run 'make sync'"
@@ -19,7 +21,7 @@ fi
 . "$HOME/.cargo/env"
 
 (cd "$SRC" && env \
-  RUSTFLAGS="--cfg tokio_unstable" \
+  RUSTFLAGS="$TOKIO_FLAGS" \
   CARGO_PROFILE_RELEASE_DEBUG=line-tables-only \
   PHP_CONFIG=/usr/bin/php-config \
   CARGO_TARGET_DIR="$HOME/core-target" \
@@ -29,12 +31,12 @@ install -m 0755 "$HOME/core-target/release/rapira" "$DEST/bin/rapira"
 
 # The driver reads the install directory of the new build from "dir" of the new record in
 # /opt/bench/meta.json, so the next run uses DEST.
-python3 - "$META" "$DEST" <<'PY'
+python3 - "$META" "$DEST" "$TOKIO_FLAGS" <<'PY'
 import hashlib
 import json
 import sys
 
-meta_path, dest = sys.argv[1:3]
+meta_path, dest, rustflags = sys.argv[1:4]
 with open(meta_path) as f:
     meta = json.load(f)
 with open(dest + "/bin/rapira", "rb") as f:
@@ -46,7 +48,7 @@ meta["new"] = {
     "build": "server",
     "asset": None,
     "binary_sha256": digest,
-    "rustflags": "--cfg tokio_unstable",
+    "rustflags": rustflags,
     "dir": dest,
 }
 with open(meta_path, "w") as f:
