@@ -10,15 +10,13 @@ const board = path.join(__dirname, "..", "board");
 const prA = "https://github.com/rapira-rs/rapira/pull/101";
 const commitB = "https://github.com/rapira-rs/rapira/commit/bbbbbbb0000000000000000000000000000000b2";
 
-// The hello capacity of run a is 104000 req/s. The new medians 114400 and 124800 are 10% and 20% above it. The
-// product of the factors 1 + delta_pct / 100, 1.1 x 1.04, would give 14.4%.
+// Runs a, b, and d measure the baseline build ccccccc. The hello capacity deltas of runs a and b are 4.0% and -0.5%.
 const history = JSON.parse(JSON.stringify([runs[0], runs[1], runs[1]]));
-history[1].summary["hello-rapira-worker"].capacity = { pairs: 3, delta_pct: 10, min_pct: 9, max_pct: 11, base: 104000, new: 114400, flags: [] };
 history[2].id = "20260928T010000Z-ci-ddddddd";
 history[2].started = "2026-09-28T01:00:00Z";
 history[2].rapira.sha = "ddddddd0000000000000000000000000000000d4";
-history[2].base = runs[1].rapira;
-history[2].summary["hello-rapira-worker"].capacity = { pairs: 3, delta_pct: 4, min_pct: 3, max_pct: 5, base: 120000, new: 124800, flags: [] };
+history[2].summary["hello-rapira-worker"].capacity = { pairs: 3, delta_pct: 6, min_pct: 5, max_pct: 7, base: 100000, new: 106000, flags: [] };
+// 63 runs: the board loads the newest 60, which are copies of run d.
 const longHistory = [history[0], history[1], ...Array.from({ length: 61 }, (_, i) => ({
   ...history[2], id: "later-" + i, started: new Date(Date.UTC(2026, 8, 28 + i, 1)).toISOString(),
 }))];
@@ -28,14 +26,14 @@ const cases = [
   { name: "desktop click at a zero-pair gap opens its run", target: "grpc-rapira", index: 1, action: "click", tooltip: null, links: [commitB] },
   { name: "desktop hover at a missing target hides the tooltip", target: "hello-rapira-dispatcher", index: 0, action: "hover", tooltip: null, links: [] },
   { name: "desktop click at a missing target opens its run", target: "hello-rapira-dispatcher", index: 0, action: "click", tooltip: null, links: [prA] },
-  { name: "desktop hover from a gap to a point shows the recorded base", target: "grpc-rapira", index: 0, from: 1, action: "hover", tooltip: ["2026-09-26 01:00 UTC - #101", "measured base ccccccc"], links: [] },
-  { name: "desktop hover from a missing target to a point keeps the tooltip in the plot", target: "hello-rapira-dispatcher", index: 1, from: 0, action: "hover", tooltip: ["2026-09-27 01:00 UTC - bbbbbbb", "measured base aaaaaaa"], links: [] },
-  { name: "desktop click at a measurement opens its run", target: "hello-rapira-worker", index: 1, action: "click", tooltip: ["2026-09-27 01:00 UTC - bbbbbbb", "measured base aaaaaaa"], links: [commitB] },
-  { name: "touch tap in the plot shows a tooltip without navigation", touch: true, target: "grpc-rapira", index: 0, action: "tap", tooltip: ["2026-09-26 01:00 UTC - #101", "measured base ccccccc"], links: [] },
+  { name: "desktop hover from a gap to a point shows the measured values", target: "grpc-rapira", index: 0, from: 1, action: "hover", tooltip: ["2026-09-26 01:00 UTC - #101", "new 150750 vs base 150000 req/s"], links: [] },
+  { name: "desktop hover from a missing target to a point keeps the tooltip in the plot", target: "hello-rapira-dispatcher", index: 1, from: 0, action: "hover", tooltip: ["2026-09-27 01:00 UTC - bbbbbbb", "new 24000 vs base 25000 req/s"], links: [] },
+  { name: "desktop click at a measurement opens its run", target: "hello-rapira-worker", index: 1, action: "click", tooltip: ["2026-09-27 01:00 UTC - bbbbbbb", "new 103480 vs base 104000 req/s"], links: [commitB] },
+  { name: "touch tap in the plot shows a tooltip without navigation", touch: true, target: "grpc-rapira", index: 0, action: "tap", tooltip: ["2026-09-26 01:00 UTC - #101", "new 150750 vs base 150000 req/s"], links: [] },
   { name: "touch tap at a gap hides the previous tooltip without navigation", touch: true, target: "grpc-rapira", index: 1, from: 0, action: "tap", tooltip: null, links: [] },
-  { name: "touch tap on a point opens its run", touch: true, target: "grpc-rapira", index: 0, point: true, action: "tap", tooltip: ["2026-09-26 01:00 UTC - #101", "measured base ccccccc"], links: [prA] },
-  { name: "the chart plots the change of the new median from the baseline run", runs: history, target: "hello-rapira-worker", index: 2, action: "hover", tooltip: ["2026-09-28 01:00 UTC - ddddddd", "change vs aaaaaaa (104000 req/s) +20.0%"], links: [], values: [0, 10, 20] },
-  { name: "the chart keeps the baseline run after it leaves the display", runs: longHistory, target: "hello-rapira-worker", index: 59, action: "hover", tooltip: ["2026-11-27 01:00 UTC - ddddddd", "change vs aaaaaaa (104000 req/s) +20.0%"], links: [], values: Array(60).fill(20) },
+  { name: "touch tap on a point opens its run", touch: true, target: "grpc-rapira", index: 0, point: true, action: "tap", tooltip: ["2026-09-26 01:00 UTC - #101", "new 150750 vs base 150000 req/s"], links: [prA] },
+  { name: "the chart plots the paired delta against the baseline build", runs: history, target: "hello-rapira-worker", index: 2, action: "hover", tooltip: ["2026-09-28 01:00 UTC - ddddddd", "delta vs ccccccc +6.0% (min +5.0%, max +7.0%, 3 pairs)"], links: [], values: [4, -0.5, 6] },
+  { name: "the chart shows the newest 60 runs", runs: longHistory, target: "hello-rapira-worker", index: 59, action: "hover", tooltip: ["2026-11-27 01:00 UTC - ddddddd", "delta vs ccccccc +6.0% (min +5.0%, max +7.0%, 3 pairs)"], links: [], values: Array(60).fill(6) },
 ];
 
 let browser;
@@ -75,10 +73,10 @@ for (const c of cases) {
         assert.equal(datasets.length, 1);
         assert.equal(datasets[0].data.length, c.values.length);
         datasets[0].data.forEach((value, i) => assert.ok(Math.abs(value - c.values[i]) < 1e-10));
-        // +20% with 3 of 3 pairs is above the capacity floor of 8%, and a higher capacity is better.
+        // +6.0% with 3 of 3 pairs and all paired deltas above zero reaches the capacity floor of 2.5%, and a higher capacity is better.
         assert.equal(datasets[0].pointBackgroundColor.at(-1), "#1a7f37");
-        assert.match(await canvas.getAttribute("aria-label"), /change from baseline/);
-        assert.match(await page.locator("#baseline").textContent(), /aaaaaaa/);
+        assert.match(await canvas.getAttribute("aria-label"), /delta vs baseline build/);
+        assert.equal(await page.locator("#baseline").textContent(), "Baseline build: ccccccc.");
       }
       await canvas.scrollIntoViewIfNeeded();
       const positions = await canvas.evaluate((canvas, c) => {

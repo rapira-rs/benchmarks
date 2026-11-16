@@ -10,7 +10,7 @@ from rig.publish import publish
 
 def run_doc(run_id, started, status="complete", pr=None):
     return {
-        "schema": "rapira-bench-run/3",
+        "schema": "rapira-bench-run/4",
         "id": run_id,
         "suite": {"name": "ci", "sha256": "ab" * 32},
         "smoke": False,
@@ -27,7 +27,7 @@ def entry(run_id, started, status="complete", pr=None):
     """The index entry of `run_doc(run_id, started, status, pr)`."""
     return {
         "id": run_id,
-        "schema": "rapira-bench-run/3",
+        "schema": "rapira-bench-run/4",
         "started": started,
         "suite": "ci",
         "rapira_sha": "0a1b2c3d4e5f",

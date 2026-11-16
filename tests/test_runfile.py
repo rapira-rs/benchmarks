@@ -225,7 +225,7 @@ class TestRunFile(unittest.TestCase):
         self.assertEqual(loaded["rapira"]["pr"], PR)
         self.assertEqual(loaded["base"]["build"], "cache")
         # indent=1 puts one space before each top-level key.
-        self.assertEqual(text.splitlines()[1], ' "schema": "rapira-bench-run/3",')
+        self.assertEqual(text.splitlines()[1], ' "schema": "rapira-bench-run/4",')
         self.assertTrue(text.endswith("}\n"))
 
 
