@@ -5,7 +5,8 @@ This document defines how the rig measures a target, which numbers it reports, w
 ## Terms
 
 - A target is rapira in one mode with one app, for example `hello-rapira-worker`. `suites/targets.toml` defines every target.
-- A build is one rapira binary. The `new` build is the build under test. The `base` build is the selected comparison build. Each run measures both builds.
+- A build is one rapira binary. The `new` build is the build under test. The `base` build is the comparison build. Each run measures both builds.
+- The baseline build is the base build of every CI run: the `base` value of `suites/ci.toml`. The `binaries` release of this repository keeps its tarball.
 - A stage is one load run on the server: a warm-up of `warmup_s` seconds, then `duration_s` seconds measured. A stage has one of two kinds: `rate` or `cap`. The kind sets the process count, the rate, the warm-up, and the measured window.
 - A cell is one stage of one round, one build, one stage kind, and one target. Its key is `r<round>-<build>-<stage>-<target>`, for example `r2-new-cap-hello-rapira-worker`. The key also names the raw directory of the cell.
 - A pair is the base cell and the new cell of one round, one target, and one stage kind.
@@ -16,11 +17,11 @@ This document defines how the rig measures a target, which numbers it reports, w
 - Run one target at a time on the server.
 - Send all load to the private address of the server.
 - Measure both builds of a comparison in one run, on the same instances. The server installs the new build under `/opt/bench/rapira/<sha7>` and the base build under `/opt/bench/rapira/base-<sha7>`, so the two builds have separate binaries also when they come from the same commit.
-- Two runs use different instances, and can use another AMI and another kernel. So the same build gives different numbers in two runs. The board compares each run with the baseline run. Its noise floors include the difference between two rigs and the offset of the rig of the baseline run. [NOTES.md](NOTES.md) records both values.
+- Two runs use different instances, so the same build gives different numbers in two runs. [NOTES.md](NOTES.md) records differences of up to 10%. Compare two builds only inside one run. Each CI run therefore measures the baseline build as its base build, and a board point is the paired delta of that run.
 - Each cell starts its own server with the process count of its stage kind. The start script verifies the process count after the start, and a different count fails the start.
 - Every PHP process uses the shared `servers/php.ini`. The run file records its text.
 - A build of `REF` or of `make sync` links the PHP of the Fedora `php-embedded` package. The base build loads the libphp of its nightly tarball. The deltas of such a run therefore include the difference between the two PHP builds. For an A/B of two rapira builds, use `NIGHTLY`.
-- Pin `AMI` when a result set takes more than one day.
+- Pin `AMI` when a result set takes more than one day. The CI workflow pins the AMI of its rig, so every board run uses the same image and the same kernel.
 
 ## Order
 
@@ -28,7 +29,7 @@ The rounds run in sequence. Round r starts at target r of the suite and wraps, s
 
 The build order in each pair is base then new in odd rounds, and new then base in even rounds. For example, round 1 of target T runs `r1-base-rate-T`, `r1-new-rate-T`, `r1-base-cap-T`, and `r1-new-cap-T`.
 
-With 3 rounds the build order is not balanced: the base build runs first in rounds 1 and 3, and the new build runs first in round 2. An effect of the position in the pair can move the median delta. That effect shows as a band that crosses zero.
+With 3 rounds the build order is not balanced: the base build runs first in rounds 1 and 3, and the new build runs first in round 2. An effect of the position in the pair can move the median delta. That effect shows as paired deltas on both sides of zero.
 
 ## Stage kinds
 
@@ -132,9 +133,9 @@ A void excludes the cell from every number, and the summary drops its pair. The 
 A run is `complete` when every planned cell ran. A complete run can hold void cells. Two cases stop the publication:
 
 - A missing cell, for example after a crash of the driver or of the rig, makes the run `incomplete`. The driver saves the run file before the first cell and after each cell. Each write replaces the previous file only after the new JSON is written. A forced stop leaves the last saved progress, with unfinished cells listed as missing. A keyboard interrupt stops the current target and saves its cell with the status `incomplete`.
-- When every new cell of one target is void, the run is `broken`. `rig bench` exits with an error, and `rig publish` refuses the run. A new build that cannot run therefore fails the CI job, and it does not become the base build of the next run.
+- When every new cell of one target is void, the run is `broken`. `rig bench` exits with an error, and `rig publish` refuses the run. A new build that cannot run therefore fails the CI job.
 
-A core change can break the config template for the base build, for example with a key that only the new build accepts. Every base cell of that run is then void. The run is complete and publishes, and its points on the board are gaps.
+A core change can break the config template for the base build, for example with a key that only the new build accepts. Every base cell of that run is then void. The run is complete and publishes, and its points on the board are gaps. The baseline build is the base build of every CI run, so every later run has the same gaps. Then move the baseline build to a newer build: [docs/operations.md](docs/operations.md) gives the steps.
 
 ## Summary
 
@@ -171,20 +172,20 @@ If the result depends on a response header or on a server configuration, capture
 
 ## Reading the board
 
-The board shows the newest 60 runs from the `gh-pages` branch. A CI run measures one nightly build of the rapira main branch, labelled with the merged pull request of its commit. Merges that land between two nightly builds share one run. The first non-smoke run of the current method is the baseline run. Its new build, A, is the fixed chart baseline. The board loads the baseline run with the displayed runs, so the baseline stays fixed when its point leaves the display. The page and the tooltip identify A by its commit SHA.
+The board shows the newest 60 runs from the `gh-pages` branch. A CI run measures one nightly build of the rapira main branch, labelled with the merged pull request of its commit. Merges that land between two nightly builds share one run. Every run measures the baseline build as its base build. The page and the tooltip identify the baseline build by its commit SHA.
 
-Each point compares the `new` median of its run with the `new` median of the baseline run: `change_from_A = 100 x (new / new_A - 1)`. The point does not use the `base` median or the paired delta of the run. The `new` median uses only the new values of the counted pairs. The two medians come from two runs on different instances, so a point includes the difference between two rigs. The comparison is valid only while each target keeps the rates, the connections, the stages, and the rounds of the baseline run, and the rig keeps its instance types, its loader count, `servers/php.ini`, and the apps. A change of them needs a new baseline run.
+Each point is the `delta_pct` of its run: the median paired delta of the new build against the baseline build. The two builds of a pair run on the same instances, so a point does not include the difference between two rigs. The points of a chart are one series. A series is valid only while each run keeps the base build, the rounds, the connections, the stages with their rates, the instance types, the loader count, the `servers/php.ini` text, and the app hashes. The board draws only the runs that have these values of the newest run. A change of one of them starts a new series, and the runs before it leave the board.
 
-- Each target has one row with three charts: the capacity change, the p99 change, and the RSS change from A, in percent. A line marks zero. The y axis has no fixed minimum.
-- A target or a measure that has no `new` median above zero in the baseline run starts at its first such median in the displayed runs. The tooltip names the build of that median. This start moves when its run leaves the display.
+- Each target has one row with three charts: the capacity delta, the p99 delta, and the RSS delta against the baseline build, in percent. A line marks zero. The y axis has no fixed minimum.
 - A run without the target, or a measure with 0 counted pairs, gives a gap.
 - The x axis lists the runs in order, labelled with the pull request number. A run without a pull request, for example a manual run, shows the first 7 characters of the rapira sha. A click in a chart opens the pull request, or the commit, of the run at the pointer. On a touch screen, a tap shows the tooltip, and a tap on a point opens the run.
-- The tooltip shows the start time and the label of the run, the pull request title, the change from A with the commit and the `new` median of A, the measured base commit, `new <x> vs base <y> <unit>`, `paired delta <d>% (min <a>%, max <b>%, <n> pairs)`, and the flag names. The measured base, the `base` median, and the paired delta come from the comparison of the two builds in the run. The point does not use these values. A gap has no measurement tooltip. Read the flag rules above before you draw a conclusion from a point.
-- Tone: a higher capacity is better, and a lower p99 and a lower RSS are better. A point is green for a better value or red for a worse value only when the point has as many pairs as the suite has rounds, and `|change_from_A|` is at least the noise floor of the target and the measure. Otherwise the point is gray. The starting point is gray. The paired delta in the tooltip has no tone.
-- The noise floor of a measure is the sum of two values, rounded up to a multiple of 0.5%. Each value is the largest over all targets. A CI run measures the build of the run before it as its base build, so each build has a `new` median in one run and a `base` median in the next run. The first value is the largest `|100 x (base / new - 1)|` of these two medians of one build: the difference between two rigs. The second value is the largest `|100 x (base / new - 1)|` of the baseline build, with its `new` median in the baseline run and its `base` median in the next run. This value is the offset of the rig of the baseline run. Every point includes this offset. When the noise of one measure of a target is much larger than that of the other targets, the target gets its own floor for that measure, and the floor of the measure leaves that target out. The one such case is the p99 of grpc-rapira. The floors are in [NOTES.md](NOTES.md), and in `NOISE_FLOOR_PCT` and `TARGET_NOISE_FLOOR_PCT` of `board/app.js`.
+- The tooltip shows the start time and the label of the run, the pull request title, `new <x> vs base <y> <unit>`, `delta vs <sha7> <d>% (min <a>%, max <b>%, <n> pairs)` with the commit of the baseline build, and the flag names. A gap has no measurement tooltip. Read the flag rules above before you draw a conclusion from a point.
+- Tone: a higher capacity is better, and a lower p99 and a lower RSS are better. A point is green for a better value or red for a worse value only when three conditions are true: the point has as many pairs as the suite has rounds, all its paired deltas are on one side of zero, and `|delta_pct|` is at least the noise floor of the target and the measure. Otherwise the point is gray.
+- The noise floor of a measure is the largest `|paired delta|` of one pair in an A/A run, over all targets, rounded up to a multiple of 0.5%. In an A/A run both builds are the same tarball, so every paired delta is noise. When the noise of one measure of a target is much larger than that of the other targets, the target gets its own floor for that measure, and the floor of the measure leaves that target out. The one such case is the p99 of grpc-rapira. The floors are 2.5% for the capacity, 3.0% for the p99, 2.0% for the RSS, and 19.5% for the p99 of grpc-rapira. [NOTES.md](NOTES.md) records the A/A run. `NOISE_FLOOR_PCT` and `TARGET_NOISE_FLOOR_PCT` of `board/app.js` hold the floors.
+- The baseline build loads the libphp of its tarball. When the nightly builds get a newer PHP, the points after that change include the difference between the two PHP builds. The run file records both PHP versions in `servers`: `php` for the new build and `php_base` for the base build.
 - Smoke runs are not shown.
 
-The board draws only runs with the schema `rapira-bench-run/3`. The numbers of the earlier methods do not compare with these runs, and the board does not show them.
+The board draws only runs with the schema `rapira-bench-run/4`. A run of an earlier schema measured the build of the run before it as its base build, so it has no delta against the baseline build, and the board does not show it.
 
 ## Server facts
 

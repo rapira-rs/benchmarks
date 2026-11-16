@@ -2,6 +2,19 @@
 
 Dated records and the decisions the code cannot show. Methodology lives in METHOD.md, operations in docs/operations.md. Numbers from different rigs or instance sizes never mix into one table.
 
+## Method change 4, 2026-11-16
+
+- From this date every CI run measures one baseline build as its base build: the nightly build `c82193b` (#300), the `base` value of `suites/ci.toml`. Before, the base build of a run was the new build of the run before it. The `binaries` release keeps the tarball of the baseline build. Its libphp is PHP 8.5.12.
+- A board point is now the median paired delta of its run against the baseline build. The two builds of a pair run on the same instances. Before, a point compared the `new` median of its run with the `new` median of the baseline run `20260927T193322Z-ci-0cafb5b`, so it included the difference between two rigs.
+- The 54 runs from 2026-09-27 to 2026-11-16 show that difference. In #260 (2026-11-02) the capacity points of the 5 targets were 8.1% to 15.7% under the baseline run, but the paired deltas of #260 were -0.6% to +3.1%. The base build of #260 is the new build of #259. Its capacity was 8.2% to 9.8% lower in #260 than in #259. In the rate cells of #260, the median server CPU was 54%, against 51% in #259 and 50% in #262 at the same request rates. #260 is the only run with the kernel 7.2.14 (`ami-0eb313702958abf42`). The cause is not known. In the next run, #262, the capacity of the new build of #260 was 7.1% to 10.2% higher than in #260.
+- The 54 runs give 265 steps between two successive runs of one target. A step is the change of the `new` median from one run to the next: `100 x (new / new of the run before - 1)`. For the capacity, the standard deviation of the step was 2.75%, that of the paired delta was 1.11%, and the correlation of the two values was 0.18. For the p99, the values were 9.93%, 3.08%, and 0.31. For the RSS, they were 1.91%, 1.78%, and 0.90. So the paired delta of a run explains little of a capacity step or a p99 step between two runs.
+- The floors of the section "Board change, 2026-10-26" came from 26 runs. With the 54 runs, the same rule gives 14.0% for the capacity, 19.5% for the p99, 5.0% for the RSS, and 99.5% for the p99 of grpc-rapira. Such floors hide the largest capacity change of the period: #247 lowered the capacity of grpc-rapira by 7.1% (paired deltas -11.0% to -3.2%). The median `new` capacity of grpc-rapira was 167109 req/s in the 29 runs before #247, and 156569 req/s in the 25 runs from #247 on.
+- The board uses the A/A floors of the section "A/A calibration, 2026-09-27" again: 2.5% for the capacity, 3.0% for the p99, 2.0% for the RSS, and 19.5% for the p99 of grpc-rapira. A point has a color only when it has one pair per round, all its paired deltas are on one side of zero, and the delta is at least the floor.
+- Each run writes `runs/<id>/run.json` with the schema `rapira-bench-run/4`. The run file records the PHP version of the base build as `php_base` in `servers`. The board draws only the schema 4 runs that have the base build, the suite values, the rig shape, the `php.ini` text, and the app hashes of the newest run. The 54 runs of schema 3 have no delta against the baseline build. Their run files stay in the `gh-pages` branch.
+- CI pins the AMI `ami-0269bcce7e5ed6268`: Fedora 44 of 2026-11-14 with the kernel 7.3.3. The 54 runs used 28 AMIs and 10 kernels, 7.2.7 to 7.3.3.
+- The `base` input of the Bench workflow and the `--index`, `--new`, and `--base` options of `rig base` are removed. `duration_us` of the RESULT line and `config` of a target are removed, because no code read them.
+- Not explained: at the same request rate, the server CPU of a rate cell differs between runs. For hello-rapira-worker, the median over the 54 runs is 50%, but #259 and #300 gave 64% and 63%. Both builds of these two runs show the higher value. For hello-rapira-classic, the median is 49%, and 8 runs gave 57% to 64%.
+
 ## Board change, 2026-10-26
 
 - Each board point now compares the `new` median of its run with the `new` median of the baseline run `20260927T193322Z-ci-0cafb5b` (#150): `100 x (new / new_A - 1)`. Before, the board multiplied the factors `1 + delta_pct / 100` of the runs between A and the point. The tarball of A is not in the `binaries` release, so no run can measure A again.
@@ -122,8 +135,8 @@ Rig: the shape of the A/A calibration, on a new rig. Two gRPC-only A/A runs of 5
 
 ## Method change, 2026-09-25
 
-- From this date the rig measures with the staged rate ladder of METHOD.md. wrk2 loads the HTTP/1.1 targets and k6 loads the gRPC targets, from four c7a.xlarge loaders against one c7a.8xlarge server. This method was replaced the same day, see the next section.
-- The numbers before this date come from closed-loop wrk and h2load passes and fixed-rate k6 passes from one c7a.4xlarge loader at a fixed connection count. The numbers after this date are the held rate, the peak successful rate, and the unloaded latency of the ladder. Do not compare numbers from before and after this date, and do not put them in one table.
+- From this date the rig measures with the staged rates of METHOD.md. wrk2 loads the HTTP/1.1 targets and k6 loads the gRPC targets, from four c7a.xlarge loaders against one c7a.8xlarge server. This method was replaced the same day, see the next section.
+- The numbers before this date come from closed-loop wrk and h2load passes and fixed-rate k6 passes from one c7a.4xlarge loader at a fixed connection count. The numbers after this date are the held rate, the peak successful rate, and the unloaded latency of the rate stages. Do not compare numbers from before and after this date, and do not put them in one table.
 - Each run now writes `runs/<id>/run.json` with the schema `rapira-bench-run/1`. The directories under `results/` stay as the record of the old method.
 - FrankenPHP now runs the glibc release asset 1.12.7 with the production worker shape, and every PHP runtime uses the shared `servers/php.ini`. The FrankenPHP and php-fpm numbers before this date used other settings.
 - The fixed c7a.8xlarge server and c7a.4xlarge loader pair no longer applies. The loader count and the instance types are knobs, and the Makefile quota check adds the vCPUs of the server and all loaders.
@@ -132,9 +145,9 @@ Rig: the shape of the A/A calibration, on a new rig. Two gRPC-only A/A runs of 5
 
 - From this date the rig measures one constant rate per target, as METHOD.md defines: 250000 req/s over 5000 connections for the HTTP targets and 100000 req/s over 100 connections for the gRPC target, 60 s measured after a 10 s warm-up, from one c7a.2xlarge loader against one c7a.8xlarge server. The numbers are the p99 latency and the RSS of the rapira process tree next to the achieved rate.
 - The current targets are rapira only: hello in the classic, worker, and dispatcher modes, the dispatcher behind the static middleware, and gRPC echo. FrankenPHP, php-fpm, nginx, RoadRunner, Symfony, Laravel, the static file rows, the gRPC-Web and Connect rows, k6, the base build, and the `full` and `ab` suites are removed.
-- Each run writes `runs/<id>/run.json` with the schema `rapira-bench-run/2`. The ladder run of the same day, `20260925T190409Z-ci-73b9d30`, has the schema 1: its numbers do not compare with the runs after it, and the board does not draw it.
+- Each run writes `runs/<id>/run.json` with the schema `rapira-bench-run/2`. The staged rate run of the same day, `20260925T190409Z-ci-73b9d30`, has the schema 1: its numbers do not compare with the runs after it, and the board does not draw it.
 
-## First ladder run, 2026-09-25
+## First staged rate run, 2026-09-25
 
 Rig: one c7a.8xlarge server and four c7a.xlarge loaders, eu-central-1a, a server build of rapira `feature/grpc-connectrpc` at `73b9d30`, the `ci` suite at 256 connections, one round. Run: `20260925T190409Z-ci-73b9d30`, published as the first board point. The run has 14 targets: a suite edit that was reverted the same day had removed the two gRPC targets.
 
@@ -145,11 +158,11 @@ Rig: one c7a.8xlarge server and four c7a.xlarge loaders, eu-central-1a, a server
 
 ## gRPC baseline (rapira PHP dispatcher vs RoadRunner), 2026-09-24
 
-Rig: c7a.8xlarge server + c7a.4xlarge loader, eu-central-1a, AMI ami-066f414c6023b2bf9, plain release build of rapira at feature/grpc-connectrpc `e421bbc` (pr_sha `924399d` is that commit plus a since-removed example that the run did not use), PHP 8.5.10 NTS with opcache and PECL protobuf 5.36.2, RoadRunner 2025.1.15 with php opcache.enable_cli=1 and 32 workers, h2load nghttp2/1.70.0, k6 2.2.0, wrk 4.2.0, 32 workers on every leg, 512 connections and 15 s on every saturated pass, lowc at 32 connections for 10 s, k6 open loop at 20000 req/s with 256 VUs (1 s ramp then 15 s), medians of 3 interleaved rounds. Run dir: `results/20260924T191959Z-c7a.8xlarge-grpc`.
+Rig: c7a.8xlarge server + c7a.4xlarge loader, eu-central-1a, AMI ami-066f414c6023b2bf9, plain release build of rapira at feature/grpc-connectrpc `e421bbc` (pr_sha `924399d` is that commit plus a since-removed example that the run did not use), PHP 8.5.10 NTS with opcache and PECL protobuf 5.36.2, RoadRunner 2025.1.15 with php opcache.enable_cli=1 and 32 workers, h2load nghttp2/1.70.0, k6 2.2.0, wrk 4.2.0, 32 workers on every target, 512 connections and 15 s on every saturated pass, lowc at 32 connections for 10 s, k6 open loop at 20000 req/s with 256 VUs (1 s ramp then 15 s), medians of 3 interleaved rounds. Run dir: `results/20260924T191959Z-c7a.8xlarge-grpc`.
 
 Closed loop (h2load, c=512, medians; the hello row also under wrk):
 
-| leg | request | req/s (median) | spread | Pss MiB |
+| target | request | req/s (median) | spread | Pss MiB |
 | --- | --- | --- | --- | --- |
 | rapira-http-h1 (wrk) | GET /?name=you | 939,155 | 1.0% | 230.6 |
 | rapira-http-h1 | GET /?name=you (h2load --h1) | 919,936 | 1.3% | 230.6 |
@@ -162,7 +175,7 @@ Closed loop (h2load, c=512, medians; the hello row also under wrk):
 
 Low concurrency (h2load, c=32, medians of p50 / p99 / avg):
 
-| leg | p50 | p99 | avg |
+| target | p50 | p99 | avg |
 | --- | --- | --- | --- |
 | rapira-http-h1 | 0.16ms | 0.25ms | 0.16ms |
 | rapira-connect-h1 | 0.19ms | 0.29ms | 0.19ms |
@@ -174,7 +187,7 @@ Low concurrency (h2load, c=32, medians of p50 / p99 / avg):
 
 Open loop (k6, target 20000 req/s, achieved req/s is the average over the 16 s run including the 1 s ramp; `rapira-connect-h2c` carries no k6 pass):
 
-| leg | req/s (achieved) | p50 | p99 | p99.9 | failed checks |
+| target | req/s (achieved) | p50 | p99 | p99.9 | failed checks |
 | --- | --- | --- | --- | --- | --- |
 | rapira-http-h1 | 19,371 | 0.13ms | 0.23ms | 0.92ms | 0 |
 | rapira-connect-h1 | 19,369 | 0.13ms | 0.43ms | 1.98ms | 0 |
@@ -208,7 +221,7 @@ A/B, main `5d188a0` (pr) vs release v0.7.0 `0612b16` (base), hello workload:
 
 Fleet (main, plain build), hello workload:
 
-| leg | req/s (median) | note |
+| target | req/s (median) | note |
 | --- | --- | --- |
 | swoole | 1,285,881 | generator_bound: a pair ceiling, not a swoole ceiling |
 | rapira-dispatcher | 1,267,571 | at the pair ceiling; one round PPS-throttled to 728k, median unaffected |
@@ -223,11 +236,11 @@ Fleet (main, plain build), hello workload:
 - The pair ceiling is ~1.27M req/s hello: the loader sits at ~96% CPU and the Nitro PPS allowance starts shaving packets in the same zone. A server faster than that needs a bigger loader or two loaders.
 - Static hit (27 KiB css): rapira and franken both peg ~55.7k req/s = 11.5 Gbps, the wire itself. Throughput does not separate them at this file size; the tail does: franken timed out 61 to 68 requests per cell, rapira 11 to 19. All hit cells voided on those timeouts by design.
 - Static miss on rapira costs ~50% of worker throughput at 32 cores (575k vs 1,150k). The maindev rig measured ~35% at smaller scale. The probe path is worth a look in core.
-- k6 probe (16-core loader, VUS=256): rapira modes 0.82 to 0.89 ms avg, fpm and roadrunner ~1.9 ms, franken 2.7 ms, zero failed checks on every leg.
+- k6 probe (16-core loader, VUS=256): rapira modes 0.82 to 0.89 ms avg, fpm and roadrunner ~1.9 ms, franken 2.7 ms, zero failed checks on every target.
 
 ## Full bench (frameworks, main vs v0.7.0), 2026-08-30
 
-Rig: the fixed c7a pair, plain release builds, eu-central-1a, 32 workers/threads/children per leg, wrk c=2048 d=15s, lowc c=32, k6 VUS=256, medians of 3 interleaved rounds. Run dir: `results/20260830T160204Z-c7a.8xlarge-frameworks`. Servers: rapira main `5d188a0` (pr), rapira v0.7.0 `0612b16` (base, classic only), FrankenPHP 1.12.4 (static, its own PHP 8.5.8), php-fpm + nginx (Fedora PHP 8.5.9 NTS, same build rapira embeds). Apps: Symfony 7.4.17 (prod, warmed cache, dump-env) and Laravel 12.68.0 + Octane 2.19.1 (config and route cached, array session and cache). The Laravel worker legs run Octane machinery on both servers (stock octane FrankenPHP entry vs an Octane-Worker rapira bridge); the Symfony worker legs run one byte-identical kernel-loop entry on both.
+Rig: the fixed c7a pair, plain release builds, eu-central-1a, 32 workers/threads/children per target, wrk c=2048 d=15s, lowc c=32, k6 VUS=256, medians of 3 interleaved rounds. Run dir: `results/20260830T160204Z-c7a.8xlarge-frameworks`. Servers: rapira main `5d188a0` (pr), rapira v0.7.0 `0612b16` (base, classic only), FrankenPHP 1.12.4 (static, its own PHP 8.5.8), php-fpm + nginx (Fedora PHP 8.5.9 NTS, same build rapira embeds). Apps: Symfony 7.4.17 (prod, warmed cache, dump-env) and Laravel 12.68.0 + Octane 2.19.1 (config and route cached, array session and cache). The Laravel worker targets run Octane machinery on both servers (stock octane FrankenPHP entry vs an Octane-Worker rapira bridge); the Symfony worker targets run one byte-identical kernel-loop entry on both.
 
 Symfony (hello route through the full kernel):
 
@@ -240,7 +253,7 @@ Symfony (hello route through the full kernel):
 | franken | classic | 42,362 | 0.88ms | 2.31ms | 7.4% |
 | fpm | classic | 38,955 | 0.86ms | 2.12ms | 1.3% |
 
-Laravel (Octane on the worker legs):
+Laravel (Octane on the worker targets):
 
 | server | mode | req/s (median) | lowc p50 | lowc p99 | spread |
 | --- | --- | --- | --- | --- | --- |
@@ -253,22 +266,22 @@ Laravel (Octane on the worker legs):
 
 \* Every v0.7.0 cell carried a handful of wrk read errors (10 to 33 resets per 15s cell, the same class the hello A/B documented) and was voided by the strict report; these two rows are medians from the raw wrk output with that caveat. All other cells are clean; zero failed k6 checks anywhere.
 
-- Symfony worker: rapira 2.0x franken. Laravel worker: rapira +9% over stock Octane-on-franken; Octane's per-request machinery, not the server, dominates that leg.
+- Symfony worker: rapira 2.0x franken. Laravel worker: rapira +9% over stock Octane-on-franken; Octane's per-request machinery, not the server, dominates that target.
 - Worker over classic: Symfony 3.6x on rapira, 2.2x on franken; Laravel 2.3x on rapira, 2.4x on franken.
 - Classic: rapira main leads both frameworks (+31% over fpm on Symfony, +9% on Laravel), and main vs v0.7.0 classic is flat (+2.1% / +0.9%), consistent with the hello A/B.
 - Laravel classic lowc oddity: rapira p50 3.94ms vs fpm 2.27ms per request despite higher rapira throughput at saturation; Symfony classic shows no such gap (0.90 vs 0.86). A per-request cost on big codebases in classic mode is worth a look in core; the r2 cell measured 2.46ms, so round variance is high on this metric.
-- v0.7.0 flush bug found while building the legs: PHP `flush()` after output makes v0.7.0 seal the response lengthless and the front closes the connection (~every request under symfony/runtime's `Response::send(true)` tail; 170k resets per 5s cell). Fixed on main. The symfony classic entry now uses send(false) on all servers; the residual v0.7.0 resets above are the pre-existing hello-class ones.
-- Flags: symfony-franken worker and classic plus symfony-fpm ran server_unsaturated at c=2048 (their pool shape, matching the hello fleet); the rapira and laravel legs saturated.
+- v0.7.0 flush bug found while building the targets: PHP `flush()` after output makes v0.7.0 seal the response lengthless and the front closes the connection (~every request under symfony/runtime's `Response::send(true)` tail; 170k resets per 5s cell). Fixed on main. The symfony classic entry now uses send(false) on all servers; the residual v0.7.0 resets above are the pre-existing hello-class ones.
+- Flags: symfony-franken worker and classic plus symfony-fpm ran server_unsaturated at c=2048 (their pool shape, matching the hello fleet); the rapira and laravel targets saturated.
 
 ## Static cache bench (feature/cache-for-static vs main vs FrankenPHP), 2026-08-31
 
-Rig: the fixed c7a pair, plain release builds, eu-central-1a, AMI ami-040c604473c52f25f, 32 workers/threads per leg, wrk c=8000 d=15s, lowc c=32, k6 VUS=256, medians of 3 interleaved rounds, new `make bench_static` driver. Run dir: `results/20260831T190826Z-c7a.8xlarge-static`. Servers: rapira feature/cache-for-static `649b8c7` (pr, per-worker in-memory file cache: 16 MiB/process, 256 KiB/file cap, 1 s freshness), rapira main `5d188a0` (base, uncached ServeDir), FrankenPHP 1.12.4. Apps behind the fallthrough: the hello worker and the Symfony 7.4.18 kernel-loop worker. hit fetches tiny.css (128 B) with PHP never running; miss requests the hello URL through the same server shape so the static probe runs and falls through to PHP; plain is the same rapira worker with no static middleware (franken has no such shape).
+Rig: the fixed c7a pair, plain release builds, eu-central-1a, AMI ami-040c604473c52f25f, 32 workers/threads per target, wrk c=8000 d=15s, lowc c=32, k6 VUS=256, medians of 3 interleaved rounds, new `make bench_static` driver. Run dir: `results/20260831T190826Z-c7a.8xlarge-static`. Servers: rapira feature/cache-for-static `649b8c7` (pr, per-worker in-memory file cache: 16 MiB/process, 256 KiB/file cap, 1 s freshness), rapira main `5d188a0` (base, uncached ServeDir), FrankenPHP 1.12.4. Apps behind the fallthrough: the hello worker and the Symfony 7.4.18 kernel-loop worker. hit fetches tiny.css (128 B) with PHP never running; miss requests the hello URL through the same server shape so the static probe runs and falls through to PHP; plain is the same rapira worker with no static middleware (franken has no such shape).
 
-Asset size is the whole game: 27 KiB pegs the 12.5 Gbps wire at ~56k req/s on every leg (2026-08-30 fleet run), and even 1 KiB put the cache leg at ~11 Gbps with shaved bw allowances and the loader over its 6.25 Gbps sustained baseline (first launch of this run, aborted after one cell). At 128 B every hit leg is CPU-bound except the cache legs, which run into the ~1.27M req/s pair ceiling instead (loader ~95% CPU): the cache hit rows are floors, not ceilings, with busy_server only ~72%.
+Asset size is the whole game: 27 KiB pegs the 12.5 Gbps wire at ~56k req/s on every target (2026-08-30 fleet run), and even 1 KiB put the cache target at ~11 Gbps with shaved bw allowances and the loader over its 6.25 Gbps sustained baseline (first launch of this run, aborted after one cell). At 128 B every hit target is CPU-bound except the cache targets, which run into the ~1.27M req/s pair ceiling instead (loader ~95% CPU): the cache hit rows are floors, not ceilings, with busy_server only ~72%.
 
 Hello app:
 
-| leg | req/s (median) | lowc p50 | lowc p99 | spread |
+| target | req/s (median) | lowc p50 | lowc p99 | spread |
 | --- | --- | --- | --- | --- |
 | rapira-cache hit | >= 1,266,878 (pair ceiling) | 0.12ms | 0.18ms | 0.6% |
 | rapira-cache miss | 973,109 | 0.14ms | 0.25ms | 2.0% |
@@ -281,7 +294,7 @@ Hello app:
 
 Symfony (kernel-loop worker):
 
-| leg | req/s (median) | lowc p50 | lowc p99 | spread |
+| target | req/s (median) | lowc p50 | lowc p99 | spread |
 | --- | --- | --- | --- | --- |
 | rapira-cache hit | >= 1,263,239 (pair ceiling) | 0.12ms | 0.19ms | 1.0% |
 | rapira-cache miss | 173,863 | 0.27ms | 0.62ms | 4.7% |
@@ -296,8 +309,8 @@ Symfony (kernel-loop worker):
 - Main's uncached hit (262k) is slower than its own miss fallthrough to resident hello PHP (579k): stat + open + read through spawn_blocking per request costs more than a full PHP hello round trip. The maindev-era note on ServeDir vs Caddy pointed the same way.
 - Miss (the branch's regression control) improved, not regressed: the probe tax vs plain is -50.7% on main hello and -16.2% on the branch (973k vs 579k, +68%); on symfony the branch's tax vanishes entirely (173.9k miss vs 173.8k plain, main -22.0%). The 2026-08-30 fleet's "static miss costs ~50% of worker" finding is specific to main.
 - Plain (middleware off): cache vs main is -1.1% hello / -1.6% symfony, inside or bordering the round spread; no baseline regression from the branch.
-- Flags: every cache hit cell is generator_bound at the pair ceiling, and four cells across the run grazed the PPS allowance by 20 to 946 packets (~0.004% of a cell's packets; ena_throttled per the strict rule, magnitudes noise). franken legs ran server_unsaturated at its usual pool shape. Zero voided cells, zero failed k6 checks, 48/48 cells.
-- Rig note: `WRK_CONNS` defaulted to the hello 250x (c=8000) for all legs including symfony; the symfony worker at ~174k req/s holds a ~46ms queue at that depth, well under the 5s timeout, and no cell voided. A future symfony-heavy static run could pin 64x for parity with bench_frameworks.
+- Flags: every cache hit cell is generator_bound at the pair ceiling, and four cells across the run grazed the PPS allowance by 20 to 946 packets (~0.004% of a cell's packets; ena_throttled per the strict rule, magnitudes noise). franken targets ran server_unsaturated at its usual pool shape. Zero voided cells, zero failed k6 checks, 48/48 cells.
+- Rig note: `WRK_CONNS` defaulted to the hello 250x (c=8000) for all targets including symfony; the symfony worker at ~174k req/s holds a ~46ms queue at that depth, well under the 5s timeout, and no cell voided. A future symfony-heavy static run could pin 64x for parity with bench_frameworks.
 
 ## Decisions and their reasons
 
@@ -312,6 +325,6 @@ Symfony (kernel-loop worker):
 The pre-AWS harness ran servers on maindev (32 cores) with the load from a Mac over LAN or on-box. Its numbers are not comparable to the AWS baseline and are recorded here only as history. The harness itself is in git history before the 2026-08-30 wipe.
 
 - Framework bench 2026-08-29 (on-box wrk 12t/500c/15s, medians of 3, 32 workers, rapira at feature/static-middleware): hello rapira 1,068,750 vs franken 86,349. Laravel classic 6,807 vs 5,736; Laravel worker 38,262 (bridge) vs 23,089 (Octane). Symfony classic 26,911 vs 21,968; Symfony worker 148,033 vs 72,839. Worker over classic: 5.6x Laravel, 5.5x Symfony. Laravel is ~4x heavier than Symfony per matching cell.
-- Static legs 2026-08-29 (182 KiB css, on-box): rapira hit 75,191 at 5.4 ms, rapira miss 692,822 at 0.69 ms (miss tax ~-35% vs the 1,068k hello ceiling), franken hit 191,234 at 6.0 ms (plain Caddy file_server). Caddy beat the ServeDir hit path ~2.5x on-box: sendfile from page cache vs a probe plus spawn_blocking per 64 KiB chunk through hyper. Over a 12.5 Gbps wire this difference disappears; on faster links or loopback it returns.
+- Static targets 2026-08-29 (182 KiB css, on-box): rapira hit 75,191 at 5.4 ms, rapira miss 692,822 at 0.69 ms (miss tax ~-35% vs the 1,068k hello ceiling), franken hit 191,234 at 6.0 ms (plain Caddy file_server). Caddy beat the ServeDir hit path ~2.5x on-box: sendfile from page cache vs a probe plus spawn_blocking per 64 KiB chunk through hyper. Over a 12.5 Gbps wire this difference disappears; on faster links or loopback it returns.
 - Framework rig operational lessons that shaped this rig: FrankenPHP ignores TERM while draining (stop is TERM, wait, KILL); an unpinned franken pool auto-sizes and breaks worker parity; backgrounded servers must close their stdio or the ssh pipe hangs.
 - The Mac-as-loader ceiling (~140k rps over LAN) is what moved benching to EC2; see rapira-rs/rapira#97.
