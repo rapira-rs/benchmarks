@@ -19,7 +19,7 @@ fi
 . "$HOME/.cargo/env"
 
 (cd "$SRC" && env \
-  RUSTFLAGS="" \
+  RUSTFLAGS="--cfg tokio_unstable" \
   CARGO_PROFILE_RELEASE_DEBUG=line-tables-only \
   PHP_CONFIG=/usr/bin/php-config \
   CARGO_TARGET_DIR="$HOME/core-target" \
@@ -46,7 +46,7 @@ meta["new"] = {
     "build": "server",
     "asset": None,
     "binary_sha256": digest,
-    "rustflags": "",
+    "rustflags": "--cfg tokio_unstable",
     "dir": dest,
 }
 with open(meta_path, "w") as f:
