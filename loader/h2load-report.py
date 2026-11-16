@@ -45,7 +45,6 @@ def report(lines, duration_s):
         latency[name] = percentile(times, pct) if n else 0
     latency["max"] = times[-1] if n else 0
     return {
-        "duration_us": duration_s * 1000000,
         "requests": n,
         "bytes": 0,
         "errors": {"connect": 0, "read": 0, "write": 0, "status": status_errors, "timeout": 0, "dropped": 0},

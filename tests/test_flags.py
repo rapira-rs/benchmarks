@@ -42,7 +42,6 @@ CPU_CASES = [
     # (190 - 100) busy ticks over (300 - 200) total ticks is 90 percent.
     {"name": "busy 90 of 100 ticks", "before": (100, 200), "after": (190, 300), "pct": 90},
     {"name": "idle window", "before": (100, 200), "after": (100, 300), "pct": 0},
-    {"name": "zero total delta", "before": (100, 200), "after": (100, 200), "pct": 0},
     # 849 of 1000 is 84.9 percent. The integer percent is 84, under GENERATOR_BUSY.
     {"name": "84.9 percent is 84", "before": (0, 0), "after": (849, 1000), "pct": 84},
     # 857 of 1000 is 85.7 percent. The integer percent is 85, at GENERATOR_BUSY.

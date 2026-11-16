@@ -43,19 +43,18 @@ local function int(x)
 end
 
 done = function(summary, latency, requests)
-  local duration_us = summary.duration
-  local duration_s = duration_us / 1000000.0
+  local duration_s = summary.duration / 1000000.0
   local rps = 0
   if duration_s > 0 then
     rps = summary.requests / duration_s
   end
 
   local out = string.format(
-    'RESULT {"duration_us":%s,"requests":%s,"bytes":%s,' ..
+    'RESULT {"requests":%s,"bytes":%s,' ..
     '"errors":{"connect":%s,"read":%s,"write":%s,"status":%s,"timeout":%s,"dropped":0},' ..
     '"latency_us":{"mean":%.3f,"p50":%s,"p90":%s,"p95":%s,"p99":%s,' ..
     '"p999":%s,"max":%s},"requests_per_sec":%.3f}',
-    int(duration_us), int(summary.requests), int(summary.bytes),
+    int(summary.requests), int(summary.bytes),
     int(summary.errors.connect), int(summary.errors.read),
     int(summary.errors.write), int(summary.errors.status),
     int(summary.errors.timeout),

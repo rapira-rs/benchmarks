@@ -187,7 +187,7 @@ PROVISION_CLI_CASES = [
         "stderr": "",
     },
     {
-        # A REF build on the box and a base tarball from the cache: the spec allows BASE next to REF.
+        # A REF build on the box and a base tarball from the binaries release: BASE is valid next to REF.
         "name": "a ref build gets a base from the binaries release",
         "argv": ["provision", "--ttl", "60", "--needs", "rapira hello", "--ref", "pr/97", "--base", "def5678", "--frame-pointers", "1"],
         "status": 0,
@@ -216,7 +216,7 @@ PROVISION_CLI_CASES = [
 def target(app, server):
     return Target(
         name=f"{app}-{server}-worker", server=server, app=app, mode="worker", proto="http1",
-        start=(), url="/", expect="apps/hello/expect.txt", config="",
+        start=(), url="/", expect="apps/hello/expect.txt",
     )
 
 

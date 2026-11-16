@@ -2,6 +2,8 @@
 # Every target runs a pair of rate cells and a pair of cap cells in each round: one cell of the base build and one of the new build.
 # A rate is the total req/s of a target over all loaders. The cap stage runs stages.cap.processes processes, the rate stage one process per server vCPU.
 name = "ci"
+# The baseline build: the base build of every CI run. The binaries release of this repository keeps its tarball.
+base = "c82193b"
 rounds = 3
 smoke = false
 targets = ["hello-rapira-classic", "hello-rapira-worker", "hello-rapira-dispatcher", "hello-rapira-dispatcher-static", "grpc-rapira"]

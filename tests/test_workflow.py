@@ -11,6 +11,7 @@ import textwrap
 import unittest
 from pathlib import Path
 
+from tests.test_base import write_suites
 from tests.test_provision_server import ASSET, SHA, SUMS, VERSION, release
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -35,6 +36,17 @@ READY_CASES = [
 UP_CASES = [
     {"name": "first zone has capacity", "retry": "0", "zones": ["AZ=eu-central-1a"]},
     {"name": "capacity retry keeps the captured directory", "retry": "1", "zones": ["AZ=eu-central-1a", "AZ=eu-central-1b"]},
+]
+
+# The tarball of the base build def5678 of the test suite file, and a tarball of another build.
+BASE_TARBALL = ASSET.replace("abc1234", "def5678")
+OTHER_TARBALL = ASSET.replace("abc1234", "0123abc")
+
+# old holds the tarballs after the newest 10 versions, as the gh api call of the prune step prints them.
+PRUNE_CASES = [
+    {"name": "the baseline tarball stays when it is older than the newest 10", "old": [BASE_TARBALL, OTHER_TARBALL], "deleted": [OTHER_TARBALL, SUMS.replace("abc1234", "0123abc")]},
+    {"name": "only the baseline tarball is old", "old": [BASE_TARBALL], "deleted": []},
+    {"name": "no old tarball", "old": [], "deleted": []},
 ]
 
 PAGES_CASES = [
@@ -66,6 +78,21 @@ elif args[:2] == ["release", "download"]:
             shutil.copyfile(Path(os.environ["RELEASE"]) / args[index + 1], dest / args[index + 1])
 elif args[:2] == ["release", "upload"]:
     Path("uploaded.json").write_text(json.dumps([arg for arg in args if arg.startswith("binary/")]))
+else:
+    sys.exit("unexpected gh: " + repr(args))
+'''
+
+GH_PRUNE = '''
+import json, os, sys
+from pathlib import Path
+
+args = sys.argv[1:]
+if args[0] == "api":
+    print(os.environ["OLD"])
+elif args[:2] == ["release", "delete-asset"]:
+    path = Path("deleted.json")
+    names = json.loads(path.read_text()) if path.exists() else []
+    path.write_text(json.dumps(names + [args[3]]))
 else:
     sys.exit("unexpected gh: " + repr(args))
 '''
@@ -145,9 +172,11 @@ class WorkflowTest(unittest.TestCase):
             release(root / "release", b"captured binary")
             (root / "bin").mkdir()
             executable(root / "bin/gh", GH)
-            env = dict(os.environ, PATH=f"{root / 'bin'}:{os.environ['PATH']}", PYTHONPATH=str(ROOT), SHA=SHA, ASSET=ASSET, RELEASE=str(root / "release"), GITHUB_REPOSITORY="example/benchmarks", INPUT_SHA="", INPUT_VERSION="", INPUT_BASE="def5678", GITHUB_OUTPUT=str(root / "outputs"), RUNNER_TEMP=str(root / "runner"))
+            write_suites(root / "suites", 'base = "def5678"\n')
+            env = dict(os.environ, PATH=f"{root / 'bin'}:{os.environ['PATH']}", PYTHONPATH=str(ROOT), SHA=SHA, ASSET=ASSET, RELEASE=str(root / "release"), GITHUB_REPOSITORY="example/benchmarks", INPUT_SHA="", INPUT_VERSION="", GITHUB_OUTPUT=str(root / "outputs"), RUNNER_TEMP=str(root / "runner"))
             proc = subprocess.run(["bash", "-e", "-c", script("Resolve the nightly and the base commits")], cwd=root, env=env, text=True, capture_output=True, check=False)
             self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+            self.assertIn("base7=def5678", (root / "outputs").read_text().splitlines(), "the base build must come from the suite file")
             self.assertTrue((binary / "nightly.json").is_file(), "the artifact must retain the resolved full commit and asset names")
             self.assertEqual(json.loads((binary / "nightly.json").read_text()), {"sha": SHA, "version": VERSION, "asset": ASSET, "sums": SUMS})
             self.assertEqual((binary / ASSET).read_bytes(), (root / "release" / ASSET).read_bytes())
@@ -161,7 +190,8 @@ class WorkflowTest(unittest.TestCase):
             with self.subTest(name=case["name"]), tempfile.TemporaryDirectory() as tmp:
                 root = Path(tmp)
                 executable(root / "make", MAKE)
-                env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}", RETRY=case["retry"], SHA7="abc1234", BASE7="def5678", RUNNER_TEMP=str(root / "runner"))
+                ami = field(step("Create and provision the rig"), "AMI", 10)
+                env = dict(os.environ, PATH=f"{root}:{os.environ['PATH']}", RETRY=case["retry"], SHA7="abc1234", BASE7="def5678", AMI=ami, RUNNER_TEMP=str(root / "runner"))
                 proc = subprocess.run(["bash", "-e", "-c", script("Create and provision the rig")], cwd=root, env=env, capture_output=True, text=True, check=False)
                 self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
                 calls = json.loads((root / "make.json").read_text())
@@ -170,6 +200,21 @@ class WorkflowTest(unittest.TestCase):
                 for args, zone in zip(ups, case["zones"]):
                     self.assertIn(f"NIGHTLY_DIR={root / 'runner/binary'}", args)
                     self.assertIn(zone, args)
+                    # Every rig of the board uses the Fedora 44 image of 2026-11-14 with the kernel 7.3.3.
+                    self.assertIn("AMI=ami-0269bcce7e5ed6268", args)
+
+    def test_prune_keeps_the_baseline_tarball(self):
+        for case in PRUNE_CASES:
+            with self.subTest(name=case["name"]), tempfile.TemporaryDirectory() as tmp:
+                root = Path(tmp)
+                (root / "bin").mkdir()
+                executable(root / "bin/gh", GH_PRUNE)
+                write_suites(root / "suites", 'base = "def5678"\n')
+                env = dict(os.environ, PATH=f"{root / 'bin'}:{os.environ['PATH']}", PYTHONPATH=str(ROOT), OLD="\n".join(case["old"]), GITHUB_REPOSITORY="example/benchmarks")
+                proc = subprocess.run(["bash", "-e", "-c", script("Prune the binaries release")], cwd=root, env=env, text=True, capture_output=True, check=False)
+                self.assertEqual(proc.returncode, 0, proc.stdout + proc.stderr)
+                deleted = json.loads((root / "deleted.json").read_text()) if (root / "deleted.json").exists() else []
+                self.assertEqual(deleted, case["deleted"])
 
     def test_publish_deploys_the_pages_artifact_of_its_attempt(self):
         # The run keeps the artifacts of earlier attempts, and deploy-pages needs exactly one artifact with its name:

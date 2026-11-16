@@ -2,7 +2,7 @@
 # A name is <app>-rapira-<mode>, with the suffix -static for the static middleware. The gRPC target is grpc-rapira.
 # The start arguments follow the box protocol of box/target.sh.
 # On the box @RIG@ expands to $HOME/bench-rig.
-# The expect, body, and config paths are relative to the repository root.
+# The expect and body paths are relative to the repository root.
 
 [hello-rapira-classic]
 server = "rapira"
@@ -12,7 +12,6 @@ proto = "http1"
 start = ["classic", "@RIG@/apps/hello/classic.php"]
 url = "/?name=you"
 expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
 
 [hello-rapira-worker]
 server = "rapira"
@@ -22,7 +21,6 @@ proto = "http1"
 start = ["worker", "@RIG@/apps/hello/worker.php"]
 url = "/?name=you"
 expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
 
 [hello-rapira-dispatcher]
 server = "rapira"
@@ -32,7 +30,6 @@ proto = "http1"
 start = ["dispatcher", "@RIG@/apps/hello/dispatcher.php"]
 url = "/?name=you"
 expect = "apps/hello/expect.txt"
-config = "servers/rapira/http.toml.tpl"
 
 # The static middleware serves apps/hello as its root. The request misses the root and reaches PHP.
 [hello-rapira-dispatcher-static]
@@ -43,7 +40,6 @@ proto = "http1"
 start = ["dispatcher", "@RIG@/apps/hello/dispatcher.php", "@RIG@/servers/rapira/static.toml.tpl"]
 url = "/?name=you"
 expect = "apps/hello/expect.txt"
-config = "servers/rapira/static.toml.tpl"
 
 # The gRPC target calls bench.v1.EchoService/Echo over h2c under h2load.
 [grpc-rapira]
@@ -54,6 +50,5 @@ proto = "grpc"
 start = ["grpc", "@RIG@/apps/grpc/php/dispatcher.php"]
 url = "/bench.v1.EchoService/Echo"
 expect = "apps/grpc/expect.grpc"
-config = "servers/rapira/grpc.toml.tpl"
 method = "POST"
 body = "apps/grpc/echo.grpc"

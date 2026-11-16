@@ -16,13 +16,15 @@ CORE=$HOME/core
 PGO=$BENCH/pgo
 DEST=$BENCH/rapira/pgo
 TRIPLE=x86_64-unknown-linux-gnu
+# rapira uses the io-uring feature of Tokio, which needs this cfg: https://docs.rs/tokio/latest/tokio/#unstable-features
+TOKIO_FLAGS="--cfg tokio_unstable"
 # Workers leave through _exit, which skips the profile write at exit. Continuous mode (%c) keeps the counters in a
 # mapped file that the forked workers share. On Linux it needs counter relocation, and it does not support value profiling:
 # https://clang.llvm.org/docs/UsersManual.html#cmdoption-fprofile-continuous
-GENERATE_FLAGS="--cfg tokio_unstable -Cprofile-generate=$PGO/data -Cllvm-args=-runtime-counter-relocation -Cllvm-args=-disable-vp"
+GENERATE_FLAGS="$TOKIO_FLAGS -Cprofile-generate=$PGO/data -Cllvm-args=-runtime-counter-relocation -Cllvm-args=-disable-vp"
 PROFILE_FILE="$PGO/data/rapira-%p%c.profraw"
 # A build that reads a profile without value sites must also disable value profiling.
-USE_FLAGS="--cfg tokio_unstable -Cprofile-use=<absolute path>/merged.profdata -Cllvm-args=-disable-vp"
+USE_FLAGS="$TOKIO_FLAGS -Cprofile-use=<absolute path>/merged.profdata -Cllvm-args=-disable-vp"
 
 new_sha() {
   python3 -c 'import json; print(json.load(open("/opt/bench/meta.json"))["new"]["sha"])'

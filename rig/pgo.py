@@ -6,7 +6,7 @@ https://doc.rust-lang.org/rustc/profile-guided-optimization.html
 import time
 from pathlib import Path
 
-from rig.bench import BENCH_DIR, CELL_OVERHEAD_S, LEAD_S, LOAD_SLACK_S, PORT, TTL_MARGIN_S, Boxes, box_cmd, load_cmd, plan_run
+from rig.bench import BENCH_DIR, CELL_OVERHEAD_S, LEAD_S, LOAD_SLACK_S, TTL_MARGIN_S, Boxes, box_cmd, load_jobs, plan_run
 from rig.registry import Suite
 from rig.rig import Rig, ensure_ttl
 from rig.ssh import SshError
@@ -29,10 +29,7 @@ def run_pgo(rig: Rig, suite: Suite, boxes: Boxes, out_dir: Path, *, server_vcpus
         tag = f"pgo-{target.name}"
         boxes.run(rig.server, box_cmd("pgo.sh", "start", tag, target.server, server_vcpus, *target.start))
         try:
-            url = f"http://{rig.server.private_ip}:{PORT}{target.url}"
-            epoch = time.time() + LEAD_S
-            rate = stage.rates[target.name] // len(rig.loaders)
-            loads = [(loader, load_cmd(target, url, epoch, rate, plan, suite, stage)) for loader in rig.loaders]
+            loads = load_jobs(rig, target, plan, suite, stage, time.time() + LEAD_S)
             for out in boxes.run_many(loads, timeout=LEAD_S + stage.warmup_s + stage.duration_s + LOAD_SLACK_S):
                 if isinstance(out, SshError):
                     raise out

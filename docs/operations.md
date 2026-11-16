@@ -49,10 +49,10 @@ Run `make pgo` after `make bench` to make a [PGO](https://doc.rust-lang.org/rust
 gh release view binaries -R rapira-rs/benchmarks --json assets --jq '.assets[].name'
 ```
 
-`python3 -m rig base --index <file> --new <sha7>` prints the base build that CI selects: the sha7 of the newest non-smoke run in the index file whose sha is not `<sha7>`. It fails when the index has no such run. `--base <sha7>` prints the given sha7. This command gets the index of the board:
+`python3 -m rig base --suite ci` prints the baseline build: the `base` value of `suites/ci.toml`. Every CI run measures it as its base build. Use it as `BASE` to compare a build with the points of the board:
 
 ```bash
-gh api -H "Accept: application/vnd.github.raw+json" "repos/rapira-rs/benchmarks/contents/data/index.json?ref=gh-pages" > index.json
+make up NIGHTLY=<sha7> BASE=$(python3 -m rig base --suite ci)
 ```
 
 Provisioning installs only the apps that the suite uses. Set the same `SUITE` on `make up` and on `make bench`.
@@ -72,6 +72,7 @@ The Fedora 44 EC2 image supplies Bash, `dnf`, `sudo`, the OpenSSH server, cloud-
 `suites/targets.toml` defines every target. A target name is `<app>-rapira-<mode>`, with the suffix `-static` for the static middleware; the gRPC target is `grpc-rapira`. A suite file has these keys:
 
 - `name`, `rounds`, `smoke`, and `targets`, the list of target names.
+- `base`: the sha7 of the baseline build, which CI measures as the base build of every run. A suite that CI does not run needs no `base`.
 - `[connections]`: the connection count of each proto, `http1` and `grpc`.
 - `[grpc]`: `streams`, the stream count of each gRPC connection.
 - `[stages.rate]`: `warmup_s` and `duration_s` of the rate stage. The rate stage runs one rapira process per server vCPU.
@@ -103,7 +104,7 @@ The driver refuses a suite before it creates a run directory when one of these c
 - `SERVER_TYPE` defaults to `c7a.2xlarge`. `LOADER_TYPE` defaults to `c7a.xlarge`. `LOADER_COUNT` defaults to 2. The default rig needs 16 vCPUs of the quota.
 - `LOADER_COUNT` must divide every rate and connection count of the suite, and the HTTP connection count must be a multiple of the loader count times the loader vCPU count. `make bench` refuses another count after the rig is up.
 - `AZ` defaults to `eu-central-1a`. `REGION` defaults to `eu-central-1`.
-- `AMI` pins an AMI. Without it, Terraform selects the newest Fedora 44 image, which Fedora rebuilds every day. Pin it when a result set takes more than one day.
+- `AMI` pins an AMI. Without it, Terraform selects the newest Fedora 44 image, which Fedora rebuilds every day. Pin it when a result set takes more than one day. The CI workflow pins the AMI of its rig.
 - `TTL` sets the instance lifetime in minutes. It defaults to 60.
 - `TF_BACKEND=s3` keeps the Terraform state in S3. The default `local` keeps the state in `terraform/`.
 - `FRAME_POINTERS=1` builds rapira with frame pointers for a perf session. It applies to server builds only.
@@ -128,7 +129,7 @@ The driver refuses a suite before it creates a run directory when one of these c
 
 Each run writes `runs/<id>/`. The run id is `<UTC timestamp>-<suite>-<rapira sha7>`. The directory holds:
 
-- `run.json`: the run file with the schema `rapira-bench-run/3`. It records the rig, the new build in `rapira` with its pull request, the base build in `base`, the version lines of the server, the php.ini text, the app hashes, the loaders, the suite, every cell, the run status, and the summary. A cell records its build, its stage kind, its process count, its rate, its achieved rate, its latency, its RSS, its `held` state, its flags, and the record of each loader with the wrk2 calibration values.
+- `run.json`: the run file with the schema `rapira-bench-run/4`. It records the rig, the new build in `rapira` with its pull request, the base build in `base`, the version lines of the server with the PHP version of each build, the php.ini text, the app hashes, the loaders, the suite, every cell, the run status, and the summary. A cell records its build, its stage kind, its process count, its rate, its achieved rate, its latency, its RSS, its `held` state, its flags, and the record of each loader with the wrk2 calibration values.
 - `raw/<cell>/`: the wrk2 or h2load output of each loader with its `RESULT` line, the rendered rapira config, the WARN and ERROR lines of the server log, and the snapshots. A failed start also records its diagnostic in `start.txt`.
 
 The run status is `complete` when every planned cell ran. A complete run can hold void cells. The status is `incomplete` when a cell is missing or interrupted, and `broken` when every new cell of one target is void. `make bench` and `make report` return a nonzero status when the run is not complete.
@@ -139,14 +140,14 @@ The run status is `complete` when every planned cell ran. A complete run can hol
 
 Each run compares its two builds on the same instances. The same build gives different numbers in two runs. Read [METHOD.md](../METHOD.md) before you publish a number.
 
-The board uses the first non-smoke run of the current method as its fixed chart baseline. It compares the `new` median of each run with the `new` median of that run. The run file and `make report` show the comparison of the two builds in a run.
+A board point is the paired delta of its run: the new build against the baseline build, which is the base build of every CI run. The run file and `make report` show the same comparison of the two builds of a run.
 
 ## Release cache
 
 The release with the tag `binaries` in this repository keeps the php8.5 linux x86_64 nightly tarballs of rapira and the `rapira-v<version>-SHA256SUMS.txt` files of the core nightly release, under their core names. The base build of a run comes from this release, because the core Nightly workflow deletes the assets of older builds.
 
 - Provisioning finds the tarball of `BASE` in this release, verifies it against the cached SHA256SUMS file, and checks its libraries with `ldd`.
-- The publish job of CI uploads the tarball and the SHA256SUMS file of each new build before the publish. After the publish, it deletes all tarballs except the newest 10 with their SHA256SUMS files.
+- The publish job of CI uploads the tarball and the SHA256SUMS file of each new build before the publish. After the publish, it deletes all tarballs except the newest 10 and the baseline build, with their SHA256SUMS files.
 - A `BASE` that is not in the release fails the provisioning. In CI it fails the bench job before `make up`, with an error that names the sha.
 
 ## Remote state
@@ -177,6 +178,21 @@ Every box has a lifetime. The bootstrap sets 75 minutes. Provisioning replaces i
 `make test` runs the unit tests with `python3 -m unittest discover -s tests -t .`. `tests/test_box.py` runs the box scripts in a container. The header of that file gives the command.
 
 Run `node --test tests/test_board_browser.cjs` for browser checks. They require Playwright Core and Chromium. Set `PLAYWRIGHT_CORE` and `CHROMIUM` to select local installations.
+
+## Baseline build and AMI of the board
+
+Every CI run measures the baseline build as its base build, on the pinned AMI. `base` in `suites/ci.toml` holds the sha7 of the baseline build, and the `binaries` release keeps its tarball. Move the baseline build when it cannot start with the current config templates, or when its PHP is too old for a useful comparison:
+
+1. Select a build of the board whose tarball is in the `binaries` release. The `gh release view` command in "Standard flow" lists the tarballs.
+2. Set `base` in `suites/ci.toml` to its sha7 through a pull request. Set the same value in the suite test of `tests/test_registry.py`.
+
+The next CI run starts a new series on the board. The runs of the baseline build before it leave the board, and their run files stay in the `gh-pages` branch.
+
+The `AMI` value of the rig step in `.github/workflows/bench.yml` is the pinned AMI, and `tests/test_workflow.py` holds the same value. Fedora sets the deprecation time of an image to 2 years after its creation. This command lists the three newest Fedora 44 images:
+
+```bash
+aws ec2 describe-images --region eu-central-1 --owners 125523088429 --filters 'Name=name,Values=Fedora-Cloud-Base-AmazonEC2.x86_64-44-*' --query 'sort_by(Images,&CreationDate)[-3:].[ImageId,Name]' --output text
+```
 
 ## CI bootstrap
 
@@ -213,8 +229,8 @@ With `TF_BACKEND=s3`, the rig stack keeps its state in the bucket. `terraform/s3
 
 After each successful Nightly run on the rapira main branch, the core repository starts `.github/workflows/bench.yml` in this repository. The bench job runs these steps:
 
-- The resolve step finds the commit of the current `nightly` release, looks up the merged pull request of that commit for the board label, and stops when the board already has that commit. It selects the base build with the `base` input of the dispatch, or else with `python3 -m rig base` on the index of the board. It fails when the index has no other non-smoke run and the `base` input is empty. It checks that the tarball of the base build is in the `binaries` release. It downloads the new tarball and its SHA256SUMS file into `$RUNNER_TEMP`, records the full commit and asset names in `nightly.json`, and keeps that directory as an artifact for 1 day.
-- The rig step creates the rig with the S3 backend and provisions it with `NIGHTLY`, `NIGHTLY_DIR`, and `BASE`. It copies the captured nightly directory to the server only. A capacity error retries once in `eu-central-1b` with the same directory.
+- The resolve step finds the commit of the current `nightly` release, looks up the merged pull request of that commit for the board label, and stops when the board already has that commit. It takes the base build from `python3 -m rig base --suite ci`, which prints the baseline build. It checks that the tarball of the baseline build is in the `binaries` release. It downloads the new tarball and its SHA256SUMS file into `$RUNNER_TEMP`, records the full commit and asset names in `nightly.json`, and keeps that directory as an artifact for 1 day.
+- The rig step creates the rig with the S3 backend and provisions it with `NIGHTLY`, `NIGHTLY_DIR`, `BASE`, and the pinned `AMI`. It copies the captured nightly directory to the server only. A capacity error retries once in `eu-central-1b` with the same directory.
 - The suite step runs `suites/ci.toml`. It fails when the run is incomplete or broken.
 - The job uploads `run.json` and `raw/` as artifacts for 90 days.
 - The PGO step runs `python3 -m rig pgo --suite ci` and uploads `pgo/` as the artifact `pgo-<sha7>` for 90 days. The publish job does not wait for it, so a failed PGO step keeps the bench job red and the run still publishes.
@@ -222,13 +238,7 @@ After each successful Nightly run on the rapira main branch, the core repository
 
 The bench job sets its `ready` output only when the suite and all artifact uploads succeed, and cleanup succeeds through `make down` or its `make nuke` fallback. A failed `make down` keeps the bench job red. A successful fallback still permits publication. A cancelled workflow does not publish.
 
-The publish job uploads the captured tarball and its SHA256SUMS file to the `binaries` release, adds the run to the `gh-pages` branch, copies `board/` there, and pushes the branch. It uploads the site with `actions/upload-pages-artifact` and deploys it with `actions/deploy-pages`. The `github-pages` environment and the `pages: write` and `id-token: write` permissions enable that deployment. See [GitHub Pages custom workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages#deploying-github-pages-artifacts). Then it deletes all tarballs except the newest 10 with their SHA256SUMS files. A failed delete does not stop the publish. The commit step skips when nothing changed, and each attempt uploads the site under its own artifact name, so a rerun of the publish job works.
-
-To choose the base build of a manual run, give the `base` input:
-
-```bash
-gh workflow run bench.yml -R rapira-rs/benchmarks -f base=<sha7>
-```
+The publish job uploads the captured tarball and its SHA256SUMS file to the `binaries` release, adds the run to the `gh-pages` branch, copies `board/` there, and pushes the branch. It uploads the site with `actions/upload-pages-artifact` and deploys it with `actions/deploy-pages`. The `github-pages` environment and the `pages: write` and `id-token: write` permissions enable that deployment. See [GitHub Pages custom workflows](https://docs.github.com/en/pages/getting-started-with-github-pages/using-custom-workflows-with-github-pages#deploying-github-pages-artifacts). Then it deletes all tarballs except the newest 10 and the baseline build, with their SHA256SUMS files. A failed delete does not stop the publish. The commit step skips when nothing changed, and each attempt uploads the site under its own artifact name, so a rerun of the publish job works.
 
 Only one bench run runs at a time. A new dispatch replaces a waiting one and never stops a running one. The bench job stops after 90 minutes. The rig step stops after 30 minutes, the suite step after 55 minutes, and the PGO step after 30 minutes. A local rig and the CI bench cannot run at the same time, because they use the same resource names and the same tag. Check the Bench runs of this repository before `make up` and before `make nuke`.
 
@@ -242,8 +252,8 @@ Do these owner steps once, in this order:
 6. Create a fine-grained token for the resource owner `rapira-rs` with access to the repository `rapira-rs/benchmarks` only and the permission "Actions: Read and write". If the organization approves tokens, approve the request. The token has an expiry date. Create a new token before that date and repeat step 7.
 7. Store the token as the secret `BENCH_DISPATCH_TOKEN` in `rapira-rs/rapira`.
 8. Copy `docs/core-dispatch.yml` to `.github/workflows/bench-dispatch.yml` in `rapira-rs/rapira` through a pull request.
-9. Create the `binaries` release with the commands below. Upload the tarball and the SHA256SUMS file of the current nightly build from the `nightly` release of `rapira-rs/rapira`. This build is the base build of the first run.
-10. Start the first run by hand with `gh workflow run bench.yml -R rapira-rs/benchmarks -f base=<sha7>`, where `<sha7>` is the build of step 9. Examine the result on the board.
+9. Create the `binaries` release with the commands below. Upload the tarball and the SHA256SUMS file of the current nightly build from the `nightly` release of `rapira-rs/rapira`. This build is the baseline build: set its sha7 as `base` in `suites/ci.toml`.
+10. Start the first run by hand with `gh workflow run bench.yml -R rapira-rs/benchmarks`. Examine the result on the board.
 
 Commands for step 2:
 

@@ -21,7 +21,6 @@ BODY_FILE = str(ROOT / "apps" / "grpc" / "echo.grpc")
 # The RESULT line of the rig contract without tool and late_ms, as the wrk2 reporter prints it.
 # 17499989 requests in 70.000867 s is 249996.746 req/s with 3 decimals.
 REPORTER_RESULT = {
-    "duration_us": 70000867,
     "requests": 17499989,
     "bytes": 2204998614,
     "errors": {"connect": 0, "read": 0, "write": 0, "status": 0, "timeout": 0, "dropped": 0},
@@ -39,7 +38,6 @@ H2LOAD_OUTPUT = "\n".join(H2LOAD_LINES) + "\n"
 # Two requests of 500 and 700 us in a 60 s window: 2 / 60 = 0.033 req/s, p50 is the first value.
 H2LOAD_ROWS = "1700000000000000\t200\t700\n1700000000000100\t200\t500\n"
 H2LOAD_RESULT = {
-    "duration_us": 60000000,
     "requests": 2,
     "bytes": 0,
     "errors": {"connect": 0, "read": 0, "write": 0, "status": 0, "timeout": 0, "dropped": 0},
@@ -270,7 +268,6 @@ DONE_CASES = [
                   "status": 0, "timeout": 0, "mean": 689.5, "p50": 689, "p90": 1111, "p95": 1175, "p99": 1264,
                   "p999": 1351, "max": 2822},
         "result": {
-            "duration_us": 20000867,
             "requests": 39989,
             "bytes": 5038614,
             "errors": {"connect": 0, "read": 0, "write": 0, "status": 0, "timeout": 0, "dropped": 0},
@@ -285,7 +282,7 @@ DONE_CASES = [
         "stats": {"duration": 0, "requests": 0, "bytes": 0, "connect": 0, "read": 0, "write": 0, "status": 0,
                   "timeout": 0, "mean": "0/0", "p50": 0, "p90": 0, "p95": 0, "p99": 0, "p999": 0, "max": 0},
         "result": {
-            "duration_us": 0, "requests": 0, "bytes": 0,
+            "requests": 0, "bytes": 0,
             "errors": {"connect": 0, "read": 0, "write": 0, "status": 0, "timeout": 0, "dropped": 0},
             "latency_us": {"mean": 0, "p50": 0, "p90": 0, "p95": 0, "p99": 0, "p999": 0, "max": 0},
             "requests_per_sec": 0,
@@ -298,7 +295,7 @@ DONE_CASES = [
                   "status": 12, "timeout": 4, "mean": 1500.25, "p50": 1400, "p90": 2000, "p95": 2100, "p99": 2500,
                   "p999": 3000, "max": 4000},
         "result": {
-            "duration_us": 10000000, "requests": 20000, "bytes": 1000000,
+            "requests": 20000, "bytes": 1000000,
             "errors": {"connect": 1, "read": 2, "write": 3, "status": 12, "timeout": 4, "dropped": 0},
             "latency_us": {"mean": 1500.25, "p50": 1400, "p90": 2000, "p95": 2100, "p99": 2500, "p999": 3000,
                            "max": 4000},

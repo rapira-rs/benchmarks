@@ -40,8 +40,6 @@ def cpu_pct(before: Snapshot, after: Snapshot) -> int:
     """Busy percent over the window. Integer division drops the fraction."""
     busy = after.cpu[0] - before.cpu[0]
     total = after.cpu[1] - before.cpu[1]
-    if total == 0:
-        return 0
     return 100 * busy // total
 
 

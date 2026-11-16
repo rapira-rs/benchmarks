@@ -11,9 +11,9 @@ from rig import ssh
 from rig.bench import BENCH_DIR, app_hashes, run_suite, server_versions
 from rig.pgo import run_pgo
 from rig.publish import publish
-from rig.registry import load_suite, load_targets, suite_needs
+from rig.registry import Suite, load_suite, load_targets, suite_needs
 from rig.report import render
-from rig.rig import arm_ttl, ensure_ttl, from_terraform, provision, remaining_ttl_s
+from rig.rig import Rig, arm_ttl, ensure_ttl, from_terraform, provision, remaining_ttl_s
 
 TF_DIR = Path("terraform")
 SUITES_DIR = Path("suites")
@@ -25,21 +25,28 @@ def load_json(path: str) -> dict:
     return json.loads(Path(path).read_text())
 
 
+def suite_file(name: str) -> Path:
+    return SUITES_DIR / f"{name}.toml"
+
+
+def staged_rig(suite_name: str) -> tuple[Rig, Suite, int, int]:
+    """The rig with the current tree on every box, the suite, the server vCPUs, and the threads of one loader."""
+    rig = from_terraform(TF_DIR)
+    suite = load_suite(suite_file(suite_name), load_targets(TARGETS_FILE), len(rig.loaders))
+    for host in rig.hosts:
+        ssh.wait_ssh(host)
+    ssh.stage_tree(rig.hosts)
+    return rig, suite, int(ssh.run(rig.server, "nproc")), int(ssh.run(rig.loaders[0], "nproc"))
+
+
 def cmd_bench(args: argparse.Namespace) -> int:
     if args.rounds is not None and args.rounds < 1:
         raise ValueError("rounds must be at least 1")
-    rig = from_terraform(TF_DIR)
-    suite_path = SUITES_DIR / f"{args.suite}.toml"
-    suite = load_suite(suite_path, load_targets(TARGETS_FILE), len(rig.loaders))
+    rig, suite, server_vcpus, loader_threads = staged_rig(args.suite)
     if args.rounds is not None:
         suite = replace(suite, rounds=args.rounds)
     if args.smoke:
         suite = replace(suite, smoke=True)
-    for host in rig.hosts:
-        ssh.wait_ssh(host)
-    ssh.stage_tree(rig.hosts)
-    server_vcpus = int(ssh.run(rig.server, "nproc"))
-    loader_threads = int(ssh.run(rig.loaders[0], "nproc"))
     meta = json.loads(ssh.run(rig.server, f"cat {BENCH_DIR}/meta.json"))
     if "base" not in meta:
         raise ValueError("the server has no base build; provision it with BASE=<sha7>")
@@ -52,7 +59,7 @@ def cmd_bench(args: argparse.Namespace) -> int:
     path = Path(args.out) / run_id / "run.json"
     try:
         run_suite(
-            rig, suite, ssh, Path(args.out), suite_path=suite_path, run_id=run_id, builds=builds,
+            rig, suite, ssh, Path(args.out), suite_path=suite_file(args.suite), run_id=run_id, builds=builds,
             servers=server_versions(ssh, rig.server), apps=app_hashes(Path(".")), server_vcpus=server_vcpus,
             loader_threads=loader_threads,
         )
@@ -77,19 +84,17 @@ def cmd_publish(args: argparse.Namespace) -> int:
 
 
 def cmd_base(args: argparse.Namespace) -> int:
-    if args.base:
-        print(args.base)
-        return 0
-    runs = [r for r in load_json(args.index)["runs"] if not r["smoke"] and not r["rapira_sha"].startswith(args.new)]
-    if not runs:
-        raise ValueError("no base build: the index has no other non-smoke run; pass the base input")
-    print(max(runs, key=lambda r: r["started"])["rapira_sha"][:7])
+    # The loader count does not change the base build. The value 1 passes every loader check.
+    suite = load_suite(suite_file(args.suite), load_targets(TARGETS_FILE), 1)
+    if not suite.base:
+        raise ValueError(f"suite {suite.name} has no base build")
+    print(suite.base)
     return 0
 
 
 def cmd_needs(args: argparse.Namespace) -> int:
     # The loader count does not change the needs. The value 1 passes every loader check.
-    suite = load_suite(SUITES_DIR / f"{args.suite}.toml", load_targets(TARGETS_FILE), 1)
+    suite = load_suite(suite_file(args.suite), load_targets(TARGETS_FILE), 1)
     print(" ".join(suite_needs(suite)))
     return 0
 
@@ -123,12 +128,8 @@ def cmd_sync(args: argparse.Namespace) -> int:
 
 
 def cmd_pgo(args: argparse.Namespace) -> int:
-    rig = from_terraform(TF_DIR)
-    suite = load_suite(SUITES_DIR / f"{args.suite}.toml", load_targets(TARGETS_FILE), len(rig.loaders))
-    for host in rig.hosts:
-        ssh.wait_ssh(host)
-    ssh.stage_tree(rig.hosts)
-    run_pgo(rig, suite, ssh, Path(args.out), server_vcpus=int(ssh.run(rig.server, "nproc")), loader_threads=int(ssh.run(rig.loaders[0], "nproc")))
+    rig, suite, server_vcpus, loader_threads = staged_rig(args.suite)
+    run_pgo(rig, suite, ssh, Path(args.out), server_vcpus=server_vcpus, loader_threads=loader_threads)
     print(f"==> {args.out}")
     return 0
 
@@ -166,10 +167,8 @@ def parser() -> argparse.ArgumentParser:
     p.add_argument("run")
     p.set_defaults(func=cmd_publish)
 
-    p = sub.add_parser("base", help="print the sha7 of the base build for a new build")
-    p.add_argument("--index", required=True)
-    p.add_argument("--new", required=True)
-    p.add_argument("--base", default="")
+    p = sub.add_parser("base", help="print the sha7 of the base build of a suite")
+    p.add_argument("--suite", required=True)
     p.set_defaults(func=cmd_base)
 
     p = sub.add_parser("needs", help="print the server kinds and apps of a suite")

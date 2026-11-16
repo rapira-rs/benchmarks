@@ -27,7 +27,6 @@ class Target:
     start: tuple[str, ...]
     url: str
     expect: str
-    config: str
     method: str = "GET"
     headers: tuple[tuple[str, str], ...] = ()
     body: str | None = None
@@ -53,6 +52,8 @@ class Suite:
     targets: tuple[Target, ...]
     # Exactly the keys of STAGE_KINDS.
     stages: dict[str, Stage]
+    # The sha7 of the base build of a CI run. Empty in a suite that CI does not run.
+    base: str = ""
 
 
 @dataclass(frozen=True)
@@ -150,6 +151,7 @@ def load_suite(path: Path, targets: dict[str, Target], loader_count: int) -> Sui
         grpc_streams=doc["grpc"]["streams"],
         targets=chosen,
         stages={kind: _stage(where, kind, tables[kind], chosen, loader_count) for kind in STAGE_KINDS},
+        base=doc.get("base", ""),
     )
 
 

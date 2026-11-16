@@ -42,9 +42,9 @@ data "aws_subnet" "az" {
 
 locals {
   ami_id = coalesce(var.ami_id, data.aws_ami.fedora.id)
-  # Static on purpose: a user_data change stops and starts the instances, and
-  # the bootstrap can never run again anyway. The real TTL is set by the
-  # provision scripts over ssh.
+  # The user data is one fixed file: a change of user_data stops and starts the
+  # instances, and the bootstrap runs only at the first boot of an instance.
+  # The provision scripts set the TTL over ssh.
   user_data = file("${path.module}/cloud-init/bootstrap.sh")
 }
 
@@ -58,8 +58,9 @@ resource "aws_key_pair" "rig" {
   public_key = trimspace(tls_private_key.rig.public_key_openssh)
 }
 
-# OpenSSH-format key, not the PKCS#8 PEM: LibreSSL-linked ssh clients cannot
-# read ed25519 PKCS#8. The key also sits in tfstate; both stay gitignored.
+# The key file has the OpenSSH format, which every ssh client reads. An ssh
+# client linked with LibreSSL cannot read an ed25519 key in the PKCS#8 PEM
+# format. The tfstate also holds the key, and .gitignore lists both files.
 resource "local_sensitive_file" "key" {
   content         = tls_private_key.rig.private_key_openssh
   filename        = "${path.module}/rig-key.pem"
