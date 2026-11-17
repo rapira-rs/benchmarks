@@ -1,6 +1,6 @@
 """Data transforms of board/app.js, run under node.
 
-The fixture holds three schema 4 run files reduced to the fields the board reads.
+The fixture holds one schema 3 run file and three schema 4 run files, reduced to the fields the board reads.
 """
 
 import json
@@ -22,11 +22,12 @@ CALL = (
     "process.stdout.write(JSON.stringify(board[process.argv[2]](...args)));"
 )
 
-RUN_A, RUN_B, RUN_S = json.loads(FIXTURE.read_text())
+RUN_C, RUN_A, RUN_B, RUN_S = json.loads(FIXTURE.read_text())
+SUMMARY_C = RUN_C["summary"]
 SUMMARY_A = RUN_A["summary"]
 SUMMARY_B = RUN_B["summary"]
-# Run a and run b have the same base build.
-BASE_SHA = RUN_A["base"]["sha"]
+# Run c is the first run, so its new build ccccccc is the baseline build. Runs a and b measure it as their base build.
+BASELINE_SHA = RUN_C["rapira"]["sha"]
 COMMIT_B = "https://github.com/rapira-rs/rapira/commit/bbbbbbb0000000000000000000000000000000b2"
 
 # An index entry of a run file from before schema 3: it has no schema key.
@@ -47,61 +48,72 @@ def entry(run):
     return {"id": run["id"], "started": run["started"], "smoke": run["smoke"], "schema": run["schema"]}
 
 
+def paired(summary):
+    """A point of a run that measured the baseline build as its base build: its change is its paired delta."""
+    return {**summary, "change_pct": summary["delta_pct"], "paired": True}
+
+
+def start(summary):
+    """The start of a target and a measure: the first new median above zero, in run c, at 0%."""
+    return {**summary, "change_pct": 0, "paired": False, "initial": True, "start_sha": BASELINE_SHA, "start_label": "#100", "start_new": summary["new"]}
+
+
 SERIES_CASES = [
     {
-        # A point is the summary record of one target and one measure in one run, as the run file holds it.
-        # grpc-rapira has 0 pairs in run b, so its points there are gaps.
-        # hello-rapira-dispatcher is only in run b, so its points in run a are null.
-        # The targets come in name order. A date is the UTC start of the run to the minute.
-        "name": "series from the summary with 0 pairs and a target in one run",
-        "runs": [RUN_A, RUN_B],
+        # Run c has another base build, so its points are the starts. Runs a and b measured the baseline build ccccccc,
+        # so their points are their paired deltas. grpc-rapira has 0 pairs in run b, so its points there are gaps.
+        # hello-rapira-dispatcher is only in run b, so its points in runs c and a are null. The targets come in name
+        # order. A date is the UTC start of the run to the minute.
+        "name": "series of a start and paired points, with 0 pairs and a target in one run",
+        "runs": [RUN_C, RUN_A, RUN_B],
         "expected": {
-            "labels": ["#101", "bbbbbbb"],
-            "dates": ["2026-09-26 01:00 UTC", "2026-09-27 01:00 UTC"],
-            "links": ["https://github.com/rapira-rs/rapira/pull/101", COMMIT_B],
-            "titles": ["Faster hello", ""],
-            "baseline": BASE_SHA,
-            "rounds": [3, 3],
+            "labels": ["#100", "#101", "bbbbbbb"],
+            "dates": ["2026-09-25 01:00 UTC", "2026-09-26 01:00 UTC", "2026-09-27 01:00 UTC"],
+            "links": ["https://github.com/rapira-rs/rapira/pull/100", "https://github.com/rapira-rs/rapira/pull/101", COMMIT_B],
+            "titles": ["Baseline", "Faster hello", ""],
+            "baseline": BASELINE_SHA,
+            "bases": ["eeeeeee", "ccccccc", "ccccccc"],
+            "rounds": [3, 3, 3],
             "targets": {
                 "grpc-rapira": {
-                    "capacity": [SUMMARY_A["grpc-rapira"]["capacity"], None],
-                    "p99": [SUMMARY_A["grpc-rapira"]["p99"], None],
-                    "rss": [SUMMARY_A["grpc-rapira"]["rss"], None],
+                    "capacity": [start(SUMMARY_C["grpc-rapira"]["capacity"]), paired(SUMMARY_A["grpc-rapira"]["capacity"]), None],
+                    "p99": [start(SUMMARY_C["grpc-rapira"]["p99"]), paired(SUMMARY_A["grpc-rapira"]["p99"]), None],
+                    "rss": [start(SUMMARY_C["grpc-rapira"]["rss"]), paired(SUMMARY_A["grpc-rapira"]["rss"]), None],
                 },
                 "hello-rapira-dispatcher": {
-                    "capacity": [None, SUMMARY_B["hello-rapira-dispatcher"]["capacity"]],
-                    "p99": [None, SUMMARY_B["hello-rapira-dispatcher"]["p99"]],
-                    "rss": [None, SUMMARY_B["hello-rapira-dispatcher"]["rss"]],
+                    "capacity": [None, None, paired(SUMMARY_B["hello-rapira-dispatcher"]["capacity"])],
+                    "p99": [None, None, paired(SUMMARY_B["hello-rapira-dispatcher"]["p99"])],
+                    "rss": [None, None, paired(SUMMARY_B["hello-rapira-dispatcher"]["rss"])],
                 },
                 "hello-rapira-worker": {
-                    "capacity": [SUMMARY_A["hello-rapira-worker"]["capacity"], SUMMARY_B["hello-rapira-worker"]["capacity"]],
-                    "p99": [SUMMARY_A["hello-rapira-worker"]["p99"], SUMMARY_B["hello-rapira-worker"]["p99"]],
-                    "rss": [SUMMARY_A["hello-rapira-worker"]["rss"], SUMMARY_B["hello-rapira-worker"]["rss"]],
+                    "capacity": [start(SUMMARY_C["hello-rapira-worker"]["capacity"]), paired(SUMMARY_A["hello-rapira-worker"]["capacity"]), paired(SUMMARY_B["hello-rapira-worker"]["capacity"])],
+                    "p99": [start(SUMMARY_C["hello-rapira-worker"]["p99"]), paired(SUMMARY_A["hello-rapira-worker"]["p99"]), paired(SUMMARY_B["hello-rapira-worker"]["p99"])],
+                    "rss": [start(SUMMARY_C["hello-rapira-worker"]["rss"]), paired(SUMMARY_A["hello-rapira-worker"]["rss"]), paired(SUMMARY_B["hello-rapira-worker"]["rss"])],
                 },
             },
         },
     },
     {
-        # An index without schema 4 runs gives an empty board: no labels and no targets.
+        # An index without schema 3 or schema 4 runs gives an empty board: no labels and no targets.
         "name": "no runs",
         "runs": [],
-        "expected": {"labels": [], "dates": [], "links": [], "titles": [], "baseline": "", "rounds": [], "targets": {}},
+        "expected": {"labels": [], "dates": [], "links": [], "titles": [], "baseline": "", "bases": [], "rounds": [], "targets": {}},
     },
 ]
 
-# The series of runs a and b, as the first series case expects it.
-SERIES_AB = SERIES_CASES[0]["expected"]
+# The series of runs c, a, and b, as the first series case expects it.
+SERIES_CAB = SERIES_CASES[0]["expected"]
 
 
-def point(pairs, delta_pct, min_pct, max_pct):
-    """A summary record of one measure. tone does not read base, new and flags."""
-    return {"pairs": pairs, "delta_pct": delta_pct, "min_pct": min_pct, "max_pct": max_pct, "base": 100.0, "new": 104.0, "flags": []}
+def point(pairs, delta_pct, min_pct, max_pct, *, is_paired=True):
+    """A point of one measure. tone does not read base, new and flags."""
+    return {"pairs": pairs, "delta_pct": delta_pct, "min_pct": min_pct, "max_pct": max_pct, "base": 100.0, "new": 104.0, "flags": [], "change_pct": delta_pct, "paired": is_paired}
 
 
-# A point is "better" or "worse" only when it has one pair per round, all its paired deltas are on one side of zero
-# (min_pct above zero or max_pct below zero), and |delta_pct| is at least the noise floor. The floors of the A/A
+# A paired point is "better" or "worse" only when it has one pair per round, all its paired deltas are on one side of
+# zero (min_pct above zero or max_pct below zero), and |delta_pct| is at least the noise floor. The floors of the A/A
 # calibration in NOTES.md: capacity 2.5, p99 3, rss 2 (percent), and p99 19.5 for grpc-rapira. A higher capacity is
-# better. A lower p99 and a lower RSS are better. All other points are "" (gray).
+# better. A lower p99 and a lower RSS are better. A point between two rigs and all other points are "" (gray).
 # The target of the rows that do not test a per-target floor.
 HELLO = "hello-rapira-worker"
 TONE_CASES = [
@@ -145,6 +157,8 @@ TONE_CASES = [
     {"name": "1 pair in a suite of 1 round", "point": point(1, -11.0, -11.0, -11.0), "target": HELLO, "measure": "p99", "rounds": 1, "expected": "better"},
     # A gap: the run does not have the target, or the measure has 0 pairs.
     {"name": "null point", "point": None, "target": HELLO, "measure": "p99", "rounds": 3, "expected": ""},
+    # The deltas would make a paired point worse, but the run measured another base build.
+    {"name": "a point between two rigs above every floor is gray", "point": point(3, -15.7, -16.0, -15.0, is_paired=False), "target": "grpc-rapira", "measure": "capacity", "rounds": 3, "expected": ""},
 ]
 
 
@@ -154,14 +168,28 @@ def line(text, tone=""):
 
 
 # The hover lines of one point: the run, the pull request title when the run has one, the new and the base median in
-# the unit of the measure, the delta against the baseline build with its smallest and largest pair and its pair count
-# in the tone of the point, and the flags when the point has any. The base build of the series is ccccccc.
-# The units: capacity in req/s, p99 in ms from us, RSS in MiB from KiB.
+# the unit of the measure, the delta against the base build of the run with its smallest and largest pair and its pair
+# count, and the flags when the point has any. The delta line has the tone of the point. A point between two rigs also
+# has the change from the start, with the build, the run label, and the new median of the start, and it is gray.
+# The baseline build is ccccccc. The units: capacity in req/s, p99 in ms from us, RSS in MiB from KiB.
 TOOLTIP_CASES = [
+    {
+        # Run c, hello capacity: the start, new 100000 req/s. Its deltas against eeeeeee, +2.6 to +3.4, would give a
+        # paired point the tone "better", but the start is a point between two rigs.
+        "name": "the start shows the change line and a gray delta",
+        "target": "hello-rapira-worker", "measure": "capacity", "index": 0,
+        "expected": [
+            line("2026-09-25 01:00 UTC - #100"),
+            line("Baseline"),
+            line("new 100000 vs base 97000 req/s"),
+            line("change vs ccccccc in run #100 (100000 req/s) 0.0% (starting point)"),
+            line("delta vs eeeeeee +3.0% (min +2.6%, max +3.4%, 3 pairs)"),
+        ],
+    },
     {
         # Run a, hello capacity: base 100000, new 104000 req/s. 3 of 3 pairs, deltas above zero, 4.0 >= 2.5.
         "name": "capacity, pull request title, better",
-        "target": "hello-rapira-worker", "measure": "capacity", "index": 0,
+        "target": "hello-rapira-worker", "measure": "capacity", "index": 1,
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
@@ -172,7 +200,7 @@ TOOLTIP_CASES = [
     {
         # Run b, hello p99: 1050 us = 1.05 ms, 1200 us = 1.20 ms. 2 of 3 pairs, so the tone is gray.
         "name": "p99, run without a pull request, 2 pairs",
-        "target": "hello-rapira-worker", "measure": "p99", "index": 1,
+        "target": "hello-rapira-worker", "measure": "p99", "index": 2,
         "expected": [
             line("2026-09-27 01:00 UTC - bbbbbbb"),
             line("new 1.05 vs base 1.20 ms"),
@@ -183,7 +211,7 @@ TOOLTIP_CASES = [
         # Run a, hello RSS: 208896 / 1024 = 204.0 MiB, 204800 / 1024 = 200.0 MiB. 3 of 3 pairs, deltas above zero,
         # 2.0 >= 2, and a higher RSS is worse.
         "name": "RSS, worse, one flag",
-        "target": "hello-rapira-worker", "measure": "rss", "index": 0,
+        "target": "hello-rapira-worker", "measure": "rss", "index": 1,
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
@@ -195,7 +223,7 @@ TOOLTIP_CASES = [
     {
         # Run a, grpc capacity: the deltas -0.8 to 1.2 are on both sides of zero, so the tone is gray.
         "name": "capacity, deltas on both sides of zero, two flags",
-        "target": "grpc-rapira", "measure": "capacity", "index": 0,
+        "target": "grpc-rapira", "measure": "capacity", "index": 1,
         "expected": [
             line("2026-09-26 01:00 UTC - #101"),
             line("Faster hello"),
@@ -207,7 +235,7 @@ TOOLTIP_CASES = [
     {
         # Run b, hello dispatcher capacity: 1 of 3 pairs, so the tone is gray.
         "name": "capacity, 1 pair",
-        "target": "hello-rapira-dispatcher", "measure": "capacity", "index": 1,
+        "target": "hello-rapira-dispatcher", "measure": "capacity", "index": 2,
         "expected": [
             line("2026-09-27 01:00 UTC - bbbbbbb"),
             line("new 24000 vs base 25000 req/s"),
@@ -218,15 +246,16 @@ TOOLTIP_CASES = [
 
 VISIBLE_CASES = [
     {
-        # The board fetches only schema 4 run files, so an entry without the schema key and a smoke entry drop out.
+        # The board fetches only schema 3 and schema 4 run files, so an entry without the schema key and a smoke entry
+        # drop out. Run c has schema 3.
         "name": "old entry and smoke entry dropped, sorted by started",
-        "entries": [entry(RUN_B), OLD_ENTRY, entry(RUN_S), entry(RUN_A)],
-        "expected": [entry(RUN_A), entry(RUN_B)],
+        "entries": [entry(RUN_B), OLD_ENTRY, entry(RUN_S), entry(RUN_A), entry(RUN_C)],
+        "expected": [entry(RUN_C), entry(RUN_A), entry(RUN_B)],
     },
     {
-        # A schema 3 run measured the build of the run before it as its base build.
-        "name": "schema 3 entry dropped",
-        "entries": [{**entry(RUN_A), "schema": "rapira-bench-run/3"}, entry(RUN_B)],
+        # A schema 2 run used another method.
+        "name": "schema 2 entry dropped",
+        "entries": [{**entry(RUN_A), "schema": "rapira-bench-run/2"}, entry(RUN_B)],
         "expected": [entry(RUN_B)],
     },
     {
@@ -235,9 +264,9 @@ VISIBLE_CASES = [
         "expected": [],
     },
     {
-        "name": "schema 4 entries in order stay the same",
-        "entries": [entry(RUN_A), entry(RUN_B)],
-        "expected": [entry(RUN_A), entry(RUN_B)],
+        "name": "schema 3 and schema 4 entries in order stay the same",
+        "entries": [entry(RUN_C), entry(RUN_A), entry(RUN_B)],
+        "expected": [entry(RUN_C), entry(RUN_A), entry(RUN_B)],
     },
 ]
 
@@ -283,7 +312,7 @@ class TooltipLinesTest(unittest.TestCase):
     def test_tooltip_lines(self):
         for case in TOOLTIP_CASES:
             with self.subTest(name=case["name"]):
-                lines = call_js("tooltipLines", SERIES_AB, case["target"], case["measure"], case["index"])
+                lines = call_js("tooltipLines", SERIES_CAB, case["target"], case["measure"], case["index"])
                 self.assertEqual(lines, case["expected"])
 
 

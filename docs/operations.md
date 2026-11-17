@@ -140,7 +140,7 @@ The run status is `complete` when every planned cell ran. A complete run can hol
 
 Each run compares its two builds on the same instances. The same build gives different numbers in two runs. Read [METHOD.md](../METHOD.md) before you publish a number.
 
-A board point is the paired delta of its run: the new build against the baseline build, which is the base build of every CI run. The run file and `make report` show the same comparison of the two builds of a run.
+A board point of a run with the baseline build as its base build is the paired delta of the run. The run file and `make report` show the same comparison of the two builds of a run. A point of a run with another base build compares the `new` median of the run with the `new` median of the first run on the board. [METHOD.md](../METHOD.md) section "Reading the board" describes both kinds of point.
 
 ## Release cache
 
@@ -181,12 +181,19 @@ Run `node --test tests/test_board_browser.cjs` for browser checks. They require 
 
 ## Baseline build and AMI of the board
 
-Every CI run measures the baseline build as its base build, on the pinned AMI. `base` in `suites/ci.toml` holds the sha7 of the baseline build, and the `binaries` release keeps its tarball. Move the baseline build when it cannot start with the current config templates, or when its PHP is too old for a useful comparison:
+Every CI run measures the baseline build as its base build, on the pinned AMI. The baseline build is the new build of the first run on the board: `0cafb5b` of run `20260927T193322Z-ci-0cafb5b` (#150). `base` in `suites/ci.toml` holds its sha7, and the suite test of `tests/test_registry.py` holds the same value. A run with another base build gives points between two rigs, and these points are always gray.
 
-1. Select a build of the board whose tarball is in the `binaries` release. The `gh release view` command in "Standard flow" lists the tarballs.
-2. Set `base` in `suites/ci.toml` to its sha7 through a pull request. Set the same value in the suite test of `tests/test_registry.py`.
+The `binaries` release keeps the tarball of the baseline build. The prune step deleted the first tarball, so the tarball in the release is a rebuild of commit `0cafb5b` with PHP 8.5.11, the PHP of the first build. These commands make the tarball again. The workflows of commit `0cafb5b` start on a push to `main` only, so the temporary branch starts no other workflow. GitHub no longer has the macOS 14 runner of that workflow, so its macOS jobs stop, and its package job, which writes the SHA256SUMS file, does not run. `sha256sum` writes the file:
 
-The next CI run starts a new series on the board. The runs of the baseline build before it leave the board, and their run files stay in the `gh-pages` branch.
+```bash
+gh api -X POST repos/rapira-rs/rapira/git/refs -f ref=refs/heads/bench-base-0cafb5b -f sha=0cafb5bc963ff2405c9c68eb756c750bcd586816
+gh workflow run build-binaries.yml -R rapira-rs/rapira --ref bench-base-0cafb5b -f ref=0cafb5bc963ff2405c9c68eb756c750bcd586816 -f version=0.8.1-nightly.0cafb5b -f packages=false -f upload_to= -f php_85=8.5.11
+# After the linux-x86_64-php8.5 job: download its tarball, write the checksum file, upload both, and delete the branch.
+gh run download <run-id> -R rapira-rs/rapira -n art-linux-x86_64-php8.5 -D base-0cafb5b
+cd base-0cafb5b && sha256sum rapira-v0.8.1-nightly.0cafb5b-php8.5-linux-x86_64.tar.gz > rapira-v0.8.1-nightly.0cafb5b-SHA256SUMS.txt
+gh release upload binaries rapira-v0.8.1-nightly.0cafb5b-php8.5-linux-x86_64.tar.gz rapira-v0.8.1-nightly.0cafb5b-SHA256SUMS.txt -R rapira-rs/benchmarks
+gh api -X DELETE repos/rapira-rs/rapira/git/refs/heads/bench-base-0cafb5b
+```
 
 The `AMI` value of the rig step in `.github/workflows/bench.yml` is the pinned AMI, and `tests/test_workflow.py` holds the same value. Fedora sets the deprecation time of an image to 2 years after its creation. This command lists the three newest Fedora 44 images:
 

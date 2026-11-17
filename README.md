@@ -2,7 +2,7 @@
 
 The benchmark rig of [rapira](https://github.com/rapira-rs/rapira). It runs on Amazon EC2: one c7a.2xlarge server and two c7a.xlarge loaders. Each run measures the new build and the base build, one after the other on the same instances. The base build of every CI run is one fixed baseline build, which `suites/ci.toml` names.
 
-The board shows the change of the new build of each run from the baseline build, measured in that run. The tooltip includes the measured values and the paired deltas of the run.
+The board shows the change of the new build of each run from the baseline build: the new build of the first run on the board. A run that measured the baseline build as its base build gives its paired delta. A run with another base build compares its `new` median with the `new` median of the first run, so its point includes the difference between two rigs. The tooltip includes the measured values and the paired deltas of the run.
 
 ## What is tested
 
