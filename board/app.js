@@ -1,9 +1,7 @@
 "use strict";
 
-// The board draws run files of this schema only.
-const RUN_SCHEMA = "rapira-bench-run/4";
-// The board loads the newest runs up to this limit.
-const HISTORY_RUNS = 60;
+// The board draws run files of these schemas. Their summary records have the same fields.
+const RUN_SCHEMAS = ["rapira-bench-run/3", "rapira-bench-run/4"];
 const COMMITS = "https://github.com/rapira-rs/rapira/commit/";
 const INK = "#000000";
 const LINE = "#2f6fdf";
@@ -16,35 +14,25 @@ const TONE_COLORS = { better: "#1a7f37", worse: "#cf222e", "": "#8c959f" };
 const SANS = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, "Noto Sans", sans-serif';
 // The distance in pixels between a point and its tooltip.
 const TIP_OFFSET = 10;
-// The noise floor of each measure in percent: the largest |paired delta| of the measure over all targets of the A/A
+// The noise floor of a paired delta in percent: the largest |paired delta| of the measure over all targets of the A/A
 // run of 2026-09-27, rounded up to 0.5%. The p99 floor leaves out grpc-rapira, which has its own floor. NOTES.md
 // holds the A/A results.
 const NOISE_FLOOR_PCT = { capacity: 2.5, p99: 3, rss: 2 };
 // The floors of one target that replace the floor of the measure: the largest |paired delta| of the target in the
 // same A/A run, rounded up to 0.5%.
 const TARGET_NOISE_FLOOR_PCT = { "grpc-rapira": { p99: 19.5 } };
-// Each chart shows the paired delta of the new build against the baseline build. Tooltip medians use the given scale
-// and digits.
+// Each chart shows the change of the new build from the baseline build. Tooltip medians use the given scale and digits.
 const MEASURES = [
-  { key: "capacity", name: "capacity", axis: "capacity delta vs baseline build (%)", unit: "req/s", scale: 1, digits: 0, higherIsBetter: true },
-  { key: "p99", name: "p99", axis: "p99 delta vs baseline build (%)", unit: "ms", scale: 1 / 1000, digits: 2, higherIsBetter: false },
-  { key: "rss", name: "RSS", axis: "RSS delta vs baseline build (%)", unit: "MiB", scale: 1 / 1024, digits: 1, higherIsBetter: false },
+  { key: "capacity", name: "capacity", axis: "capacity change vs baseline build (%)", unit: "req/s", scale: 1, digits: 0, higherIsBetter: true },
+  { key: "p99", name: "p99", axis: "p99 change vs baseline build (%)", unit: "ms", scale: 1 / 1000, digits: 2, higherIsBetter: false },
+  { key: "rss", name: "RSS", axis: "RSS change vs baseline build (%)", unit: "MiB", scale: 1 / 1024, digits: 1, higherIsBetter: false },
 ];
 
 // Manifest entries to show, oldest first. Smoke runs and runs of another schema are not shown.
 function visibleRuns(entries) {
   return entries
-    .filter((entry) => !entry.smoke && entry.schema === RUN_SCHEMA)
+    .filter((entry) => !entry.smoke && RUN_SCHEMAS.includes(entry.schema))
     .sort((a, b) => (a.started < b.started ? -1 : a.started > b.started ? 1 : 0));
-}
-
-// The values that the runs of one series share: the base build, the rounds, the connections, the stages with their
-// rates, the instance types, the loader count, the php.ini text, and the app hashes.
-function seriesKey(run) {
-  return JSON.stringify([
-    run.base.sha, run.suite.rounds, run.suite.connections, run.suite.stages, run.rig.server_type, run.rig.loader_type,
-    run.rig.loader_count, run.servers.php_ini, run.apps,
-  ]);
 }
 
 // The x label of a run: the pull request number, or the first 7 characters of the sha without one.
@@ -57,40 +45,59 @@ function runLink(run) {
   return run.rapira.pr ? run.rapira.pr.url : COMMITS + run.rapira.sha;
 }
 
-// Runs arrive oldest first. The series has the runs with the key of the newest run. A point is the summary record of
-// one target and one measure in one run: the paired delta of the new build against the base build. A run without the
-// target, or a measure with 0 pairs, gives null.
+// Runs arrive oldest first. The baseline build is the new build of the first run. A point is the summary record of one
+// target and one measure in one run, with change_pct, its change from the baseline build:
+// - A run with the baseline build as its base build gives its paired delta, measured on the same instances.
+// - Another run gives 100 x (new / new of the start - 1) between two rigs. The start is the first run with a new median
+//   above zero for the target and the measure, and its own change is 0%.
+// A run without the target, or a measure with 0 pairs, gives null.
 function targetSeries(runs) {
-  const newest = runs.at(-1);
-  const displayed = runs.filter((run) => seriesKey(run) === seriesKey(newest));
-  const names = Array.from(new Set(displayed.flatMap((run) => Object.keys(run.summary)))).sort();
+  const baseline = runs[0]?.rapira.sha ?? "";
+  const names = Array.from(new Set(runs.flatMap((run) => Object.keys(run.summary)))).sort();
   const targets = {};
   names.forEach((name) => {
     targets[name] = {};
     MEASURES.forEach((measure) => {
-      targets[name][measure.key] = displayed.map((run) => {
-        const point = run.summary[name]?.[measure.key];
-        return point?.pairs ? point : null;
+      const points = runs.map((run) => run.summary[name]?.[measure.key]);
+      const start = points.findIndex((point) => point?.new > 0);
+      targets[name][measure.key] = points.map((point, i) => {
+        if (!point?.pairs) {
+          return null;
+        }
+        if (runs[i].base.sha === baseline) {
+          return { ...point, change_pct: point.delta_pct, paired: true };
+        }
+        return start < 0 ? null : {
+          ...point,
+          change_pct: 100 * (point.new / points[start].new - 1),
+          paired: false,
+          initial: i === start,
+          start_sha: runs[start].rapira.sha,
+          start_label: runLabel(runs[start]),
+          start_new: points[start].new,
+        };
       });
     });
   });
   return {
-    labels: displayed.map(runLabel),
+    labels: runs.map(runLabel),
     // started is an ISO 8601 UTC time, for example 2026-09-26T19:10:13Z.
-    dates: displayed.map((run) => run.started.slice(0, 16).replace("T", " ") + " UTC"),
-    links: displayed.map(runLink),
-    titles: displayed.map((run) => (run.rapira.pr ? run.rapira.pr.title : "")),
-    // The base build of every run of the series.
-    baseline: newest?.base.sha ?? "",
-    rounds: displayed.map((run) => run.suite.rounds),
+    dates: runs.map((run) => run.started.slice(0, 16).replace("T", " ") + " UTC"),
+    links: runs.map(runLink),
+    titles: runs.map((run) => (run.rapira.pr ? run.rapira.pr.title : "")),
+    baseline,
+    bases: runs.map((run) => run.base.sha.slice(0, 7)),
+    rounds: runs.map((run) => run.suite.rounds),
     targets,
   };
 }
 
-// A point has a tone when it has one pair per round, all its paired deltas are on one side of zero, and |delta_pct| is
-// at least the noise floor: the floor of the target for the measure, or else the floor of the measure.
+// A point has a tone when it is a paired point, it has one pair per round, all its paired deltas are on one side of
+// zero, and |delta_pct| is at least the noise floor: the floor of the target for the measure, or else the floor of the
+// measure. A point between two rigs is gray: NOTES.md shows differences of one build between two rigs above any of
+// these floors.
 function tone(point, target, measure, rounds) {
-  if (!point || point.pairs < rounds) {
+  if (!point?.paired || point.pairs < rounds) {
     return "";
   }
   const up = point.min_pct > 0;
@@ -116,8 +123,15 @@ function tooltipLines(series, name, measure, i) {
     lines.push({ text: series.titles[i], tone: "" });
   }
   lines.push({ text: "new " + value(point.new) + " vs base " + value(point.base) + " " + spec.unit, tone: "" });
+  if (!point.paired) {
+    lines.push({
+      text: "change vs " + point.start_sha.slice(0, 7) + " in run " + point.start_label + " (" + value(point.start_new) + " " +
+        spec.unit + ") " + percent(point.change_pct) + (point.initial ? " (starting point)" : ""),
+      tone: "",
+    });
+  }
   lines.push({
-    text: "delta vs " + series.baseline.slice(0, 7) + " " + percent(point.delta_pct) + " (min " + percent(point.min_pct) +
+    text: "delta vs " + series.bases[i] + " " + percent(point.delta_pct) + " (min " + percent(point.min_pct) +
       ", max " + percent(point.max_pct) + ", " + point.pairs + (point.pairs === 1 ? " pair)" : " pairs)"),
     tone: tone(point, name, measure, series.rounds[i]),
   });
@@ -196,7 +210,7 @@ function drawChart(parent, series, name, measure) {
       labels: series.labels,
       datasets: [
         {
-          data: points.map((point) => point?.delta_pct ?? null),
+          data: points.map((point) => point?.change_pct ?? null),
           borderColor: LINE,
           borderWidth: 1,
           pointRadius: 3,
@@ -278,7 +292,7 @@ function showError(error) {
 async function main() {
   Chart.defaults.color = INK;
   Chart.defaults.font.family = SANS;
-  const entries = visibleRuns((await fetchJson("data/index.json")).runs).slice(-HISTORY_RUNS);
+  const entries = visibleRuns((await fetchJson("data/index.json")).runs);
   const series = targetSeries(await Promise.all(entries.map((entry) => fetchJson("data/" + entry.id + ".json"))));
   if (series.baseline) {
     const link = el("a", series.baseline.slice(0, 7));

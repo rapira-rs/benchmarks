@@ -3,7 +3,7 @@
 import unittest
 from copy import deepcopy
 
-from tests.test_board_data import BASE_SHA, NODE, RUN_A, RUN_B, call_js
+from tests.test_board_data import BASELINE_SHA, NODE, RUN_A, RUN_B, RUN_C, call_js
 
 OTHER_SHA = "ddddddd0000000000000000000000000000000d4"
 
@@ -18,36 +18,27 @@ def changed(run, path, value):
     return copy
 
 
-# The board draws the runs that have the same values as the newest run for: the base build, the rounds, the
-# connections, the stages with their rates, the instance types, the loader count, the php.ini text, and the app hashes.
-# Run a is #101 and run b is bbbbbbb. Run b is the newest run in every row.
-KEY_CASES = [
-    # Run a and run b differ in the AMI, the kernel, and the PHP version of the new build.
-    {"name": "another AMI, kernel, and PHP of the new build keep the run", "runs": [RUN_A, RUN_B], "labels": ["#101", "bbbbbbb"], "baseline": BASE_SHA},
-    {"name": "another base build", "runs": [changed(RUN_A, ("base", "sha"), OTHER_SHA), RUN_B], "labels": ["bbbbbbb"], "baseline": BASE_SHA},
-    {"name": "another round count", "runs": [changed(RUN_A, ("suite", "rounds"), 5), RUN_B], "labels": ["bbbbbbb"], "baseline": BASE_SHA},
-    {"name": "another connection count", "runs": [changed(RUN_A, ("suite", "connections", "http1"), 2000), RUN_B], "labels": ["bbbbbbb"], "baseline": BASE_SHA},
-    {"name": "another rate", "runs": [changed(RUN_A, ("suite", "stages", "rate", "rates", "hello-rapira-worker"), 250000), RUN_B], "labels": ["bbbbbbb"], "baseline": BASE_SHA},
-    {"name": "another stage duration", "runs": [changed(RUN_A, ("suite", "stages", "cap", "duration_s"), 30), RUN_B], "labels": ["bbbbbbb"], "baseline": BASE_SHA},
-    {"name": "another server type", "runs": [changed(RUN_A, ("rig", "server_type"), "c7a.4xlarge"), RUN_B], "labels": ["bbbbbbb"], "baseline": BASE_SHA},
-    {"name": "another loader type", "runs": [changed(RUN_A, ("rig", "loader_type"), "c7a.2xlarge"), RUN_B], "labels": ["bbbbbbb"], "baseline": BASE_SHA},
-    {"name": "another loader count", "runs": [changed(RUN_A, ("rig", "loader_count"), 4), RUN_B], "labels": ["bbbbbbb"], "baseline": BASE_SHA},
-    {"name": "another php.ini text", "runs": [changed(RUN_A, ("servers", "php_ini"), "opcache.enable=0\n"), RUN_B], "labels": ["bbbbbbb"], "baseline": BASE_SHA},
-    {"name": "another app hash", "runs": [changed(RUN_A, ("apps", "apps/hello/worker.php"), "22bb"), RUN_B], "labels": ["bbbbbbb"], "baseline": BASE_SHA},
-    # The run between run a and run b has another base build. Run a is older than that run and stays.
-    {"name": "a run of another base build between two runs of the series", "runs": [RUN_A, changed(RUN_B, ("base", "sha"), OTHER_SHA), RUN_B], "labels": ["#101", "bbbbbbb"], "baseline": BASE_SHA},
-    {"name": "the newest run selects the baseline build", "runs": [RUN_A, changed(RUN_B, ("base", "sha"), OTHER_SHA)], "labels": ["bbbbbbb"], "baseline": OTHER_SHA},
+# The board draws every run, and the baseline build is the new build of the first run. A change of the settings keeps
+# the runs before it on the board. Run c is #100 with the new build ccccccc, run a is #101, and run b is bbbbbbb.
+SETTINGS_CASES = [
+    # Run c and run b differ in the schema, the base build, the AMI, the kernel, and the PHP version of the new build.
+    {"name": "another schema, base build, AMI, kernel, and PHP keep the run", "runs": [RUN_C, RUN_B], "labels": ["#100", "bbbbbbb"]},
+    {"name": "another base build of the newest run keeps the runs", "runs": [RUN_C, changed(RUN_B, ("base", "sha"), OTHER_SHA)], "labels": ["#100", "bbbbbbb"]},
+    {"name": "another round count of the newest run keeps the runs", "runs": [RUN_C, RUN_A, changed(RUN_B, ("suite", "rounds"), 5)], "labels": ["#100", "#101", "bbbbbbb"]},
+    {"name": "another rate of the newest run keeps the runs", "runs": [RUN_C, RUN_A, changed(RUN_B, ("suite", "stages", "rate", "rates", "hello-rapira-worker"), 250000)], "labels": ["#100", "#101", "bbbbbbb"]},
+    {"name": "another app hash of the newest run keeps the runs", "runs": [RUN_C, RUN_A, changed(RUN_B, ("apps", "apps/hello/worker.php"), "22bb")], "labels": ["#100", "#101", "bbbbbbb"]},
+    {"name": "other settings of the first run keep it as the baseline run", "runs": [changed(RUN_C, ("rig", "loader_count"), 4), RUN_A, RUN_B], "labels": ["#100", "#101", "bbbbbbb"]},
 ]
 
 
 @unittest.skipUnless(NODE, "node is not installed")
 class SeriesTest(unittest.TestCase):
     def test_series_runs(self):
-        for case in KEY_CASES:
+        for case in SETTINGS_CASES:
             with self.subTest(name=case["name"]):
                 series = call_js("targetSeries", case["runs"])
                 self.assertEqual(case["labels"], series["labels"])
-                self.assertEqual(case["baseline"], series["baseline"])
+                self.assertEqual(BASELINE_SHA, series["baseline"])
 
 
 if __name__ == "__main__":

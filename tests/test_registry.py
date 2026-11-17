@@ -353,8 +353,8 @@ class ShippedSuitesTest(unittest.TestCase):
         suite = load_suite(ROOT / "suites/ci.toml", self.registry, 2)
         self.assertEqual(tuple(t.name for t in suite.targets), CI_TARGETS)
         self.assertEqual(suite.rounds, 3)
-        # The baseline build of the board: the nightly build of rapira pull request 300.
-        self.assertEqual(suite.base, "c82193b")
+        # The baseline build of the board: the nightly build of rapira pull request 150.
+        self.assertEqual(suite.base, "0cafb5b")
         self.assertEqual(suite.connections, {"http1": 1000, "grpc": 100})
         self.assertEqual(suite.grpc_streams, 100)
         self.assertEqual(suite.stages, CI_STAGES)
